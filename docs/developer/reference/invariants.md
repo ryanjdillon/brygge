@@ -409,6 +409,12 @@ Price items carry no account. The category map (`revenueAccountMap`, read throug
 
 **Failure mode:** a board member with a fresh TOTP deleted or deactivated an admin, and since BRY-525 a delete also removes the admin's passkeys, TOTP and tokens; for the club's only admin nobody could undo it and recovery needed SQL. Two admins removed at once, each seeing the other still present, would do the same.
 
+### An erased member's identity does not stay in the audit log
+
+**Rule (BRD-11, BRY-536):** audit rows about a member hold ids (`resource_id`, `user_id`), never a name, email, phone or address. Every path that erases a member's identity (`HandleDeleteUser`, an immediate `HandleProcessDeletion`, the purge sweep) calls `audit.ScrubMemberPII` in the same transaction, which removes `audit.MemberPIIKeys` from the details of the member's rows and keeps the rest. A new audit write about a member stores ids only; a new identity key joins `MemberPIIKeys`. `audit_log` is append-only by convention (nothing in the database enforces it), and the scrub is its one sanctioned `UPDATE`.
+
+**Failure mode:** `delete_user` stored `old_email` and `old_full_name`, and `user.deactivated` stored both too, so a member erased for GDPR stayed named in the log indefinitely.
+
 ### Board viewing never widens a write
 
 **Rule (BRY-372):** every board role and admin (`roles.CanViewAdmin`) may read every admin page except Developer and Site. Reads open through `middleware.RequireRoleOrBoardRead(<write roles>)`, which admits viewers only on `GET`/`HEAD` and applies `RequireRole(<write roles>)` to every other method, so a surface's write roles are the ones it had before. A handler mounted on `GET` behind it must not write, mint a credential or send anything; such a `GET` keeps its own `RequireRole` (the pay-link endpoints do). In the SPA, write controls on viewable pages hide behind `useCan()`.

@@ -472,6 +472,14 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   Payments page's nudge ask per price item whether an order line has it, and
   the price-item delete's reference count does too. Vocabulary:
   [`enums.md`](reference/enums.md#payment-overview-groups-payment_filter_groups-migration-000123-bry-522).
+- **Audit identity scrub.** 000124 (BRY-536) is a data-only migration, no
+  schema change: it removes the identity keys (`audit.MemberPIIKeys`) from
+  `audit_log.details` of rows about members who are already erased (an
+  `@deleted.local` or legacy `deleted@deleted` address, or no users row).
+  Idempotent; its down is a no-op. `audit_log` is append-only by convention
+  only (no trigger or privilege), and `audit.ScrubMemberPII` is the one
+  sanctioned `UPDATE`; see
+  [`security/member-lifecycle.md`](security/member-lifecycle.md#the-audit-log-keeps-no-identity).
 - `invoice_pdf_archive` (migration 000050) — preserves prior PDF bytes when
   `invoices.pdf_data` is regenerated, so Norwegian bokføringsloven §13's
   5-year retention requirement is satisfied.

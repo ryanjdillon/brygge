@@ -663,6 +663,11 @@ func (h *GDPRHandler) HandleProcessDeletion(w http.ResponseWriter, r *http.Reque
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
+		if _, err = audit.ScrubMemberPII(ctx, tx, userID); err != nil {
+			h.log.Error().Err(err).Msg("failed to scrub audit log")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
 	}
 
 	// Audit the outcome, including what was wiped now vs deferred, so the

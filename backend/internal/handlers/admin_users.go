@@ -22,6 +22,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/brygge-klubb/brygge/internal/accounting"
+	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/finance"
 	brmail "github.com/brygge-klubb/brygge/internal/mail"
@@ -848,11 +849,11 @@ func (h *AdminUsersHandler) HandleDeleteUser(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var userEmail, userName string
+	var lockedID string
 	err = tx.QueryRow(ctx,
-		`SELECT email, full_name FROM users WHERE id = $1 AND club_id = $2 FOR UPDATE`,
+		`SELECT id FROM users WHERE id = $1 AND club_id = $2 FOR UPDATE`,
 		userID, clubID,
-	).Scan(&userEmail, &userName)
+	).Scan(&lockedID)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "user not found")
 		return
@@ -908,9 +909,9 @@ func (h *AdminUsersHandler) HandleDeleteUser(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Ids only: the member is named by resource_id, and an erased member's
+	// name and address must not live on in the log.
 	auditDetails, _ := json.Marshal(map[string]any{
-		"old_email":        userEmail,
-		"old_full_name":    userName,
 		"erasure":          erasure,
 		"sessions_revoked": sessionsRevoked,
 	})
@@ -939,6 +940,11 @@ func (h *AdminUsersHandler) HandleDeleteUser(w http.ResponseWriter, r *http.Requ
 	}
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to delete user")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if _, err := audit.ScrubMemberPII(ctx, tx, userID); err != nil {
+		h.log.Error().Err(err).Msg("failed to scrub audit log")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -1018,29 +1024,28 @@ func (h *AdminUsersHandler) HandleDeactivateUser(w http.ResponseWriter, r *http.
 		return
 	}
 
-	var userEmail, userName string
-	err = tx.QueryRow(ctx,
+	tag, err := tx.Exec(ctx,
 		`UPDATE users SET deactivated_at = now(), deactivated_by = $3, updated_at = now()
-		  WHERE id = $1 AND club_id = $2 AND deactivated_at IS NULL
-		  RETURNING email, COALESCE(full_name, '')`,
+		  WHERE id = $1 AND club_id = $2 AND deactivated_at IS NULL`,
 		userID, claims.ClubID, claims.UserID,
-	).Scan(&userEmail, &userName)
-	if err == pgx.ErrNoRows {
-		// Either no such member in this club, or already deactivated.
-		Error(w, http.StatusNotFound, "member not found or already deactivated")
-		return
-	}
+	)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to deactivate user")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	if tag.RowsAffected() == 0 {
+		// Either no such member in this club, or already deactivated.
+		Error(w, http.StatusNotFound, "member not found or already deactivated")
+		return
+	}
 
-	auditDetails, _ := json.Marshal(map[string]any{"email": userEmail, "full_name": userName})
+	// The row's resource_id names the member; the details stay empty so the
+	// log holds no name or address that outlives an erasure.
 	if _, err := tx.Exec(ctx,
 		`INSERT INTO audit_log (club_id, actor_id, action, resource, resource_id, details)
-		 VALUES ($1, $2, 'user.deactivated', 'user', $3, $4)`,
-		claims.ClubID, claims.UserID, userID, auditDetails,
+		 VALUES ($1, $2, 'user.deactivated', 'user', $3, '{}')`,
+		claims.ClubID, claims.UserID, userID,
 	); err != nil {
 		h.log.Error().Err(err).Msg("failed to write audit log")
 		Error(w, http.StatusInternalServerError, "internal error")
@@ -1107,28 +1112,25 @@ func (h *AdminUsersHandler) HandleReactivateUser(w http.ResponseWriter, r *http.
 		return
 	}
 
-	var userEmail, userName string
-	err = tx.QueryRow(ctx,
+	tag, err := tx.Exec(ctx,
 		`UPDATE users SET deactivated_at = NULL, deactivated_by = NULL, updated_at = now()
-		  WHERE id = $1 AND club_id = $2 AND deactivated_at IS NOT NULL
-		  RETURNING email, COALESCE(full_name, '')`,
+		  WHERE id = $1 AND club_id = $2 AND deactivated_at IS NOT NULL`,
 		userID, claims.ClubID,
-	).Scan(&userEmail, &userName)
-	if err == pgx.ErrNoRows {
-		Error(w, http.StatusNotFound, "member not found or not deactivated")
-		return
-	}
+	)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to reactivate user")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	if tag.RowsAffected() == 0 {
+		Error(w, http.StatusNotFound, "member not found or not deactivated")
+		return
+	}
 
-	auditDetails, _ := json.Marshal(map[string]any{"email": userEmail, "full_name": userName})
 	if _, err := tx.Exec(ctx,
 		`INSERT INTO audit_log (club_id, actor_id, action, resource, resource_id, details)
-		 VALUES ($1, $2, 'user.reactivated', 'user', $3, $4)`,
-		claims.ClubID, claims.UserID, userID, auditDetails,
+		 VALUES ($1, $2, 'user.reactivated', 'user', $3, '{}')`,
+		claims.ClubID, claims.UserID, userID,
 	); err != nil {
 		h.log.Error().Err(err).Msg("failed to write audit log")
 		Error(w, http.StatusInternalServerError, "internal error")
@@ -1294,12 +1296,7 @@ func (h *AdminUsersHandler) createUser(ctx context.Context, clubID, actorID stri
 		}
 	}
 
-	auditData, _ := json.Marshal(map[string]any{
-		"email":      email,
-		"first_name": firstName,
-		"last_name":  lastName,
-		"roles":      req.Roles,
-	})
+	auditData, _ := json.Marshal(map[string]any{"roles": req.Roles})
 	// audit_log canonical schema (000001_init): actor_id, resource,
 	// resource_id, details. Sibling admin handlers in this file use a
 	// (user_id, entity_type, entity_id, new_data) shape that doesn't
@@ -1549,6 +1546,28 @@ type adminUserUpdateRequest struct {
 	AdminNotes  *string `json:"admin_notes,omitempty"`
 }
 
+// updatedFields lists the JSON names of the fields a partial update carries.
+func updatedFields(req adminUserUpdateRequest) []string {
+	fields := []string{}
+	for name, set := range map[string]bool{
+		"email":        req.Email != nil,
+		"first_name":   req.FirstName != nil,
+		"last_name":    req.LastName != nil,
+		"phone":        req.Phone != nil,
+		"address_line": req.AddressLine != nil,
+		"postal_code":  req.PostalCode != nil,
+		"city":         req.City != nil,
+		"is_local":     req.IsLocal != nil,
+		"admin_notes":  req.AdminNotes != nil,
+	} {
+		if set {
+			fields = append(fields, name)
+		}
+	}
+	slices.Sort(fields)
+	return fields
+}
+
 // HandleUpdateUser applies a partial update to a user's profile fields.
 // Only supplied keys are written; nil pointers are left untouched. Email
 // + roles are intentionally out of scope (separate endpoints).
@@ -1651,7 +1670,9 @@ func (h *AdminUsersHandler) HandleUpdateUser(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	auditData, _ := json.Marshal(req)
+	// Field names only: the values are the member's identity and would outlive
+	// an erasure in the log.
+	auditData, _ := json.Marshal(map[string]any{"fields": updatedFields(req)})
 	if _, err := h.db.Exec(ctx,
 		`INSERT INTO audit_log (club_id, actor_id, action, resource, resource_id, details)
 		 VALUES ($1, $2, 'update_user', 'user', $3, $4)`,

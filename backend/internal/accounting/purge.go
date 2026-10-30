@@ -3,6 +3,8 @@ package accounting
 import (
 	"context"
 	"fmt"
+
+	"github.com/brygge-klubb/brygge/internal/audit"
 )
 
 // legacyAnonymizedEmail is the constant address earlier versions wrote when
@@ -22,7 +24,8 @@ const ErasedEmailSuffix = "@deleted.local"
 // financial records have all cleared the retention window (BRY-207). It never
 // deletes the user row — invoices reference it (no ON DELETE cascade) and keep
 // their snapshot identity (BRY-205) — it only scrubs name/email/phone/address
-// in place. Idempotent: rows already scrubbed (erased or legacy sentinel email) are skipped, so
+// in place, and the same identity from the member's audit_log rows
+// (audit.ScrubMemberPII). Idempotent: rows already scrubbed (erased or legacy sentinel email) are skipped, so
 // it is safe to run on any schedule without duplicating work or audit entries.
 // Returns the number of members purged this run.
 func (s *Service) PurgeExpiredMemberPII(ctx context.Context) (int64, error) {
@@ -183,6 +186,9 @@ func (s *Service) purgeOneMember(ctx context.Context, userID, clubID string) (bo
 	}
 	if tag.RowsAffected() == 0 {
 		return false, nil
+	}
+	if _, err := audit.ScrubMemberPII(ctx, tx, userID); err != nil {
+		return false, err
 	}
 	if _, err := tx.Exec(ctx,
 		`INSERT INTO audit_log (club_id, actor_id, action, resource, resource_id, details)

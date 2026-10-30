@@ -37,13 +37,15 @@ The action string is the JSON wire format (`row.action`); the constant is the Go
 |---|---|---|---|---|
 | `ActionUserRoleUpdated` | `user.role_updated` | user | Grant/revoke a role on a user | `role`, `granted` (bool) |
 | `ActionUserDeleted` | `user.deleted` | user | Reserved, currently unused: nothing writes it. The admin delete writes the raw string `delete_user` (below). | — |
-| `ActionUserDeactivated` | `user.deactivated` | user | Admin deactivates a member (reversible; hides + blocks login, keeps data) | `email`, `full_name` |
-| `ActionUserReactivated` | `user.reactivated` | user | Admin reactivates a deactivated member | `email`, `full_name` |
+| `ActionUserDeactivated` | `user.deactivated` | user | Admin deactivates a member (reversible; hides + blocks login, keeps data, revokes their developer tokens) | — (ids only; the member is `resource_id`) |
+| `ActionUserReactivated` | `user.reactivated` | user | Admin reactivates a deactivated member | — (ids only) |
 | `ActionMemberPIIPurged` | `user.pii_purged` | user | Scheduled sweep erases a deactivated member's PII once retention clears (actor is NULL — system job) | `reason` |
-| `ActionUserMailProvisioned` | `user.mail_provisioned` | user | Stalwart mailbox created for the user | `email` |
-| `ActionUserMailDeprovisioned` | `user.mail_deprovisioned` | user | Stalwart mailbox removed | `email` |
+| `ActionUserMailProvisioned` | `user.mail_provisioned` | user | Stalwart mailbox created for the user | `jmap_user` (the principal slug, no PII) |
+| `ActionUserMailDeprovisioned` | `user.mail_deprovisioned` | user | Stalwart mailbox removed | `jmap_user` |
 
-`HandleDeleteUser` (`DELETE /admin/users/{userID}`, soft or hard) writes the raw action string `delete_user` rather than `ActionUserDeleted`: resource `user`, `extra` `old_email`, `old_full_name`, `erasure` (bool), `sessions_revoked` (session rows deleted by `revokeMemberAccess`, including expired ones). The string is shipped, so it stays.
+`HandleDeleteUser` (`DELETE /admin/users/{userID}`, which always anonymises in place) writes the raw action string `delete_user` rather than `ActionUserDeleted`: resource `user`, `extra` `sessions_revoked` (session rows deleted by `revokeMemberAccess`, including expired ones). The string is shipped, so it stays. Rows written before BRY-536 also carry `old_email`, `old_full_name` and `erasure`; the identity keys are scrubbed for members who are erased.
+
+The other member writes in `admin_users.go` also use raw strings: `create_user` (`roles`), `update_user` (`fields`, the names of the fields changed, never their values) and `update_roles` (`old_roles`, `new_roles`). **Audit rows about a member hold ids only.** A name, email, phone or address in `details` outlives the member's erasure; the erasure paths remove `audit.MemberPIIKeys` from the member's rows (`audit.ScrubMemberPII`), and a new action about a member must not write those keys. Rows that name a recipient rather than a member (`invoice.emailed`, `invoice.reminded`, `invoice.delivery_log_viewed`, all keyed on the faktura) are outside that scrub.
 
 ## Slips
 
