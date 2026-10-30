@@ -4,6 +4,8 @@ import { useI18n } from 'vue-i18n'
 import { useQueryClient } from '@tanstack/vue-query'
 import { useFreshTotp } from '@/composables/useFreshTotp'
 import { unassignBankRow, unassignVippsCharge, type AutoAssignResult } from '@/composables/useBankImports'
+import { asClearedSettlementRefusal, type ClearedSettlementRefusal } from '@/composables/useClearedSettlement'
+import ClearedSettlementRefusalNote from '@/components/admin/ClearedSettlementRefusal.vue'
 
 // Shows what an import or sync booked without review — Vipps charges
 // (BRY-340) or KID-less bank deposits (BRY-366) — and lets the treasurer
@@ -18,21 +20,33 @@ const { ensureFreshTotp } = useFreshTotp()
 const undone = ref<Set<string>>(new Set())
 const busy = ref<string | null>(null)
 const error = ref<string | null>(null)
+// A charge whose settlement is already cleared is refused; the note offers to
+// undo the clearing and then repeats the undo of that charge.
+const cleared = ref<{ rowID: string; refusal: ClearedSettlementRefusal } | null>(null)
 
 async function undo(rowID: string) {
   if (!(await ensureFreshTotp())) return
   busy.value = rowID
   error.value = null
+  cleared.value = null
   try {
     if (props.source === 'bank') await unassignBankRow(rowID)
     else await unassignVippsCharge(rowID)
     undone.value = new Set([...undone.value, rowID])
     queryClient.invalidateQueries({ queryKey: ['accounting'] })
   } catch (e) {
-    error.value = (e as Error).message
+    const refusal = asClearedSettlementRefusal(e)
+    if (refusal) cleared.value = { rowID, refusal }
+    else error.value = (e as Error).message
   } finally {
     busy.value = null
   }
+}
+
+function undoAgain() {
+  const rowID = cleared.value?.rowID
+  cleared.value = null
+  if (rowID) void undo(rowID)
 }
 
 function targetLabel(rule: string, target: string) {
@@ -70,5 +84,6 @@ function targetLabel(rule: string, target: string) {
     </template>
     <p v-if="props.result.error" class="mt-1 text-red-700">{{ props.result.error }}</p>
     <p v-if="error" class="mt-1 text-red-700">{{ error }}</p>
+    <ClearedSettlementRefusalNote v-if="cleared" :refusal="cleared.refusal" @undone="undoAgain" />
   </div>
 </template>

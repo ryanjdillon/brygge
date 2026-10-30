@@ -957,7 +957,7 @@
         "vippsDraftsConfirm": "Registra bozze",
         "vippsDraftsNothing": "Nessuna bozza Vipps da registrare in questo periodo.",
         "vippsDraftsDone": "{posted} scrittura/e Vipps registrata/e, {reclassified} riclassificata/e.",
-        "vippsDraftsChecklist": "Riclassifica (togli la spunta per lasciare una bozza così com'è)",
+        "vippsDraftsChecklist": "Riclassifica (togli la spunta per lasciare una bozza così com'è; anche le bozze di commissione e versamento della liquidazione restano allora bozze)",
         "vippsDraftsSkipped": "{unchecked} senza spunta restano bozze; {stale} non più validi e saltati.",
         "vippsDraftsReleasableHeading": "Pagamenti che puoi rimandare alla coda Vipps",
         "vippsDraftsRelease": "Rilascia",
@@ -1002,7 +1002,18 @@
         "tooltipMva": "VAT portion of this expense (for momskompensasjon)",
         "tooltipLineDesc": "Optional note for this line"
       },
-      "importedNoOpeningBalance": "Questa fattura è stata importata dal sistema precedente e il suo credito non è ancora nel bilancio di apertura di Brygge. Registra il pagamento dopo che il bilancio di apertura è stato contabilizzato."
+      "importedNoOpeningBalance": "Questa fattura è stata importata dal sistema precedente e il suo credito non è ancora nel bilancio di apertura di Brygge. Registra il pagamento dopo che il bilancio di apertura è stato contabilizzato.",
+      "clearedSettlement": {
+        "refused": "Questo pagamento appartiene alla liquidazione {settlement} (Vippsnr {msn}), già riconciliata con il versamento bancario. Annulla prima la riconciliazione, poi potrai annullare il pagamento.",
+        "undoButton": "Annulla il versamento",
+        "undoing": "Annullamento…",
+        "confirmTitle": "Annullare la riconciliazione della liquidazione {settlement}?",
+        "confirmBody": "Serve per poter correggere il pagamento. La liquidazione viene riconciliata di nuovo alla prossima sincronizzazione, quando tutti i suoi pagamenti sono registrati.",
+        "detailPayout": "La registrazione del versamento della liquidazione viene annullata",
+        "detailDeposit": "Il versamento bancario «Utb. {settlement} Vippsnr {msn}» torna in Tildel",
+        "detailFee": "La commissione Vipps resta registrata",
+        "noDeposit": "Questa riconciliazione non può essere annullata da qui. Annulla il versamento in Banca & Vipps."
+      }
     },
     "groupEconomy": "Economy",
     "groupShop": "Shop",

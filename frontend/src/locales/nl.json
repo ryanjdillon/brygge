@@ -957,7 +957,7 @@
         "vippsDraftsConfirm": "Concepten boeken",
         "vippsDraftsNothing": "Geen Vipps-concepten om te boeken in deze periode.",
         "vippsDraftsDone": "{posted} Vipps-boeking(en) geboekt, {reclassified} omgeboekt.",
-        "vippsDraftsChecklist": "Omboeken (vink uit om een concept te laten zoals het is)",
+        "vippsDraftsChecklist": "Omboeken (vink uit om een concept te laten zoals het is; de concepten voor kosten en uitbetaling van de afrekening blijven dan ook concept)",
         "vippsDraftsSkipped": "{unchecked} zonder vinkje blijven concept; {stale} niet meer van toepassing en overgeslagen.",
         "vippsDraftsReleasableHeading": "Betalingen die u kunt terugzetten in de Vipps-wachtrij",
         "vippsDraftsRelease": "Vrijgeven",
@@ -1002,7 +1002,18 @@
         "tooltipMva": "VAT portion of this expense (for momskompensasjon)",
         "tooltipLineDesc": "Optional note for this line"
       },
-      "importedNoOpeningBalance": "Deze factuur is geïmporteerd uit het vorige systeem en de vordering staat nog niet in de openingsbalans van Brygge. Boek de betaling zodra de openingsbalans is geboekt."
+      "importedNoOpeningBalance": "Deze factuur is geïmporteerd uit het vorige systeem en de vordering staat nog niet in de openingsbalans van Brygge. Boek de betaling zodra de openingsbalans is geboekt.",
+      "clearedSettlement": {
+        "refused": "Deze betaling hoort bij afrekening {settlement} (Vippsnr {msn}), die al met de bankstorting is afgestemd. Maak eerst die afstemming ongedaan, daarna kun je de betaling ongedaan maken.",
+        "undoButton": "Storting ongedaan maken",
+        "undoing": "Bezig met ongedaan maken…",
+        "confirmTitle": "Afstemming van afrekening {settlement} ongedaan maken?",
+        "confirmBody": "Zo kun je de betaling corrigeren. De afrekening wordt bij de volgende synchronisatie opnieuw afgestemd zodra al haar betalingen zijn geboekt.",
+        "detailPayout": "De uitbetalingsboeking van de afrekening wordt geannuleerd",
+        "detailDeposit": "De bankstorting \"Utb. {settlement} Vippsnr {msn}\" gaat terug naar Tildel",
+        "detailFee": "De Vipps-kosten blijven geboekt",
+        "noDeposit": "Deze afstemming kan hier niet ongedaan worden gemaakt. Maak de storting ongedaan onder Bank & Vipps."
+      }
     },
     "groupEconomy": "Economy",
     "groupShop": "Shop",

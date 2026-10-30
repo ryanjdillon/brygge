@@ -957,7 +957,7 @@
         "vippsDraftsConfirm": "Entwürfe buchen",
         "vippsDraftsNothing": "Keine Vipps-Entwürfe in dieser Periode.",
         "vippsDraftsDone": "{posted} Vipps-Beleg(e) gebucht, {reclassified} umgebucht.",
-        "vippsDraftsChecklist": "Umbuchen (Haken entfernen, um einen Entwurf unverändert zu lassen)",
+        "vippsDraftsChecklist": "Umbuchen (Haken entfernen, um einen Entwurf unverändert zu lassen; Gebühren- und Auszahlungsentwurf der Abrechnung bleiben dann ebenfalls Entwürfe)",
         "vippsDraftsSkipped": "{unchecked} ohne Haken bleiben Entwürfe; {stale} passten nicht mehr und wurden übersprungen.",
         "vippsDraftsReleasableHeading": "Zahlungen, die Sie in die Vipps-Warteschlange zurückgeben können",
         "vippsDraftsRelease": "Freigeben",
@@ -1002,7 +1002,18 @@
         "tooltipMva": "VAT portion of this expense (for momskompensasjon)",
         "tooltipLineDesc": "Optional note for this line"
       },
-      "importedNoOpeningBalance": "Diese Rechnung wurde aus dem bisherigen System importiert, und ihre Forderung ist noch nicht in Brygges Eröffnungsbilanz enthalten. Buchen Sie die Zahlung, sobald die Eröffnungsbilanz gebucht ist."
+      "importedNoOpeningBalance": "Diese Rechnung wurde aus dem bisherigen System importiert, und ihre Forderung ist noch nicht in Brygges Eröffnungsbilanz enthalten. Buchen Sie die Zahlung, sobald die Eröffnungsbilanz gebucht ist.",
+      "clearedSettlement": {
+        "refused": "Diese Zahlung gehört zur Abrechnung {settlement} (Vippsnr {msn}), die bereits mit der Bankeinzahlung abgeglichen ist. Machen Sie zuerst den Abgleich rückgängig, danach können Sie die Zahlung rückgängig machen.",
+        "undoButton": "Einzahlung rückgängig machen",
+        "undoing": "Wird rückgängig gemacht …",
+        "confirmTitle": "Abgleich der Abrechnung {settlement} rückgängig machen?",
+        "confirmBody": "Damit lässt sich die Zahlung korrigieren. Die Abrechnung wird bei der nächsten Synchronisierung erneut abgeglichen, sobald alle ihre Zahlungen gebucht sind.",
+        "detailPayout": "Der Auszahlungsbeleg der Abrechnung wird storniert",
+        "detailDeposit": "Die Bankeinzahlung „Utb. {settlement} Vippsnr {msn}“ kommt zurück in Tildel",
+        "detailFee": "Die Vipps-Gebühr bleibt gebucht",
+        "noDeposit": "Dieser Abgleich lässt sich hier nicht rückgängig machen. Machen Sie die Einzahlung unter Bank & Vipps rückgängig."
+      }
     },
     "groupEconomy": "Economy",
     "groupShop": "Shop",

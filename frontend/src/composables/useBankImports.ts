@@ -484,5 +484,8 @@ export async function unassignVippsCharge(rowID: string): Promise<{ status: stri
 
 // Undoes a bank row booking so it returns to Tildel. Behind fresh TOTP.
 export async function unassignBankRow(rowID: string): Promise<{ status: string }> {
-  return fetchJSON(`${BASE}/bank-rows/${rowID}/unassign`, { method: 'POST' })
+  return fetchJSON(`${BASE}/bank-rows/${rowID}/unassign`, {
+    method: 'POST',
+    body: JSON.stringify({ confirm: true }),
+  })
 }

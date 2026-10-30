@@ -956,7 +956,7 @@
         "vippsDraftsConfirm": "Comptabiliser",
         "vippsDraftsNothing": "Aucun brouillon Vipps à comptabiliser pour cette période.",
         "vippsDraftsDone": "{posted} pièce(s) Vipps comptabilisée(s), {reclassified} reclassée(s).",
-        "vippsDraftsChecklist": "Reclasser (décochez pour laisser un brouillon tel quel)",
+        "vippsDraftsChecklist": "Reclasser (décochez pour laisser un brouillon tel quel ; les brouillons des frais et du versement du règlement restent alors aussi des brouillons)",
         "vippsDraftsSkipped": "{unchecked} non cochés restent en brouillon ; {stale} ne correspondaient plus et ont été ignorés.",
         "vippsDraftsReleasableHeading": "Paiements que vous pouvez renvoyer dans la file Vipps",
         "vippsDraftsRelease": "Libérer",
@@ -1001,7 +1001,18 @@
         "tooltipMva": "VAT portion of this expense (for momskompensasjon)",
         "tooltipLineDesc": "Optional note for this line"
       },
-      "importedNoOpeningBalance": "Cette facture a été importée de l'ancien système et sa créance ne figure pas encore dans le bilan d'ouverture de Brygge. Comptabilisez le paiement une fois le bilan d'ouverture passé."
+      "importedNoOpeningBalance": "Cette facture a été importée de l'ancien système et sa créance ne figure pas encore dans le bilan d'ouverture de Brygge. Comptabilisez le paiement une fois le bilan d'ouverture passé.",
+      "clearedSettlement": {
+        "refused": "Ce paiement appartient au règlement {settlement} (Vippsnr {msn}), déjà rapproché du dépôt bancaire. Annulez d'abord ce rapprochement, puis vous pourrez annuler le paiement.",
+        "undoButton": "Annuler le dépôt",
+        "undoing": "Annulation …",
+        "confirmTitle": "Annuler le rapprochement du règlement {settlement} ?",
+        "confirmBody": "Cela permet de corriger le paiement. Le règlement est de nouveau rapproché à la prochaine synchronisation, une fois tous ses paiements comptabilisés.",
+        "detailPayout": "L'écriture de versement du règlement est annulée",
+        "detailDeposit": "Le dépôt bancaire « Utb. {settlement} Vippsnr {msn} » retourne dans Tildel",
+        "detailFee": "Les frais Vipps restent comptabilisés",
+        "noDeposit": "Ce rapprochement ne peut pas être annulé ici. Annulez le dépôt sous Banque & Vipps."
+      }
     },
     "groupEconomy": "Economy",
     "groupShop": "Shop",

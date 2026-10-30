@@ -2,10 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { mountWithPlugins } from '@/test/test-utils'
 import AutoAssignSummary from '@/components/admin/AutoAssignSummary.vue'
+import { ApiError } from '@/lib/errors'
 
 const unassignVipps = vi.fn()
 const unassignBank = vi.fn()
 const ensureFreshTotp = vi.fn()
+const askConfirm = vi.fn()
 
 vi.mock('@/composables/useBankImports', () => ({
   unassignVippsCharge: (id: string) => unassignVipps(id),
@@ -15,6 +17,8 @@ vi.mock('@/composables/useBankImports', () => ({
 vi.mock('@/composables/useFreshTotp', () => ({
   useFreshTotp: () => ({ ensureFreshTotp: () => ensureFreshTotp() }),
 }))
+
+vi.mock('@/stores/confirm', () => ({ useConfirm: () => askConfirm }))
 
 vi.mock('@tanstack/vue-query', async () => {
   const actual = await vi.importActual('@tanstack/vue-query')
@@ -55,6 +59,7 @@ describe('AutoAssignSummary', () => {
     unassignVipps.mockReset().mockResolvedValue({ status: 'unassigned' })
     unassignBank.mockReset().mockResolvedValue({ status: 'unassigned' })
     ensureFreshTotp.mockReset().mockResolvedValue(true)
+    askConfirm.mockReset().mockResolvedValue(true)
   })
 
   it('lists Vipps bookings and undoes one through the charge endpoint', async () => {
@@ -102,5 +107,26 @@ describe('AutoAssignSummary', () => {
     })
     expect(wrapper.text()).toContain('admin.bankImports.autoAssignOff')
     expect(wrapper.find('li').exists()).toBe(false)
+  })
+
+  it('offers to undo a cleared settlement when a charge undo is refused, then undoes the charge', async () => {
+    unassignVipps
+      .mockRejectedValueOnce(new ApiError(409, 'refused', 'charge_in_cleared_settlement', {
+        settlement_number: '3000101', msn: '000001', bank_row_id: 'bank-1',
+      }))
+      .mockResolvedValueOnce({ status: 'unassigned' })
+    const wrapper = mountWithPlugins(AutoAssignSummary, { props: { result: vippsResult, source: 'vipps' } })
+
+    await wrapper.findAll('button')[0].trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="cleared-settlement-refusal"]').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('admin.bankImports.autoAssignUndone')
+
+    await wrapper.get('[data-testid="cleared-settlement-undo"]').trigger('click')
+    await flushPromises()
+    expect(unassignBank).toHaveBeenCalledWith('bank-1')
+    expect(unassignVipps).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-testid="cleared-settlement-refusal"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('admin.bankImports.autoAssignUndone')
   })
 })

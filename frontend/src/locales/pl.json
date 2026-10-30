@@ -931,7 +931,7 @@
         "tooltipSource": "How this entry was created (manual, payment sync, bank import)",
         "tooltipAccounts": "Which accounts are affected",
         "vippsDraftsAutoAssignOff": "Automatyczne przypisywanie jest wyłączone, więc płatności na 3900 Andre inntekter zostaną tam zaksięgowane bez klasyfikacji. Najpierw włącz je w Økonomiinnstillinger → Vipps, aby je sklasyfikować.",
-        "vippsDraftsChecklist": "Przeksięguj (odznacz, aby zostawić szkic bez zmian)",
+        "vippsDraftsChecklist": "Przeksięguj (odznacz, aby zostawić szkic bez zmian; szkice opłaty i wypłaty rozliczenia też pozostaną szkicami)",
         "vippsDraftsSkipped": "{unchecked} odznaczonych zostaje jako szkice; {stale} już nie pasowało i pominięto.",
         "vippsDraftsReleasableHeading": "Płatności, które możesz zwolnić do kolejki Vipps",
         "vippsDraftsRelease": "Zwolnij",
@@ -976,7 +976,18 @@
         "tooltipMva": "VAT portion of this expense (for momskompensasjon)",
         "tooltipLineDesc": "Optional note for this line"
       },
-      "importedNoOpeningBalance": "Ta faktura została zaimportowana z poprzedniego systemu, a jej należność nie jest jeszcze ujęta w bilansie otwarcia Brygge. Zaksięguj płatność po zaksięgowaniu bilansu otwarcia."
+      "importedNoOpeningBalance": "Ta faktura została zaimportowana z poprzedniego systemu, a jej należność nie jest jeszcze ujęta w bilansie otwarcia Brygge. Zaksięguj płatność po zaksięgowaniu bilansu otwarcia.",
+      "clearedSettlement": {
+        "refused": "Ta płatność należy do rozliczenia {settlement} (Vippsnr {msn}), które jest już uzgodnione z wpłatą bankową. Najpierw cofnij to uzgodnienie, potem możesz cofnąć płatność.",
+        "undoButton": "Cofnij wpłatę",
+        "undoing": "Cofanie…",
+        "confirmTitle": "Cofnąć uzgodnienie rozliczenia {settlement}?",
+        "confirmBody": "Pozwala to poprawić płatność. Rozliczenie zostanie uzgodnione ponownie przy następnej synchronizacji, gdy wszystkie jego płatności będą zaksięgowane.",
+        "detailPayout": "Dokument wypłaty rozliczenia zostaje anulowany",
+        "detailDeposit": "Wpłata bankowa „Utb. {settlement} Vippsnr {msn}” wraca do Tildel",
+        "detailFee": "Opłata Vipps pozostaje zaksięgowana",
+        "noDeposit": "Tego uzgodnienia nie można cofnąć tutaj. Cofnij wpłatę w Bank i Vipps."
+      }
     },
     "groupEconomy": "Economy",
     "groupShop": "Shop",

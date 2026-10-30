@@ -1655,7 +1655,7 @@
         "vippsDraftsConfirm": "Bokfør utkast",
         "vippsDraftsNothing": "Ingen Vipps-utkast å bokføre i denne perioden.",
         "vippsDraftsDone": "{posted} Vipps-bilag bokført, {reclassified} omklassifisert.",
-        "vippsDraftsChecklist": "Bokfør om (fjern haken for å la et utkast stå urørt)",
+        "vippsDraftsChecklist": "Bokfør om (fjern haken for å la et utkast stå urørt; avgifts- og utbetalingsutkastene til oppgjøret blir da også stående)",
         "vippsDraftsSkipped": "{unchecked} uten hake står igjen som utkast; {stale} passet ikke lenger og ble hoppet over.",
         "vippsDraftsReleasableHeading": "Betalinger du kan frigi til Vipps-køen",
         "vippsDraftsRelease": "Frigi",
@@ -1709,7 +1709,18 @@
         "receiptUploadFailed": "Opplasting av kvittering feilet — bilaget er lagret, prøv opplastingen på nytt",
         "receiptUnknownVendor": "Ukjent leverandør"
       },
-      "importedNoOpeningBalance": "Denne fakturaen er importert fra det forrige systemet, og kundefordringen er ikke med i Brygges inngående balanse ennå. Bokfør betalingen når inngående balanse er postert."
+      "importedNoOpeningBalance": "Denne fakturaen er importert fra det forrige systemet, og kundefordringen er ikke med i Brygges inngående balanse ennå. Bokfør betalingen når inngående balanse er postert.",
+      "clearedSettlement": {
+        "refused": "Betalingen tilhører oppgjør {settlement} (Vippsnr {msn}), som allerede er avstemt mot bankinnbetalingen. Angre avstemmingen først, så kan du angre betalingen.",
+        "undoButton": "Angre innbetalingen",
+        "undoing": "Angrer …",
+        "confirmTitle": "Angre avstemmingen av oppgjør {settlement}?",
+        "confirmBody": "Du gjør dette for å kunne rette betalingen. Oppgjøret avstemmes på nytt ved neste synkronisering når alle betalingene i det er bokført.",
+        "detailPayout": "Utbetalingsbilaget for oppgjøret annulleres",
+        "detailDeposit": "Bankinnbetalingen «Utb. {settlement} Vippsnr {msn}» legges tilbake i Tildel",
+        "detailFee": "Vipps-avgiften forblir bokført",
+        "noDeposit": "Avstemmingen kan ikke angres herfra. Angre innbetalingen under Bank og Vipps."
+      }
     },
     "groupEconomy": "Økonomi",
     "groupShop": "Butikk",

@@ -46,6 +46,8 @@ import {
 import Select from '@/components/ui/form/Select.vue'
 import NumberInput from '@/components/ui/form/NumberInput.vue'
 import { ApiError } from '@/lib/errors'
+import { asClearedSettlementRefusal, type ClearedSettlementRefusal } from '@/composables/useClearedSettlement'
+import ClearedSettlementRefusalNote from '@/components/admin/ClearedSettlementRefusal.vue'
 
 const { t } = useI18n()
 // Periods are a ledger write; anything that books or voids an entry is a
@@ -177,22 +179,40 @@ const VOID_REFUSALS: Record<VoidRefusal, { text: string; link: string; to: strin
   },
 }
 const voidRefusal = ref<VoidRefusal | null>(null)
+// A Vipps charge entry whose settlement is already cleared is refused too
+// (409 charge_in_cleared_settlement); the note offers to undo the clearing and
+// then voids the entry again.
+const clearedRefusal = ref<{ entryId: string; refusal: ClearedSettlementRefusal } | null>(null)
+
+function runVoid(entryId: string) {
+  voidRefusal.value = null
+  clearedRefusal.value = null
+  syncMessage.value = ''
+  voidMutation.mutate(entryId, {
+    onError: (err) => {
+      if (err instanceof ApiError && err.status === 409 && (err.code === 'stripe_entry' || err.code === 'bank_entry')) {
+        voidRefusal.value = err.code
+        return
+      }
+      const cleared = asClearedSettlementRefusal(err)
+      if (cleared) {
+        clearedRefusal.value = { entryId, refusal: cleared }
+        return
+      }
+      syncMessage.value = `${t('common.error')}: ${(err as Error).message}`
+    },
+  })
+}
 
 async function handleVoid(entryId: string) {
   if (!(await ensureFreshTotp())) return
-  if (confirm(t('admin.accounting.journal.confirmVoid'))) {
-    voidRefusal.value = null
-    syncMessage.value = ''
-    voidMutation.mutate(entryId, {
-      onError: (err) => {
-        if (err instanceof ApiError && err.status === 409 && (err.code === 'stripe_entry' || err.code === 'bank_entry')) {
-          voidRefusal.value = err.code
-          return
-        }
-        syncMessage.value = `${t('common.error')}: ${(err as Error).message}`
-      },
-    })
-  }
+  if (confirm(t('admin.accounting.journal.confirmVoid'))) runVoid(entryId)
+}
+
+function voidAgain() {
+  const entryId = clearedRefusal.value?.entryId
+  clearedRefusal.value = null
+  if (entryId) runVoid(entryId)
 }
 
 // A draft blocks closing its period, so an abandoned one needs a way out.
@@ -625,6 +645,11 @@ function formatNOK(amount: number): string {
           {{ t(VOID_REFUSALS[voidRefusal].link) }}
         </RouterLink>
       </p>
+      <ClearedSettlementRefusalNote
+        v-if="clearedRefusal"
+        :refusal="clearedRefusal.refusal"
+        @undone="voidAgain"
+      />
       <p
         v-if="syncMessage"
         class="mt-2 text-sm"

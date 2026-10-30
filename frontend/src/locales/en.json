@@ -1659,7 +1659,7 @@
         "vippsDraftsConfirm": "Post drafts",
         "vippsDraftsNothing": "No Vipps drafts to post in this period.",
         "vippsDraftsDone": "{posted} Vipps bilag(s) posted, {reclassified} rebooked.",
-        "vippsDraftsChecklist": "Rebook (untick to leave a draft as it is)",
+        "vippsDraftsChecklist": "Rebook (untick to leave a draft as it is; the settlement's fee and payout drafts then stay drafts too)",
         "vippsDraftsSkipped": "{unchecked} unticked left as drafts; {stale} no longer applied and skipped.",
         "vippsDraftsReleasableHeading": "Payments you can release to the Vipps queue",
         "vippsDraftsRelease": "Release",
@@ -1713,7 +1713,18 @@
         "receiptUploadFailed": "Receipt upload failed — entry saved, please retry the upload",
         "receiptUnknownVendor": "Unknown vendor"
       },
-      "importedNoOpeningBalance": "This faktura was imported from the previous system and its receivable isn't in Brygge's opening balance yet. Book the payment after the opening balance is posted."
+      "importedNoOpeningBalance": "This faktura was imported from the previous system and its receivable isn't in Brygge's opening balance yet. Book the payment after the opening balance is posted.",
+      "clearedSettlement": {
+        "refused": "This payment belongs to settlement {settlement} (Vippsnr {msn}), which is already matched to the bank deposit. Undo that matching first, then you can undo the payment.",
+        "undoButton": "Undo the deposit",
+        "undoing": "Undoing…",
+        "confirmTitle": "Undo the matching of settlement {settlement}?",
+        "confirmBody": "You do this so the payment can be corrected. The settlement is matched again at the next sync, once all its payments are booked.",
+        "detailPayout": "The settlement's payout entry is voided",
+        "detailDeposit": "The bank deposit \"Utb. {settlement} Vippsnr {msn}\" goes back to Tildel",
+        "detailFee": "The Vipps fee stays booked",
+        "noDeposit": "This matching cannot be undone from here. Undo the deposit under Bank & Vipps."
+      }
     },
     "groupEconomy": "Economy",
     "groupShop": "Shop",
