@@ -512,7 +512,7 @@ Stripe can send its payment and refund receipts from the club's domain instead o
 1. In Stripe: Settings → Custom email domain → **Connect your domain**.
 2. Copy into `terraform.tfvars.json`:
    - `stripe_email_verification`: the full `stripe-verification=…` value, without quotes;
-   - `stripe_email_dkim_tokens`: the six DKIM tokens, the part of each name before `._domainkey`. Check one row's value: it should be `<token>.dkim.custom-email-domain.stripe.com`, which is what `terraform/dns.nix` publishes.
+   - `stripe_email_dkim_tokens`: the six DKIM tokens, the part of each name before `._domainkey`. Check one row's value: it should be `<token>.dkim.custom-email-domain.stripe.com`, which is what `terraform/dns.nix` publishes. Exactly what to copy, with an example: [payments.md](../payments.md#receipts-from-the-clubs-domain-stripe-custom-email-domain).
 3. `nix run .#tf-apply`, then **Try verifying now** in Stripe. Verification can take up to 72 hours.
 
 Skip the dialog's `_dmarc` row: Stripe's DKIM (`d=<domain>`) and SPF (`MAIL FROM bounce.<domain>`) both align under the existing relaxed DMARC policy. The Stripe selectors don't touch the mail server's `mail._domainkey`.

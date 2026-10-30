@@ -200,6 +200,34 @@ A card dispute (the cardholder asks the bank to take the payment back) is two se
 - **Dashboard links** are built by `stripe.DashboardURL(secretKey, path)` (`handlers.stripeDashboardURL(cfg, path)`): `https://dashboard.stripe.com/<path>`, with `/test` after the domain when the configured key is a test key (`sk_test_` / `rk_test_`), and never an `acct_` id.
 - **Refunds** cannot be made while a dispute stands in the way: `payments.OpenDisputeForAttempt(ctx, q, clubID, attemptID)` returns the dispute that blocks refunding an attempt (Stripe's `is_charge_refundable` when the events gave it; otherwise a chargeback awaiting a response or under review, or a lost one. An inquiry does not block: refunding is how it is settled). The refund endpoint calls it before it asks Stripe (409 `disputed`, `can_refund` false) and still handles Stripe's `charge_disputed` refusal as a failed refund, since this state can lag Stripe's.
 
+### Receipts from the club's domain (Stripe custom email domain)
+
+Stripe can send its payment and refund receipts from the club's own domain. In Stripe: Settings → Custom email domain → **Connect your domain**. The dialog lists DNS records; Terraform publishes them from two optional tfvars values (decision and DMARC background: [adr/mail.md](../adr/mail.md); the full procedure and checks: [mail/setup.md](mail/setup.md#stripe-custom-email-domain)).
+
+What goes into `terraform/terraform.tfvars.json`:
+
+| tfvars key | What to enter | From the dialog |
+|---|---|---|
+| `stripe_email_verification` | The **whole** value, as one string, starting with `stripe-verification=`; no quotes inside | The `TXT` row for `@` (use its copy icon; the dialog cuts the value off) |
+| `stripe_email_dkim_tokens` | An array of the **six tokens**: for each `CNAME` row, only the **first label of the Name column**, i.e. the text *before* `._domainkey` | The six `CNAME` rows ending in `._domainkey` |
+
+Example (made-up tokens). A dialog row with Name `abcd1234efgh5678ijkl9012mnop3456._domainkey` and Value `abcd1234efgh5678ijkl9012mnop3456.dkim.custom-email-domain.stripe.com.` becomes the array element `"abcd1234efgh5678ijkl9012mnop3456"`:
+
+```json
+{
+  "stripe_email_verification": "stripe-verification=0123456789abcdef0123456789abcdef",
+  "stripe_email_dkim_tokens": [
+    "abcd1234efgh5678ijkl9012mnop3456",
+    "…five more, one per CNAME row…"
+  ]
+}
+```
+
+- **Enter only the token.** Not the whole name (`<token>._domainkey`), not the value, and no trailing dot. The variable validation refuses a token containing `._domainkey` or anything other than lower-case letters and digits, and a verification value with quotes or without the `stripe-verification=` prefix.
+- **The target of each CNAME is built from the token** as `<token>.dkim.custom-email-domain.stripe.com.`. Check one row's Value in the dialog: if Stripe's pattern ever differs, change `terraform/dns.nix`, not the tokens.
+- **Nothing else is entered.** The `bounce` CNAME (`custom-email-domain.stripe.com.`) is the same for every club, so `dns.nix` publishes it automatically whenever either value is set. Don't add a `bounce` key to tfvars. Skip the dialog's `_dmarc` row: the club's existing DMARC record applies (MAIL-1).
+- **Apply and verify.** `nix run .#tf-plan` should list only additions (six `<token>._domainkey` CNAMEs, `bounce`) and the apex TXT updated in place. Then `nix run .#tf-apply` and **Try verifying now** in Stripe. "You have set up your DNS records" turns green at once; the domain check itself can take up to 72 hours.
+
 ### Still Vipps-shaped
 
 - `orders.vipps_reference` holds the latest Vipps attempt's reference for the settlement reconciliation (BRY-445).
