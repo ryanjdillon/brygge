@@ -323,9 +323,10 @@ func TestReconcileVippsConfirmRefusesImportedFaktura(t *testing.T) {
 	ctx := context.Background()
 	inv := f.imported(t, day(2025, 9, 1), 45000)
 	rowID := f.club.NewBankRow(t, f.club.NewBankImport(t), fin.BankRowOpts{Date: day(2026, 6, 5), Cents: 45000})
+	charge := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000, Date: day(2026, 6, 4), CustomerName: "Synthetic Payer"})
 	lines := []VippsReconcileLine{
 		{Kind: "bank_in", AccountCode: "1920", Debit: 450},
-		{Kind: "receivable", AccountCode: receivablesAccountCode, Credit: 450, LinkedInvoiceID: inv.ID},
+		{Kind: "receivable", AccountCode: receivablesAccountCode, Credit: 450, LinkedInvoiceID: inv.ID, VippsRowID: charge},
 	}
 
 	if _, err := f.svc.ReconcileVippsConfirm(ctx, f.club.ID, rowID, "", f.club.Treasurer.ID, lines); !errors.Is(err, ErrImportedNoOpeningBalance) {

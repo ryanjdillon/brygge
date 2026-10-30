@@ -175,16 +175,25 @@ func importedNoOpeningBalanceConflict(w http.ResponseWriter) {
 }
 
 // The 409 codes for a payment refused because its faktura is credited in
-// full, or is a credit note (BRY-508). The Stripe assign answers the same
-// codes through accounting.StripeTxnRefusal.
+// full, is a credit note (BRY-508), or is voided. The Stripe assign answers
+// invoice_credited and invoice_not_debt through accounting.StripeTxnRefusal;
+// a voided faktura is its invoice_settled.
 const (
 	invoiceCreditedCode = "invoice_credited"
 	invoiceNotDebtCode  = "invoice_not_debt"
+	invoiceVoidedCode   = "invoice_voided"
+	// settlementOverpaidCode is the legacy Vipps confirm's refusal of lines
+	// that link one faktura twice or credit it above its total.
+	settlementOverpaidCode = "settlement_invoice_overpaid"
+	// vippsRowBookedCode is the confirm's refusal of a settlement with a
+	// Vipps row that is already booked.
+	vippsRowBookedCode = "vipps_row_booked"
 )
 
-// invoiceNotAssignableConflict answers 409 invoice_credited or
-// invoice_not_debt, nothing booked, when err is accounting.ErrInvoiceCredited
-// or accounting.ErrInvoiceNotDebt, and reports whether it did. The message is
+// invoiceNotAssignableConflict answers 409 invoice_credited, invoice_not_debt
+// or invoice_voided, nothing booked, when err is accounting.ErrInvoiceCredited,
+// accounting.ErrInvoiceNotDebt or accounting.ErrInvoiceVoided, and reports
+// whether it did. The message is
 // Norwegian and shown as is; the code lets the SPA word it in the
 // treasurer's locale.
 func invoiceNotAssignableConflict(w http.ResponseWriter, err error) bool {
@@ -194,6 +203,9 @@ func invoiceNotAssignableConflict(w http.ResponseWriter, err error) bool {
 	}{
 		{accounting.ErrInvoiceCredited, invoiceCreditedCode},
 		{accounting.ErrInvoiceNotDebt, invoiceNotDebtCode},
+		{accounting.ErrInvoiceVoided, invoiceVoidedCode},
+		{accounting.ErrSettlementInvoiceOverpaid, settlementOverpaidCode},
+		{accounting.ErrVippsRowAlreadyBooked, vippsRowBookedCode},
 	} {
 		if errors.Is(err, refusal.err) {
 			JSON(w, http.StatusConflict, map[string]string{"error": refusal.err.Error(), "code": refusal.code})

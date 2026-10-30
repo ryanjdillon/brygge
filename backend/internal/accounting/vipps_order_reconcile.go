@@ -25,9 +25,14 @@ type VippsOrderReconcileResult struct {
 
 // AssignVippsChargeToOrder books one belastning against the checkout order its
 // merchant reference names. It refuses when the order's split does not add up
-// to the charge, or when a faktura it would settle already has a payment —
-// either needs a human, not a second credit to receivables. Idempotent per
-// charge. found=false means no order carries the charge's reference.
+// to the charge, or when a faktura it would settle can no longer take a
+// payment (voided, credited, a credit note, already paid, a booked row
+// recorded against it, or imported without its opening balance): any of these
+// needs a human, not a second credit to receivables. The fakturas are locked
+// and checked inside the booking transaction, as a manual assign does, so a
+// credit note, payment or booking that landed after the caller last looked is
+// seen. Idempotent per charge. found=false means no order carries the
+// charge's reference.
 func (s *Service) AssignVippsChargeToOrder(ctx context.Context, clubID, vippsRowID, createdBy string) (res *VippsChargePostResult, found bool, err error) {
 	b, err := s.loadVippsBelastning(ctx, clubID, vippsRowID)
 	if err != nil {
@@ -40,7 +45,13 @@ func (s *Service) AssignVippsChargeToOrder(ctx context.Context, clubID, vippsRow
 		return nil, true, fmt.Errorf("charge is dismissed")
 	}
 
-	split, found, err := s.resolveOrderChargeSplit(ctx, clubID, b.orderRef)
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, false, fmt.Errorf("begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	split, found, err := resolveOrderChargeSplit(ctx, tx, clubID, b.orderRef)
 	if err != nil || !found {
 		return nil, found, err
 	}
@@ -48,21 +59,35 @@ func (s *Service) AssignVippsChargeToOrder(ctx context.Context, clubID, vippsRow
 		return nil, true, fmt.Errorf("order %s has no fakturas or lines to book", b.orderRef)
 	}
 
-	credits, invoiceIDs, err := checkOrderChargeSplit(ctx, s.db, clubID, split, b.amount, b.date)
-	if errors.Is(err, errOrderReceivableNotOpen) {
-		return nil, true, fmt.Errorf("a faktura on order %s is already paid, voided or credited — book the charge by hand", b.orderRef)
+	// Fakturas first: the lock order every settle path shares (invariants.md,
+	// "Lock order"). This path takes no order or attempt lock.
+	var settled []settledInvoice
+	for _, l := range split {
+		if l.LinkedInvoiceID != "" {
+			settled = append(settled, settledInvoice{id: l.LinkedInvoiceID, bookingDate: b.date})
+		}
 	}
+	if _, err := lockInvoicesForManualAssign(ctx, tx, clubID, settled); err != nil {
+		return nil, true, orderReceivableRefusal(b.orderRef, err)
+	}
+
+	credits, invoiceIDs, err := checkOrderChargeSplit(ctx, tx, clubID, split, b.amount, b.date)
 	if err != nil {
-		return nil, true, err
+		return nil, true, orderReceivableRefusal(b.orderRef, err)
 	}
 
 	desc := fmt.Sprintf("Vipps innbetaling ordre %s", b.orderRef)
-	entryID, err := s.postVippsChargeSplit(ctx, clubID, createdBy, desc, b, credits)
+	entryID, err := postVippsChargeSplitTx(ctx, tx, clubID, createdBy, desc, b, credits)
 	if errors.Is(err, errChargeRaced) {
 		return &VippsChargePostResult{EntryID: entryID, AlreadyReconciled: true}, true, nil
 	}
 	if err != nil {
 		return nil, true, err
+	}
+	// The back-links update the fakturas, so they run once the commit has
+	// released the locks.
+	if err := tx.Commit(ctx); err != nil {
+		return nil, true, fmt.Errorf("commit vipps order charge: %w", err)
 	}
 	for _, id := range invoiceIDs {
 		// Best-effort, as in AssignVippsChargeToInvoice: the GL is already right.
@@ -72,6 +97,36 @@ func (s *Service) AssignVippsChargeToOrder(ctx context.Context, clubID, vippsRow
 		}
 	}
 	return &VippsChargePostResult{EntryID: entryID}, true, nil
+}
+
+// orderChargeRefusal is the message skipped_details shows when a faktura on
+// the order can no longer take the charge; Unwrap keeps the specific cause
+// (ErrInvoiceCredited, ErrInvoiceVoided, …) for errors.Is.
+type orderChargeRefusal struct {
+	orderRef string
+	cause    error
+}
+
+func (e *orderChargeRefusal) Error() string {
+	return fmt.Sprintf("a faktura on order %s is already paid, voided or credited — book the charge by hand", e.orderRef)
+}
+
+func (e *orderChargeRefusal) Unwrap() error { return e.cause }
+
+// orderReceivableRefusal wraps the refusals that mean "a faktura on the
+// order is not open" in orderChargeRefusal; every other error (a split that
+// does not add up, ErrImportedNoOpeningBalance, a database error) passes
+// through unchanged.
+func orderReceivableRefusal(orderRef string, err error) error {
+	for _, cause := range []error{
+		errOrderReceivableNotOpen, ErrInvoiceVoided, ErrInvoiceCredited, ErrInvoiceNotDebt,
+		errInvoicePaid, errInvoiceHasBookedRow,
+	} {
+		if errors.Is(err, cause) {
+			return &orderChargeRefusal{orderRef: orderRef, cause: err}
+		}
+	}
+	return err
 }
 
 // AutoReconcileOrderCharges first repairs Report API rows imported before the

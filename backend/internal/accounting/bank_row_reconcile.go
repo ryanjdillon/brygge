@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -226,12 +227,13 @@ func (s *Service) assignBankRowToInvoice(
 type invoiceLockMode int
 
 const (
-	// lockManual is a treasurer's assign (bank row, Stripe charge and Vipps
-	// charge): it refuses a voided, credit-note (ErrInvoiceNotDebt),
-	// credited (ErrInvoiceCredited) or paid faktura, one a booked row is
-	// recorded against, or an imported one
-	// whose receivable isn't in the GL by the booking date
-	// (ErrImportedNoOpeningBalance).
+	// lockManual is a treasurer's assign or a booking that stands in for
+	// one (bank row, Stripe charge, Vipps charge, the Vipps settlement
+	// reconcile, an order-linked Vipps charge): it refuses a voided
+	// (ErrInvoiceVoided), credit-note (ErrInvoiceNotDebt), credited
+	// (ErrInvoiceCredited) or paid faktura, one a booked row is recorded
+	// against, or an imported one whose receivable isn't in the GL by the
+	// booking date (ErrImportedNoOpeningBalance).
 	lockManual invoiceLockMode = iota
 	// lockAutoAssign adds the auto-assign rule's conditions: still owed,
 	// sent, not imported, nothing booked against it (incl. a KID-matched
@@ -285,9 +287,11 @@ var errInvoiceNotOpen = errors.New("faktura no longer open")
 // paid once it held the lock: a concurrent assignment got there first.
 var errInvoicePaid = errors.New("invoice is already paid")
 
-// errInvoiceVoided means a manual or Vipps assignment found its faktura
-// voided once it held the lock.
-var errInvoiceVoided = errors.New("invoice is voided")
+// ErrInvoiceVoided means a manual or Vipps assignment found its faktura
+// voided once it held the lock. Nothing is booked; the handlers answer 409
+// invoice_voided. Shown as is, so a full Norwegian sentence.
+var ErrInvoiceVoided = errors.New( //nolint:staticcheck // ST1005: a user-facing sentence, see above
+	"Fakturaen er annullert, så betalingen kan ikke knyttes til den.")
 
 // ErrInvoiceCredited means a manual assignment (bank row, Stripe charge or
 // Vipps charge) found its faktura credited in full once it held the lock:
@@ -396,7 +400,7 @@ func lockInvoiceForAssign(ctx context.Context, tx pgx.Tx, clubID, invoiceID stri
 	}
 	switch {
 	case invoiceStatus == "voided":
-		return 0, errInvoiceVoided
+		return 0, ErrInvoiceVoided
 	case opts.mode == lockManual && invoiceCents <= 0:
 		return 0, ErrInvoiceNotDebt
 	case opts.mode == lockManual && credited:
@@ -411,6 +415,46 @@ func lockInvoiceForAssign(ctx context.Context, tx pgx.Tx, clubID, invoiceID stri
 		return 0, ErrImportedNoOpeningBalance
 	}
 	return invoiceCents, nil
+}
+
+// settledInvoice is a faktura a booking settles and the date its payment is
+// checked against (see invoiceLockOpts.bookingDate).
+type settledInvoice struct {
+	id          string
+	bookingDate time.Time
+}
+
+// lockInvoicesForManualAssign locks every faktura a multi-faktura booking
+// settles, in id order and in one statement (lockInvoicesTx), and only then
+// runs lockInvoiceForAssign's lockManual checks on each, so a booking that
+// waited for a lock reads the winner's rows. A faktura named twice is
+// checked once, against its earliest date. It takes the fakturas before
+// anything else the booking locks (an order, then its attempt), and returns
+// each faktura's total in øre.
+func lockInvoicesForManualAssign(ctx context.Context, tx pgx.Tx, clubID string, invs []settledInvoice) (map[string]int64, error) {
+	byID := make(map[string]time.Time, len(invs))
+	for _, inv := range invs {
+		if d, ok := byID[inv.id]; !ok || inv.bookingDate.Before(d) {
+			byID[inv.id] = inv.bookingDate
+		}
+	}
+	ids := make([]string, 0, len(byID))
+	for id := range byID {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	if err := lockInvoicesTx(ctx, tx, clubID, ids); err != nil {
+		return nil, err
+	}
+	totals := make(map[string]int64, len(ids))
+	for _, id := range ids {
+		cents, err := lockInvoiceForAssign(ctx, tx, clubID, id, invoiceLockOpts{mode: lockManual, bookingDate: byID[id]})
+		if err != nil {
+			return nil, err
+		}
+		totals[id] = cents
+	}
+	return totals, nil
 }
 
 // errNoFiscalPeriod: no fiscal period covers the date, and the caller must

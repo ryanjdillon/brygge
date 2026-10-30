@@ -114,3 +114,67 @@ func TestAssignCreditedFakturaIsConflict(t *testing.T) {
 		t.Errorf("a refused assign was audited")
 	}
 }
+
+// A voided faktura is refused as 409 invoice_voided, booking nothing, by the
+// bank-row assigns, the Vipps charge assign and the legacy Vipps reconcile
+// confirm.
+func TestAssignVoidedFakturaIsConflict(t *testing.T) {
+	env := newAliasTestEnv(t, func(r chi.Router, svc *accounting.Service, as *audit.Service) {
+		h := NewBankRowsHandler(svc, as, zerolog.Nop())
+		r.Post("/bank-rows/{rowID}/assign-invoice", h.HandleAssignInvoice)
+		r.Post("/bank-rows/assign-invoice-multi", h.HandleAssignInvoiceMulti)
+		ah := NewAccountingHandler(svc, as, nil, nil, nil, zerolog.Nop())
+		r.Post("/vipps-charges/{rowID}/assign-invoice", ah.HandleAssignVippsChargeToInvoice)
+		r.Post("/bank-rows/{rowID}/reconcile-vipps/confirm", ah.HandleVippsReconcileConfirm)
+	})
+	club := env.club
+	ctx := context.Background()
+	m := club.NewMember(t, "member")
+	voided := club.NewInvoice(t, fin.InvoiceOpts{Member: &m, Cents: 30000, Status: "voided"})
+	imp := club.NewBankImport(t)
+	booked := func(table, rowID string) bool {
+		var b bool
+		if err := club.Pool.QueryRow(ctx,
+			`SELECT journal_entry_id IS NOT NULL FROM `+table+` WHERE id = $1`, rowID).Scan(&b); err != nil {
+			t.Fatalf("row: %v", err)
+		}
+		return b
+	}
+
+	row := club.NewBankRow(t, imp, fin.BankRowOpts{Cents: 30000})
+	wantRefusalCode(t, env.serve([]string{"treasurer"}, http.MethodPost, "/bank-rows/"+row+"/assign-invoice",
+		map[string]any{"invoice_id": voided.ID}), invoiceVoidedCode)
+
+	rows := []string{club.NewBankRow(t, imp, fin.BankRowOpts{Cents: 10000}), club.NewBankRow(t, imp, fin.BankRowOpts{Cents: 20000})}
+	wantRefusalCode(t, env.serve([]string{"treasurer"}, http.MethodPost, "/bank-rows/assign-invoice-multi",
+		map[string]any{"row_ids": rows, "invoice_id": voided.ID}), invoiceVoidedCode)
+
+	charge := club.NewVippsRow(t, fin.VippsRowOpts{Cents: 30000, CustomerName: "Synthetic Payer"})
+	wantRefusalCode(t, env.serve([]string{"treasurer"}, http.MethodPost, "/vipps-charges/"+charge+"/assign-invoice",
+		map[string]any{"invoice_id": voided.ID}), invoiceVoidedCode)
+
+	confirmRow := club.NewBankRow(t, imp, fin.BankRowOpts{Cents: 30000})
+	wantRefusalCode(t, env.serve([]string{"treasurer"}, http.MethodPost, "/bank-rows/"+confirmRow+"/reconcile-vipps/confirm",
+		map[string]any{"lines": []accounting.VippsReconcileLine{
+			{AccountCode: "1920", Debit: 300},
+			{AccountCode: "1500", Credit: 300, LinkedInvoiceID: voided.ID, VippsRowID: club.NewVippsRow(t, fin.VippsRowOpts{Cents: 30000})},
+		}}), invoiceVoidedCode)
+
+	if booked("bank_import_rows", row) || booked("bank_import_rows", rows[0]) || booked("bank_import_rows", rows[1]) ||
+		booked("bank_import_rows", confirmRow) || booked("vipps_import_rows", charge) {
+		t.Errorf("a refused assign of a voided faktura booked something")
+	}
+
+	// A confirm that links one open faktura from two lines is refused.
+	open := club.NewInvoice(t, fin.InvoiceOpts{Member: &m, Cents: 30000})
+	dupRow := club.NewBankRow(t, imp, fin.BankRowOpts{Cents: 60000})
+	wantRefusalCode(t, env.serve([]string{"treasurer"}, http.MethodPost, "/bank-rows/"+dupRow+"/reconcile-vipps/confirm",
+		map[string]any{"lines": []accounting.VippsReconcileLine{
+			{AccountCode: "1920", Debit: 600},
+			{AccountCode: "1500", Credit: 300, LinkedInvoiceID: open.ID, VippsRowID: charge},
+			{AccountCode: "1500", Credit: 300, LinkedInvoiceID: open.ID, VippsRowID: club.NewVippsRow(t, fin.VippsRowOpts{Cents: 30000})},
+		}}), settlementOverpaidCode)
+	if booked("bank_import_rows", dupRow) {
+		t.Errorf("a refused confirm booked the bank row")
+	}
+}

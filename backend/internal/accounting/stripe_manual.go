@@ -517,7 +517,7 @@ func stripeInvoiceLockRefusal(err error) error {
 		return stripeRefusal(StripeTxnInvoiceCredited, ErrInvoiceCredited.Error())
 	case errors.Is(err, ErrInvoiceNotDebt):
 		return stripeRefusal(StripeTxnInvoiceNotDebt, ErrInvoiceNotDebt.Error())
-	case errors.Is(err, errInvoiceVoided):
+	case errors.Is(err, ErrInvoiceVoided):
 		return stripeRefusal(StripeTxnInvoiceSettled, "fakturaen er annullert")
 	case errors.Is(err, errInvoicePaid), errors.Is(err, errInvoiceHasBookedRow):
 		return stripeRefusal(StripeTxnInvoiceSettled, "fakturaen er alt betalt eller har en bokført innbetaling")

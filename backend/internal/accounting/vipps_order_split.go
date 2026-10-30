@@ -77,13 +77,14 @@ func buildOrderChargeSplitAs(label string, sources []orderChargeSource, lines []
 // resolveOrderChargeSplit finds the checkout order behind a settled charge's
 // merchant reference (chk-…) and returns its per-line credit split. found=false
 // when no order matches the reference (the caller falls back to the existing
-// amount/member classification cascade).
-func (s *Service) resolveOrderChargeSplit(ctx context.Context, clubID, reference string) (lines []VippsReconcileLine, found bool, err error) {
+// amount/member classification cascade). It reads through q, so a booking
+// that holds the fakturas locked resolves on its own transaction.
+func resolveOrderChargeSplit(ctx context.Context, q dbtx, clubID, reference string) (lines []VippsReconcileLine, found bool, err error) {
 	if reference == "" {
 		return nil, false, nil
 	}
 	var orderID string
-	err = s.db.QueryRow(ctx,
+	err = q.QueryRow(ctx,
 		`SELECT id FROM orders WHERE club_id = $1 AND vipps_reference = $2`,
 		clubID, reference,
 	).Scan(&orderID)
@@ -93,7 +94,7 @@ func (s *Service) resolveOrderChargeSplit(ctx context.Context, clubID, reference
 	if err != nil {
 		return nil, false, fmt.Errorf("load order by reference: %w", err)
 	}
-	lines, err = orderChargeSplit(ctx, s.db, orderID, vippsSplitLabel)
+	lines, err = orderChargeSplit(ctx, q, orderID, vippsSplitLabel)
 	if err != nil {
 		return nil, false, err
 	}

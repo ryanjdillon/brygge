@@ -186,6 +186,9 @@ func (s *Service) ReconcileVippsPreview(ctx context.Context, clubID, bankRowID s
 		Description: fmt.Sprintf("Vipps utbetaling %s (Vippsnr %s)", settlement, msn),
 	})
 
+	// A faktura is offered to the first charge that matches it; a second
+	// charge of the same amount from the same payer falls through.
+	linkedInvoices := map[string]bool{}
 	for _, v := range detail {
 		switch VippsRowType(v.RowType) {
 		case VippsRowBelastning:
@@ -231,6 +234,12 @@ func (s *Service) ReconcileVippsPreview(ctx context.Context, clubID, bankRowID s
 					chargeDate = *v.Date
 				}
 				invoiceID = s.findOpenInvoiceForMember(ctx, clubID, memberID, v.Amount, chargeDate)
+				if linkedInvoices[invoiceID] {
+					invoiceID = ""
+				}
+			}
+			if invoiceID != "" {
+				linkedInvoices[invoiceID] = true
 			}
 			switch {
 			case invoiceID != "":
@@ -304,10 +313,33 @@ func (s *Service) ReconcileVippsPreview(ctx context.Context, clubID, bankRowID s
 	return preview, nil
 }
 
+// vippsInvoiceToleranceCents is how far a charge may differ from the faktura
+// it pays (1 kr), as in findOpenInvoiceForMember and AssignVippsChargeToInvoice.
+const vippsInvoiceToleranceCents = 100
+
+// ErrSettlementInvoiceOverpaid means a settlement confirm links one faktura
+// from more than one line, or credits it with more than its total. Nothing is
+// booked; the handlers answer 409 settlement_invoice_overpaid. Shown as is, so
+// a full Norwegian sentence.
+var ErrSettlementInvoiceOverpaid = errors.New( //nolint:staticcheck // ST1005: a user-facing sentence, see above
+	"Oppgjøret knytter samme faktura til flere linjer, eller krediterer fakturaen med mer enn dens beløp. Rediger linjene og prøv igjen.")
+
+// ErrVippsRowAlreadyBooked means a settlement confirm found one of its Vipps
+// rows already booked (per charge, or by another settlement) or gone. Nothing
+// is booked; the handlers answer 409 vipps_row_booked. Shown as is, so a full
+// Norwegian sentence.
+var ErrVippsRowAlreadyBooked = errors.New( //nolint:staticcheck // ST1005: a user-facing sentence, see above
+	"En Vipps-rad i oppgjøret er allerede bokført, så oppgjøret kan ikke bokføres. Last oppgjøret på nytt.")
+
 // ReconcileVippsConfirm books a (possibly edited) preview as a posted journal
 // entry (BRY-339). The caller is responsible for passing the final line set.
 // If periodOverride is empty, the period is auto-resolved from the bank row's
 // date (and auto-created as calendar-year if missing).
+//
+// The preview may be stale or edited, so every faktura a line settles is
+// locked and re-checked inside the booking transaction, as a manual assign
+// does (lockManual): a faktura voided, credited, paid or booked since the
+// preview is refused with nothing booked.
 func (s *Service) ReconcileVippsConfirm(ctx context.Context, clubID, bankRowID, periodOverride, createdBy string, lines []VippsReconcileLine) (string, error) {
 	return s.reconcileVippsConfirm(ctx, clubID, bankRowID, periodOverride, createdBy, lines, true)
 }
@@ -321,29 +353,21 @@ func (s *Service) reconcileVippsConfirm(ctx context.Context, clubID, bankRowID, 
 		return "", fmt.Errorf("at least one line is required")
 	}
 
-	var (
-		bankDate    time.Time
-		description string
-		existing    *string
-	)
-	err := s.db.QueryRow(ctx,
-		`SELECT row_date, description, journal_entry_id
-		 FROM bank_import_rows WHERE id = $1 AND club_id = $2`,
-		bankRowID, clubID,
-	).Scan(&bankDate, &description, &existing)
-	if err != nil {
-		return "", fmt.Errorf("loading bank row: %w", err)
-	}
-	if existing != nil {
-		return "", fmt.Errorf("bank row already linked to journal entry")
-	}
-
-	periodID, periodStatus, perr := s.resolvePeriod(ctx, clubID, bankDate, periodOverride)
-	if perr != nil {
-		return "", fmt.Errorf("resolving fiscal period: %w", perr)
-	}
-	if periodStatus == "closed" {
-		return "", fmt.Errorf("fiscal period %d is closed — reopen it or pick a different period", bankDate.Year())
+	// Lines are client-editable. A faktura is settled by the one charge that
+	// links it, and its linked credit may not exceed it (the preview's own
+	// amount tolerance), or 1500 would be credited twice.
+	linkedCents := map[string]int64{}
+	for _, l := range lines {
+		if l.LinkedInvoiceID == "" {
+			continue
+		}
+		if l.VippsRowID == "" {
+			return "", fmt.Errorf("a line linked to faktura %s names no Vipps charge", l.LinkedInvoiceID)
+		}
+		if _, dup := linkedCents[l.LinkedInvoiceID]; dup {
+			return "", ErrSettlementInvoiceOverpaid
+		}
+		linkedCents[l.LinkedInvoiceID] = toCents(l.Credit)
 	}
 
 	var dr, cr float64
@@ -361,40 +385,73 @@ func (s *Service) reconcileVippsConfirm(ctx context.Context, clubID, bankRowID, 
 	if !floatNear(dr, cr, 0.005) {
 		return "", fmt.Errorf("lines do not balance: debit %.2f != credit %.2f", dr, cr)
 	}
-	// The lines may be an edited or stale preview, so each faktura it
-	// settles is re-checked rather than trusted: an imported one needs its
-	// receivable in the GL by the charge date (BRY-386), and a credited one
-	// is refused so 1500 is not credited twice (BRY-508).
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return "", fmt.Errorf("begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var (
+		bankDate    time.Time
+		description string
+		existing    *string
+	)
+	if err := tx.QueryRow(ctx,
+		`SELECT row_date, description, journal_entry_id
+		 FROM bank_import_rows WHERE id = $1 AND club_id = $2`,
+		bankRowID, clubID,
+	).Scan(&bankDate, &description, &existing); err != nil {
+		return "", fmt.Errorf("loading bank row: %w", err)
+	}
+	if existing != nil {
+		return "", fmt.Errorf("bank row already linked to journal entry")
+	}
+
+	// Fakturas before the period and the entry. An imported faktura is
+	// checked against its charge's date (BRY-386), else the bank row's.
+	var settled []settledInvoice
 	for _, l := range lines {
 		if l.LinkedInvoiceID == "" {
 			continue
 		}
-		var ok, credited bool
-		if err := s.db.QueryRow(ctx,
-			`SELECT `+finance.ImportedReceivableOpenSQL("i",
-				`COALESCE((SELECT COALESCE(v.booking_date, v.tx_at::date) FROM vipps_import_rows v
-				            WHERE v.id::text = $4 AND v.club_id = $2), $3::date)`)+`,
-			        `+finance.CreditedSQL("i")+`
-			   FROM invoices i
-			  WHERE i.id::text = $1 AND i.club_id = $2`,
-			l.LinkedInvoiceID, clubID, bankDate, l.VippsRowID,
-		).Scan(&ok, &credited); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return "", fmt.Errorf("linked invoice %s not found", l.LinkedInvoiceID)
+		date := bankDate
+		if l.VippsRowID != "" {
+			var chargeDate *time.Time
+			if err := tx.QueryRow(ctx,
+				`SELECT COALESCE(booking_date, tx_at::date) FROM vipps_import_rows
+				  WHERE id::text = $1 AND club_id = $2`,
+				l.VippsRowID, clubID,
+			).Scan(&chargeDate); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return "", fmt.Errorf("loading charge date: %w", err)
 			}
-			return "", fmt.Errorf("checking linked invoice: %w", err)
+			if chargeDate != nil {
+				date = *chargeDate
+			}
 		}
-		if credited {
-			return "", ErrInvoiceCredited
+		settled = append(settled, settledInvoice{id: l.LinkedInvoiceID, bookingDate: date})
+	}
+	totals, err := lockInvoicesForManualAssign(ctx, tx, clubID, settled)
+	if err != nil {
+		return "", err
+	}
+	for id, cents := range linkedCents {
+		if cents > totals[id]+vippsInvoiceToleranceCents {
+			return "", ErrSettlementInvoiceOverpaid
 		}
-		if !ok {
-			return "", ErrImportedNoOpeningBalance
-		}
+	}
+
+	periodID, periodStatus, perr := resolvePeriodIn(ctx, tx, clubID, bankDate, periodOverride)
+	if perr != nil {
+		return "", fmt.Errorf("resolving fiscal period: %w", perr)
+	}
+	if periodStatus == "closed" {
+		return "", fmt.Errorf("fiscal period %d is closed — reopen it or pick a different period", bankDate.Year())
 	}
 
 	sourceID := bankRowID
 	sourceTable := "bank_import_rows"
-	entry, err := s.CreateJournalEntry(ctx, CreateJournalEntryInput{
+	entry, err := createJournalEntryTx(ctx, tx, CreateJournalEntryInput{
 		FiscalPeriodID: periodID,
 		EntryDate:      bankDate.Format("2006-01-02"),
 		Description:    fmt.Sprintf("Vipps reconciliation: %s", description),
@@ -409,38 +466,50 @@ func (s *Service) reconcileVippsConfirm(ctx context.Context, clubID, bankRowID, 
 		return "", fmt.Errorf("creating journal entry: %w", err)
 	}
 
-	tag, err := s.db.Exec(ctx,
+	tag, err := tx.Exec(ctx,
 		`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true
 		  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL`,
 		entry.ID, bankRowID, clubID,
 	)
 	if err != nil {
-		s.discardDraft(ctx, clubID, entry.ID)
 		return "", fmt.Errorf("linking bank row: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		s.discardDraft(ctx, clubID, entry.ID)
 		return "", fmt.Errorf("bank row is already booked")
 	}
 
-	var vippsRowIDs []string
+	// Each charge records the faktura it settles in this commit, so a
+	// booking that waited for the faktura lock sees it.
 	for _, l := range lines {
 		if l.VippsRowID == "" {
 			continue
 		}
-		vippsRowIDs = append(vippsRowIDs, l.VippsRowID)
-		_, _ = s.db.Exec(ctx,
-			`UPDATE vipps_import_rows SET journal_entry_id = $1 WHERE id = $2 AND club_id = $3`,
-			entry.ID, l.VippsRowID, clubID,
+		var invoiceID *string
+		if l.LinkedInvoiceID != "" {
+			invoiceID = &l.LinkedInvoiceID
+		}
+		tag, err := tx.Exec(ctx,
+			`UPDATE vipps_import_rows SET journal_entry_id = $1, invoice_id = $4::uuid
+			  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL`,
+			entry.ID, l.VippsRowID, clubID, invoiceID,
 		)
+		if err != nil {
+			return "", fmt.Errorf("linking vipps row: %w", err)
+		}
+		if tag.RowsAffected() != 1 {
+			return "", ErrVippsRowAlreadyBooked
+		}
 	}
 
 	if post {
-		if err := s.PostJournalEntry(ctx, clubID, entry.ID, createdBy); err != nil {
-			s.unwindVippsPosting(ctx, clubID, entry.ID, "bank_import_rows", []string{bankRowID})
-			s.unwindVippsPosting(ctx, clubID, entry.ID, "vipps_import_rows", vippsRowIDs)
+		if err := postJournalEntryTx(ctx, tx, clubID, entry.ID, createdBy); err != nil {
 			return "", fmt.Errorf("posting journal entry: %w", err)
 		}
+	}
+	// The back-links below update the fakturas, so they run once the commit
+	// has released the locks.
+	if err := tx.Commit(ctx); err != nil {
+		return "", fmt.Errorf("commit vipps reconcile: %w", err)
 	}
 
 	// Back-link any invoice that this reconciliation paid off so the
@@ -700,14 +769,15 @@ func normalizeName(s string) string {
 // in the GL by chargeDate is never offered (BRY-386).
 func (s *Service) findOpenInvoiceForMember(ctx context.Context, clubID, memberID string, amount float64, chargeDate time.Time) string {
 	rows, err := s.db.Query(ctx,
-		`SELECT id FROM invoices
-		  WHERE club_id = $1
-		    AND user_id = $2
-		    AND `+finance.OwedByMemberSQL("")+`
-		    AND `+finance.ImportedReceivableOpenSQL("", "$4::date")+`
-		    AND ABS(total_amount - $3) < 1.00
-		    AND issue_date > CURRENT_DATE - INTERVAL '90 days'
-		  ORDER BY issue_date DESC
+		`SELECT i.id FROM invoices i
+		  WHERE i.club_id = $1
+		    AND i.user_id = $2
+		    AND `+finance.OwedByMemberSQL("i")+`
+		    AND `+finance.ImportedReceivableOpenSQL("i", "$4::date")+`
+		    AND NOT `+invoiceBookedRowSQL("i")+`
+		    AND ABS(i.total_amount - $3) < 1.00
+		    AND i.issue_date > CURRENT_DATE - INTERVAL '90 days'
+		  ORDER BY i.issue_date DESC
 		  LIMIT 2`,
 		clubID, memberID, amount, chargeDate,
 	)

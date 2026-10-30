@@ -467,8 +467,9 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   (KID auto-match writes `journal_entry_id`; reassign endpoint cascades
   to journal_lines).
 - `vipps_import_rows` — Vipps payout CSV ingestion. `journal_entry_id` is
-  set by `ReconcileVippsConfirm` after the cascade resolves; unresolved
-  belastning lines land in 3900 (Andre inntekter) rather than 2900.
+  set by `ReconcileVippsConfirm` after the cascade resolves (which also
+  records the settled faktura in `invoice_id`, under the faktura lock);
+  unresolved belastning lines land in 3900 (Andre inntekter) rather than 2900.
 - `clubs.bank_auto_assign` (migration 000110) — per-club opt-in for booking
   unambiguous KID-less bank deposits to a faktura without a human (BRY-366),
   separate from `vipps_auto_assign`. Default off; while off, the bank KID

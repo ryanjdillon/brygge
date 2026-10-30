@@ -295,8 +295,8 @@ func TestManualAssignRefusesCreditedFaktura(t *testing.T) {
 
 	// A voided faktura keeps its own refusals.
 	voidedRow := c.NewBankRow(t, imp, fin.BankRowOpts{Cents: 45000})
-	if _, err := f.svc.AssignBankRowToInvoice(ctx, c.ID, c.Treasurer.ID, voidedRow, f.voided.ID); !errors.Is(err, errInvoiceVoided) {
-		t.Errorf("voided: bank assign err = %v, want errInvoiceVoided", err)
+	if _, err := f.svc.AssignBankRowToInvoice(ctx, c.ID, c.Treasurer.ID, voidedRow, f.voided.ID); !errors.Is(err, ErrInvoiceVoided) {
+		t.Errorf("voided: bank assign err = %v, want ErrInvoiceVoided", err)
 	}
 	voidedTxn := f.reviewRow(t, "txn_test_cr_voided", "charge", StripeReviewNoAttempt, 45000, 0, "")
 	_, err = f.svc.AssignStripeTxnToInvoice(ctx, c.ID, c.Treasurer.ID, voidedTxn, f.voided.ID)
@@ -328,9 +328,10 @@ func TestReconcileVippsConfirmRefusesCreditedFaktura(t *testing.T) {
 	row := c.NewBankRow(t, c.NewBankImport(t), fin.BankRowOpts{Cents: 45000})
 	before := f.journalEntries(t)
 
+	charge := c.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000, CustomerName: "Synthetic Payer"})
 	lines := []VippsReconcileLine{
 		{AccountCode: "1920", Debit: 450},
-		{AccountCode: receivablesAccountCode, Credit: 450, LinkedInvoiceID: f.linked.ID},
+		{AccountCode: receivablesAccountCode, Credit: 450, LinkedInvoiceID: f.linked.ID, VippsRowID: charge},
 	}
 	if _, err := f.svc.ReconcileVippsConfirm(ctx, c.ID, row, "", c.Treasurer.ID, lines); !errors.Is(err, ErrInvoiceCredited) {
 		t.Fatalf("confirm err = %v, want ErrInvoiceCredited", err)
