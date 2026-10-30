@@ -638,7 +638,7 @@ func (h *InvoiceHandler) emailNewInvoice(ctx context.Context, m newInvoiceMail) 
 	}
 	filename := invoiceAttachmentName(fmt.Sprintf("faktura-%d.pdf", m.number), m.total)
 	subject, htmlBody := h.invoiceMessage(ctx, m.locale, m.clubID, m.invoiceID, m.deliverName, m.clubName,
-		m.number, m.dueDate, m.total, m.kid, m.bankAccount)
+		m.number, m.dueDate, m.total, m.kid, m.bankAccount, false)
 	if err := h.email.SendWithAttachment(email.WithKind(ctx, email.KindInvoice), m.deliverTo, subject, htmlBody, filename, m.pdf); err != nil {
 		h.log.Error().Err(err).Str("email", m.deliverTo).Msg("failed to send invoice email")
 		return nil, nil
@@ -661,11 +661,18 @@ func (h *InvoiceHandler) emailNewInvoice(ctx context.Context, m newInvoiceMail) 
 // invoiceMessage is the subject and HTML body of the email that carries an
 // issued faktura or credit note. A credit note (negative total) asks for
 // nothing: no payment details and no pay link, so a recipient is never
-// prompted to pay one.
+// prompted to pay one. So does the faktura a failed card refund issued, which
+// is settled when it is issued; settled is true for it (refundRefailInvoiceSQL,
+// read by the caller with the rest of the faktura).
 func (h *InvoiceHandler) invoiceMessage(ctx context.Context, locale, clubID, invoiceID, memberName, clubName string,
-	number int, dueDate time.Time, total float64, kid, bankAccount string) (subject, body string) {
+	number int, dueDate time.Time, total float64, kid, bankAccount string, settled bool) (subject, body string) {
 	if isCreditTotal(total) {
 		return email.CreditNoteSubject(clubName, number), email.CreditNoteBody(memberName, clubName, number, total)
+	}
+	// The faktura a failed refund issued is paid already: it is told as such,
+	// with no KID, account or pay link to act on.
+	if settled {
+		return email.RefundDocumentSubject(clubName, number, total), email.RefundDocumentBody(memberName, clubName, number, total)
 	}
 	// Offer online payment as a secondary option; the email frames bank
 	// transfer with KID as preferred. Non-fatal: an empty URL (whenever
@@ -1335,6 +1342,7 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 		s3Key          string
 		alreadySent    *time.Time
 		imported       bool
+		refail         bool
 	)
 	if err := h.db.QueryRow(ctx,
 		`SELECT i.invoice_number, i.user_id,
@@ -1346,14 +1354,15 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 		        COALESCE(u.last_name, ''), COALESCE(u.first_name, ''),
 		        COALESCE(u.email, ''), COALESCE(i.recipient_email, ''),
 		        fp.year, i.total_amount, i.due_date, i.kid_number,
-		        i.pdf_data, COALESCE(i.s3_key, ''), i.sent_at, i.import_source IS NOT NULL
+		        i.pdf_data, COALESCE(i.s3_key, ''), i.sent_at, i.import_source IS NOT NULL,
+		        `+refundRefailInvoiceSQL("i")+`
 		   FROM invoices i
 		   LEFT JOIN users u ON u.id = i.user_id
 		   LEFT JOIN fiscal_periods fp ON fp.id = i.fiscal_period_id
 		  WHERE i.id = $1 AND i.club_id = $2`,
 		invoiceID, claims.ClubID,
 	).Scan(&invoiceNumber, &userID, &memberName, &memberLast, &memberFirst, &memberEmail, &recipientEmail,
-		&fiscalYear, &total, &dueDate, &kid, &pdfData, &s3Key, &alreadySent, &imported); err != nil {
+		&fiscalYear, &total, &dueDate, &kid, &pdfData, &s3Key, &alreadySent, &imported, &refail); err != nil {
 		if err == pgx.ErrNoRows {
 			Error(w, http.StatusNotFound, "invoice not found")
 			return
@@ -1400,7 +1409,7 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 	).Scan(&clubName, &bankAccount)
 
 	subject, htmlBody := h.invoiceMessage(ctx, email.DetectLocale(r), claims.ClubID, invoiceID, memberName, clubName,
-		invoiceNumber, dueDate, total, kid, bankAccount)
+		invoiceNumber, dueDate, total, kid, bankAccount, refail)
 	filename := invoiceAttachmentName(buildInvoiceFilename(invoiceNumber, memberLast, memberFirst, fiscalYear), total)
 
 	// Stamp sent_at BEFORE handing the message to the mail server, then
@@ -1483,6 +1492,7 @@ func (h *InvoiceHandler) HandleResendInvoice(w http.ResponseWriter, r *http.Requ
 		pdfData        []byte
 		s3KeyResend    string
 		sentAt         *time.Time
+		refail         bool
 	)
 	if err := h.db.QueryRow(ctx,
 		`SELECT i.invoice_number,
@@ -1494,14 +1504,15 @@ func (h *InvoiceHandler) HandleResendInvoice(w http.ResponseWriter, r *http.Requ
 		        COALESCE(u.last_name, ''), COALESCE(u.first_name, ''),
 		        COALESCE(u.email, ''), COALESCE(i.recipient_email, ''),
 		        fp.year, i.total_amount, i.due_date, i.kid_number,
-		        i.pdf_data, COALESCE(i.s3_key, ''), i.sent_at
+		        i.pdf_data, COALESCE(i.s3_key, ''), i.sent_at,
+		        `+refundRefailInvoiceSQL("i")+`
 		   FROM invoices i
 		   LEFT JOIN users u ON u.id = i.user_id
 		   LEFT JOIN fiscal_periods fp ON fp.id = i.fiscal_period_id
 		  WHERE i.id = $1 AND i.club_id = $2`,
 		invoiceID, claims.ClubID,
 	).Scan(&invoiceNumber, &memberName, &memberLast, &memberFirst, &memberEmail, &recipientEmail,
-		&fiscalYear, &total, &dueDate, &kid, &pdfData, &s3KeyResend, &sentAt); err != nil {
+		&fiscalYear, &total, &dueDate, &kid, &pdfData, &s3KeyResend, &sentAt, &refail); err != nil {
 		if err == pgx.ErrNoRows {
 			Error(w, http.StatusNotFound, "invoice not found")
 			return
@@ -1542,7 +1553,7 @@ func (h *InvoiceHandler) HandleResendInvoice(w http.ResponseWriter, r *http.Requ
 	).Scan(&clubName, &bankAccount)
 
 	subject, htmlBody := h.invoiceMessage(ctx, email.DetectLocale(r), claims.ClubID, invoiceID, memberName, clubName,
-		invoiceNumber, dueDate, total, kid, bankAccount)
+		invoiceNumber, dueDate, total, kid, bankAccount, refail)
 	filename := invoiceAttachmentName(buildInvoiceFilename(invoiceNumber, memberLast, memberFirst, fiscalYear), total)
 
 	if err := h.email.SendWithAttachment(email.WithKind(ctx, email.KindInvoice), deliverTo, subject, htmlBody, filename, pdfBytesResend); err != nil {

@@ -130,7 +130,7 @@ func TestInvoiceMessageForCreditNote(t *testing.T) {
 	h := &InvoiceHandler{}
 	due := time.Date(2026, 3, 31, 0, 0, 0, 0, time.UTC)
 	subject, body := h.invoiceMessage(context.Background(), "nb", "club", "inv", "Test Member", "Test Båtlag",
-		289, due, -5, "000000289X", "1234.56.78901")
+		289, due, -5, "000000289X", "1234.56.78901", false)
 	if !strings.HasPrefix(subject, "Kreditnota fra Test Båtlag") {
 		t.Errorf("subject = %q", subject)
 	}

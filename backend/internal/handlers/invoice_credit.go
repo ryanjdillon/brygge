@@ -100,6 +100,13 @@ func refundCreditNoteSQL(alias string) string {
 	return `EXISTS (SELECT 1 FROM refund_documents rcn WHERE rcn.credit_invoice_id = ` + alias + `.id AND rcn.kind = 'credit')`
 }
 
+// refundRefailInvoiceSQL is true for the debit faktura a failed card refund
+// issued in place of a credit note. It is settled by the money that came
+// back when it is issued, so its PDF and email ask for no payment.
+func refundRefailInvoiceSQL(alias string) string {
+	return `EXISTS (SELECT 1 FROM refund_documents rfi WHERE rfi.credit_invoice_id = ` + alias + `.id AND rfi.kind = 'refail_invoice')`
+}
+
 // refundCreditedSQL is true for a faktura card refunds issued credit notes
 // for (refund_documents, kind credit), live or not: a manual credit of the
 // whole faktura on top of them would credit it twice.

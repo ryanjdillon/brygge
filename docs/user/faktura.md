@@ -268,6 +268,10 @@ After **Krediter**, the club often still wants the money (a wrong card, a paymen
 
 It can be done once per credited faktura: the old row then reads **Ny faktura #N** and the new one **Erstatter #M**. If you delete that new faktura (while it is a draft) or void it, **Ny faktura** is offered again. The credit notes stay. If the refund later fails, Brygge does not bill again for the money that came back, since the new faktura already collects it: the failed refund waits in Tildel (**Mislykket refusjon – fakturaen er utstedt på nytt**) for you to assign it to an account or dismiss it. **Ny faktura** is not offered after a partial refund, after **Krev inn på nytt** (the faktura is open already), or for a refund that failed and was re-billed automatically.
 
+### When a refund fails
+
+If Stripe reports that a refund could not be paid out, the money stays with the club. Brygge keeps the credit note, which is never voided, and issues a new faktura for the same amount to the same payer, settled by the money that came back at once. The new faktura is already paid, so nobody is asked to pay it: it is never overdue, never reminded and has no pay link. Its PDF is headed **Faktura** and shows the number and date, but instead of kontonummer, KID, forfallsdato and "Beløp å betale" it shows **Status: Betalt** and the line "Ingen betaling kreves. Fakturaen er allerede betalt." The email that carries it (**Ny faktura fra <klubb>**) says the same, and resending that faktura by hand (it is issued already sent) gives the same email, never the usual one with a KID and a pay link. Other fakturas are not affected: even a paid faktura printed again keeps its payment details.
+
 ### Disputes (innsigelser)
 
 When a cardholder disputes a payment with their bank, the bank takes the money back from the club's Stripe balance until the dispute is decided.
