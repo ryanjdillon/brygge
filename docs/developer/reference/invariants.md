@@ -726,9 +726,9 @@ A new group is created just before the faktura built-in and the positions are re
 
 ### Developer tokens are hashed, scoped and role-less
 
-**Rule:** developer bearer tokens (BRY-115) are stored only as `sha256(token)`, and the plaintext is returned once at mint. `RequireDevToken` is the **only** middleware on `POST /api/v1/dev/query` and is mounted on no other route. It ignores cookies and injects claims with **no roles**, so a token can never satisfy `RequireRole` or reach a session route. The route exists only when `DEV_QUERY_TOKENS_ENABLED=true`. `developer_tokens` is never added to the `brygge_dev_ro` allowlist.
+**Rule:** developer bearer tokens (BRY-115) are stored only as `sha256(token)`, and the plaintext is returned once at mint. `devtoken.Authenticate` admits a token only while its minter is active (`deactivated_at IS NULL`, same club) and still holds `devtoken.MinterRole` (`admin`, the role the mint routes require), so deactivation or demotion cuts access on the next request; a DB error refuses the request (BRY-540). Keep `MinterRole` and the `RequireRole` on `/admin/dev/tokens` in step. `RequireDevToken` is the **only** middleware on `POST /api/v1/dev/query` and is mounted on no other route. It ignores cookies and injects claims with **no roles**, so a token can never satisfy `RequireRole` or reach a session route. The route exists only when `DEV_QUERY_TOKENS_ENABLED=true`. `developer_tokens` is never added to the `brygge_dev_ro` allowlist.
 
-**Failure mode:** a token mounted on a broader route, or carrying the creator's roles, turns a short-lived read credential into an admin session that bypasses TOTP. A plaintext token at rest, or a readable `developer_tokens` table, turns one DB read into token theft.
+**Failure mode:** a token mounted on a broader route, or carrying the creator's roles, turns a short-lived read credential into an admin session that bypasses TOTP. A plaintext token at rest, or a readable `developer_tokens` table, turns one DB read into token theft. An `Authenticate` that checks only expiry and the revoked flag lets a deactivated or demoted admin's token keep reading masked data for up to its 7-day TTL.
 
 ### Query role is a real privilege boundary, not `SET ROLE`
 

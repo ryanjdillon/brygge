@@ -12,7 +12,7 @@ import (
 	"github.com/brygge-klubb/brygge/internal/testutil"
 )
 
-// seed inserts a synthetic club + user and returns their ids.
+// seed inserts a synthetic club + admin user and returns their ids.
 func seed(t *testing.T, db *pgxpool.Pool) (clubID, userID string) {
 	t.Helper()
 	ctx := context.Background()
@@ -26,6 +26,11 @@ func seed(t *testing.T, db *pgxpool.Pool) (clubID, userID string) {
 		"INSERT INTO users (id, club_id, email, first_name, last_name) VALUES ($1, $2, $3, 'Test', 'Admin')",
 		userID, clubID, "admin-"+testutil.RandomHex(4)+"@example.test"); err != nil {
 		t.Fatalf("seed user: %v", err)
+	}
+	if _, err := db.Exec(ctx,
+		"INSERT INTO user_roles (user_id, club_id, role) VALUES ($1, $2, $3::user_role)",
+		userID, clubID, MinterRole); err != nil {
+		t.Fatalf("seed role: %v", err)
 	}
 	return clubID, userID
 }
@@ -140,5 +145,107 @@ func TestExpiryAndPurge(t *testing.T) {
 	}
 	if n, err := svc.PurgeExpired(ctx); err != nil || n != 1 {
 		t.Errorf("purge past grace: n=%d err=%v, want 1", n, err)
+	}
+}
+
+func TestAuthenticateRequiresActiveAdminMinter(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	svc := NewService(db)
+
+	// Each case mints for a freshly seeded admin, then mutates the minter or
+	// the token before authenticating.
+	cases := []struct {
+		name    string
+		mutate  func(t *testing.T, clubID, userID string)
+		wantErr error
+	}{
+		{"active admin", func(*testing.T, string, string) {}, nil},
+		{"deactivated minter", func(t *testing.T, _, userID string) {
+			mustExec(t, db, "UPDATE users SET deactivated_at = now() WHERE id::text = $1", userID)
+		}, ErrInvalid},
+		{"admin role removed", func(t *testing.T, _, userID string) {
+			mustExec(t, db, "DELETE FROM user_roles WHERE user_id::text = $1", userID)
+		}, ErrInvalid},
+		{"demoted to board", func(t *testing.T, clubID, userID string) {
+			mustExec(t, db, "DELETE FROM user_roles WHERE user_id::text = $1", userID)
+			mustExec(t, db, "INSERT INTO user_roles (user_id, club_id, role) VALUES ($1, $2, 'board'::user_role)", userID, clubID)
+		}, ErrInvalid},
+		{"admin of another club only", func(t *testing.T, _, userID string) {
+			otherClub, _ := seed(t, db)
+			mustExec(t, db, "DELETE FROM user_roles WHERE user_id::text = $1", userID)
+			mustExec(t, db, "INSERT INTO user_roles (user_id, club_id, role) VALUES ($1, $2, 'admin'::user_role)", userID, otherClub)
+		}, ErrInvalid},
+		{"minter moved to another club", func(t *testing.T, _, userID string) {
+			otherClub, _ := seed(t, db)
+			mustExec(t, db, "UPDATE users SET club_id = $2 WHERE id::text = $1", userID, otherClub)
+		}, ErrInvalid},
+		{"minter row gone", func(t *testing.T, _, userID string) {
+			mustExec(t, db, "UPDATE developer_tokens SET created_by = NULL WHERE created_by::text = $1", userID)
+		}, ErrInvalid},
+		{"expired", func(t *testing.T, _, userID string) {
+			mustExec(t, db, "UPDATE developer_tokens SET expires_at = now() - interval '1 minute' WHERE created_by::text = $1", userID)
+		}, ErrInvalid},
+		{"revoked", func(t *testing.T, _, userID string) {
+			mustExec(t, db, "UPDATE developer_tokens SET revoked_at = now() WHERE created_by::text = $1", userID)
+		}, ErrInvalid},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			clubID, userID := seed(t, db)
+			plain, _, err := svc.Mint(ctx, clubID, userID, "agent", time.Hour)
+			if err != nil {
+				t.Fatalf("mint: %v", err)
+			}
+			tc.mutate(t, clubID, userID)
+
+			tok, err := svc.Authenticate(ctx, plain, ScopeDBQuery)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("err = %v, want %v", err, tc.wantErr)
+			}
+			if tc.wantErr != nil {
+				if tok.ID != "" {
+					t.Errorf("refused token returned metadata: %+v", tok)
+				}
+				var used *time.Time
+				if err := db.QueryRow(ctx, "SELECT last_used_at FROM developer_tokens WHERE token_hash = $1", hashToken(plain)).Scan(&used); err != nil {
+					t.Fatalf("read last_used_at: %v", err)
+				}
+				if used != nil {
+					t.Error("refused token had its last use stamped")
+				}
+			}
+		})
+	}
+}
+
+func TestAuthenticateFailsClosedOnDBError(t *testing.T) {
+	db := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	svc := NewService(db)
+	clubID, userID := seed(t, db)
+
+	plain, _, err := svc.Mint(ctx, clubID, userID, "agent", time.Hour)
+	if err != nil {
+		t.Fatalf("mint: %v", err)
+	}
+	db.Close()
+
+	tok, err := svc.Authenticate(ctx, plain, ScopeDBQuery)
+	if err == nil {
+		t.Fatalf("authenticate on a closed pool succeeded: %+v", tok)
+	}
+	if errors.Is(err, ErrInvalid) {
+		t.Errorf("db error reported as ErrInvalid, want a distinct error: %v", err)
+	}
+	if tok.ID != "" {
+		t.Errorf("db error returned token metadata: %+v", tok)
+	}
+}
+
+func mustExec(t *testing.T, db *pgxpool.Pool, sql string, args ...any) {
+	t.Helper()
+	if _, err := db.Exec(context.Background(), sql, args...); err != nil {
+		t.Fatalf("exec %q: %v", sql, err)
 	}
 }

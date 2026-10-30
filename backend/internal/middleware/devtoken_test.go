@@ -53,6 +53,9 @@ func TestRequireDevTokenInjectsClaims(t *testing.T) {
 	if _, err := db.Exec(ctx, "INSERT INTO users (id, club_id, email) VALUES ($1, $2, $3)", userID, clubID, testutil.RandomHex(4)+"@example.test"); err != nil {
 		t.Fatalf("seed user: %v", err)
 	}
+	if _, err := db.Exec(ctx, "INSERT INTO user_roles (user_id, club_id, role) VALUES ($1, $2, $3::user_role)", userID, clubID, devtoken.MinterRole); err != nil {
+		t.Fatalf("seed role: %v", err)
+	}
 	svc := devtoken.NewService(db)
 	plain, tok, err := svc.Mint(ctx, clubID, userID, "agent", 0)
 	if err != nil {

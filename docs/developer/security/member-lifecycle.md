@@ -34,7 +34,10 @@ a member can authenticate. It runs in the caller's transaction, before the
 identity is anonymised because magic links are keyed by the old email. Both
 `HandleProcessDeletion` and `HandleDeleteUser` call it; `HandleDeactivateUser`
 (reversible) only sets `deactivated_at` and drops sessions, since reactivation
-must keep passkeys and TOTP.
+must keep passkeys and TOTP. The member's developer tokens are not revoked
+there: `devtoken.Authenticate` refuses a token whose minter is deactivated or no
+longer holds the admin role, so access ends on the next request and returns if
+the member is reactivated while the token is still unexpired and unrevoked.
 
 `HandleDeleteUser` runs the same step for the anonymise-in-place and the hard
 delete paths (a hard delete cascades sessions and passkeys but only detaches

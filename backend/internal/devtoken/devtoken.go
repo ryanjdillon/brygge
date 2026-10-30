@@ -36,6 +36,12 @@ const (
 	// ScopeDBQuery authorises POST /api/v1/dev/query.
 	ScopeDBQuery = "db_query"
 
+	// MinterRole is the role a user must hold to mint a token, and must keep
+	// holding for the token to authenticate. The mint routes
+	// (POST/DELETE /admin/dev/tokens in cmd/api/main.go) gate on the same
+	// role; change both together.
+	MinterRole = "admin"
+
 	// DefaultTTL and MaxTTL bound a token's life. An agent session lasts
 	// hours, not weeks; a leaked token should die on its own quickly.
 	DefaultTTL = 24 * time.Hour
@@ -54,7 +60,8 @@ const (
 
 var (
 	// ErrInvalid covers every authentication failure — unknown, malformed,
-	// expired, revoked or wrong-scope — so callers can't distinguish them.
+	// expired, revoked, wrong-scope, or minted by a user who is no longer an
+	// active admin of the club — so callers can't distinguish them.
 	ErrInvalid  = errors.New("invalid or expired developer token")
 	ErrNotFound = errors.New("developer token not found")
 	ErrTTL      = fmt.Errorf("token lifetime must be at most %s", MaxTTL)
@@ -129,7 +136,11 @@ func (s *Service) Mint(ctx context.Context, clubID, createdBy, name string, ttl 
 }
 
 // Authenticate resolves a live token for the given scope and stamps its
-// last use. Any failure returns ErrInvalid.
+// last use. A token is live only while its minter is still an active member
+// of the token's club holding MinterRole, so deactivating or demoting the
+// minter ends the token's access on the next request without a revoke step.
+// Any refusal returns ErrInvalid; a database error is returned wrapped and
+// never authenticates.
 func (s *Service) Authenticate(ctx context.Context, plaintext, scope string) (Token, error) {
 	if !strings.HasPrefix(plaintext, Prefix) || len(plaintext) <= displayLen {
 		return Token{}, ErrInvalid
@@ -138,8 +149,18 @@ func (s *Service) Authenticate(ctx context.Context, plaintext, scope string) (To
 		`UPDATE developer_tokens SET last_used_at = now()
 		 WHERE token_hash = $1 AND scope = $2
 		   AND revoked_at IS NULL AND expires_at > now()
+		   AND EXISTS (
+		     SELECT 1 FROM users u
+		     WHERE u.id = developer_tokens.created_by
+		       AND u.club_id = developer_tokens.club_id
+		       AND u.deactivated_at IS NULL
+		       AND EXISTS (
+		         SELECT 1 FROM user_roles r
+		         WHERE r.user_id = u.id
+		           AND r.club_id = developer_tokens.club_id
+		           AND r.role = $3::user_role))
 		 RETURNING `+tokenColumns,
-		hashToken(plaintext), scope))
+		hashToken(plaintext), scope, MinterRole))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Token{}, ErrInvalid
 	}
