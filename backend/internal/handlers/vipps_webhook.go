@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
@@ -70,23 +71,11 @@ func (h *VippsWebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	// (checkout/QR/faktura pay link) or an invoice (BRY-8 faktura payment
 	// link). Fall back to the instance-level club when the reference is
 	// unrecognised.
-	var clubID string
-	err = h.db.QueryRow(ctx,
-		`SELECT club_id FROM payment_attempts WHERE provider = $1 AND provider_reference = $2`,
-		vipps.ProviderName, evt.Reference,
-	).Scan(&clubID)
+	clubID, err := h.resolveClub(ctx, evt.Reference)
 	if err != nil {
-		err = h.db.QueryRow(ctx,
-			`SELECT club_id FROM invoices WHERE vipps_payment_reference = $1 LIMIT 1`,
-			evt.Reference,
-		).Scan(&clubID)
-	}
-	if err != nil {
-		// Reference matched neither — use the instance club.
-		_ = h.db.QueryRow(ctx,
-			`SELECT id FROM clubs WHERE slug = $1 LIMIT 1`,
-			h.cfg.ClubSlug,
-		).Scan(&clubID)
+		h.log.Error().Err(err).Str("reference", evt.Reference).Msg("webhook: club lookup failed")
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
 	}
 	if clubID == "" {
 		h.log.Warn().Str("reference", evt.Reference).Msg("webhook: could not resolve club_id — dropping")
@@ -113,7 +102,23 @@ func (h *VippsWebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		Str("club_id", clubID).
 		Msg("vipps webhook received")
 
-	h.dispatch(ctx, clubID, evt)
+	if err := h.dispatch(ctx, clubID, evt); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+// resolveClub finds the club of the attempt or invoice the reference belongs
+// to, falling back to the instance club for a reference that is neither. A
+// failed lookup is an error, not a fall-through: the event would otherwise be
+// stored and dispatched under the wrong club and never reach its attempt.
+// The result is "" when not even the instance club exists.
+func (h *VippsWebhookHandler) resolveClub(ctx context.Context, reference string) (string, error) {
+	return firstClub(ctx, h.db, []clubLookup{
+		{`SELECT club_id FROM payment_attempts WHERE provider = $1 AND provider_reference = $2`, []any{vipps.ProviderName, reference}},
+		{`SELECT club_id FROM invoices WHERE vipps_payment_reference = $1 LIMIT 1`, []any{reference}},
+		{`SELECT id FROM clubs WHERE slug = $1 LIMIT 1`, []any{h.cfg.ClubSlug}},
+	})
 }

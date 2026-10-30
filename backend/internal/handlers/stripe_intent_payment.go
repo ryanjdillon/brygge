@@ -23,12 +23,18 @@ type intentPayment struct {
 	// when it does not exist): the payment may be another deployment's, or
 	// ours with an attempt not yet found.
 	lookupFailed bool
+	// dbLookupFailed is set when a read of Brygge's own tables (the attempt,
+	// the stored charge) failed with anything but "no row": the payment may
+	// be ours with its attempt not yet found.
+	dbLookupFailed bool
 }
 
 // unplaced reports a payment the webhook cannot place and must not drop:
-// Stripe could not be asked about it, so it may be ours. The event is
-// answered with an error and Stripe delivers it again.
-func (p intentPayment) unplaced() bool { return p.lookupFailed && p.attemptID == "" }
+// Stripe or Brygge's database could not be asked about it, so it may be ours.
+// The event is answered with an error and Stripe delivers it again.
+func (p intentPayment) unplaced() bool {
+	return (p.lookupFailed || p.dbLookupFailed) && p.attemptID == ""
+}
 
 // resolveIntentPayment finds the payment an event is about. The attempt comes
 // from the PaymentIntent (the attempt id and club slug Brygge put in its
@@ -81,6 +87,7 @@ func (h *StripeWebhookHandler) claimAttempt(ctx context.Context, p *intentPaymen
 	).Scan(&club, &order)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
+			p.dbLookupFailed = true
 			h.log.Warn().Err(err).Str("object_id", objectID).Msg("webhook: attempt lookup failed")
 		}
 		return
@@ -106,6 +113,7 @@ func (h *StripeWebhookHandler) paymentFromCharge(ctx context.Context, p *intentP
 	).Scan(&club, &attempt, &order)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
+			p.dbLookupFailed = true
 			h.log.Warn().Err(err).Str("object_id", objectID).Msg("webhook: charge lookup failed")
 		}
 		return

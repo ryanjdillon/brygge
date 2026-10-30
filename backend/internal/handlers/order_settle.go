@@ -49,17 +49,24 @@ type paymentAttempt struct {
 // to orders o.
 const attemptColumns = `pa.id, pa.order_id, pa.status, pa.amount::float8, pa.currency, o.user_id IS NULL`
 
-func scanAttempt(row pgx.Row, provider string) (paymentAttempt, bool) {
+// scanAttempt reads one attempt row. A missing row is (zero, false, nil); any
+// other error is returned, because a webhook that cannot tell "not our payment"
+// from "the database is down" would acknowledge an event it never handled.
+func scanAttempt(row pgx.Row, provider string) (paymentAttempt, bool, error) {
 	a := paymentAttempt{Provider: provider}
 	if err := row.Scan(&a.ID, &a.OrderID, &a.Status, &a.Amount, &a.Currency, &a.Guest); err != nil {
-		return paymentAttempt{}, false
+		if errors.Is(err, pgx.ErrNoRows) {
+			return paymentAttempt{}, false, nil
+		}
+		return paymentAttempt{}, false, err
 	}
-	return a, true
+	return a, true, nil
 }
 
 // attemptByReference resolves a provider's reference to its attempt in the
-// club, and whether one was found.
-func (s orderSettlement) attemptByReference(ctx context.Context, clubID, provider, reference string) (paymentAttempt, bool) {
+// club, and whether one was found. The error is a failed lookup, which the
+// webhook answers with a 5xx so the provider delivers the event again.
+func (s orderSettlement) attemptByReference(ctx context.Context, clubID, provider, reference string) (paymentAttempt, bool, error) {
 	return scanAttempt(s.db.QueryRow(ctx,
 		`SELECT `+attemptColumns+`
 		   FROM payment_attempts pa
@@ -71,10 +78,11 @@ func (s orderSettlement) attemptByReference(ctx context.Context, clubID, provide
 
 // attemptByID resolves an attempt id a provider echoed back (from metadata
 // Brygge set) to the attempt in the club, and whether one was found. An id
-// that is not a UUID matches nothing rather than failing the query.
-func (s orderSettlement) attemptByID(ctx context.Context, clubID, provider, id string) (paymentAttempt, bool) {
+// that is not a UUID matches nothing rather than failing the query. The error
+// is a failed lookup, as for attemptByReference.
+func (s orderSettlement) attemptByID(ctx context.Context, clubID, provider, id string) (paymentAttempt, bool, error) {
 	if _, err := uuid.Parse(id); err != nil {
-		return paymentAttempt{}, false
+		return paymentAttempt{}, false, nil
 	}
 	return scanAttempt(s.db.QueryRow(ctx,
 		`SELECT `+attemptColumns+`
@@ -83,6 +91,31 @@ func (s orderSettlement) attemptByID(ctx context.Context, clubID, provider, id s
 		  WHERE pa.club_id = $1 AND pa.provider = $2 AND pa.id = $3`,
 		clubID, provider, id,
 	), provider)
+}
+
+// clubLookup is a query for a club id and its arguments.
+type clubLookup struct {
+	query string
+	args  []any
+}
+
+// firstClub returns the club id of the first lookup that finds a row, "" when
+// none does. A lookup that fails is an error rather than a miss: a webhook that
+// fell through to the next lookup (ultimately the instance club) would store
+// and dispatch its event under the wrong club, and the provider would never
+// redeliver it.
+func firstClub(ctx context.Context, db *pgxpool.Pool, lookups []clubLookup) (string, error) {
+	for _, l := range lookups {
+		var clubID string
+		err := db.QueryRow(ctx, l.query, l.args...).Scan(&clubID)
+		if err == nil {
+			return clubID, nil
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return "", err
+		}
+	}
+	return "", nil
 }
 
 // authDecision is what to do with an authorized payment.

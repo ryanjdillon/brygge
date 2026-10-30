@@ -17,18 +17,18 @@ const captureKeyPrefix = "capture2-"
 // dispatch routes an already-persisted event to settlement, a payout event
 // to the Stripe balance mirror, a dispute event to payment_disputes and a
 // refund event to payment_refunds. The error is a dispute or refund that
-// could not be stored, which makes the event be delivered again; every other
-// outcome is handled and logged.
+// could not be stored, or an attempt that could not be looked up, which makes
+// the event be delivered again; every other outcome is handled and logged.
 func (h *StripeWebhookHandler) dispatch(ctx context.Context, clubID string, evt *stripe.Event, dispute *disputeContext, refund *refundContext) error {
 	switch evt.Type {
 	case stripe.EventCheckoutSessionCompleted, stripe.EventCheckoutSessionAsyncPaymentSucceeded:
-		h.onSessionCompleted(ctx, clubID, evt)
+		return h.onSessionCompleted(ctx, clubID, evt)
 	case stripe.EventCheckoutSessionExpired, stripe.EventCheckoutSessionAsyncPaymentFailed:
-		h.onSessionFailed(ctx, clubID, evt)
+		return h.onSessionFailed(ctx, clubID, evt)
 	case stripe.EventPaymentIntentCanceled:
-		h.onIntentCanceled(ctx, clubID, evt)
+		return h.onIntentCanceled(ctx, clubID, evt)
 	case stripe.EventPaymentIntentSucceeded:
-		h.onIntentSucceeded(ctx, clubID, evt)
+		return h.onIntentSucceeded(ctx, clubID, evt)
 	case stripe.EventPayoutPaid, stripe.EventPayoutFailed, stripe.EventPayoutCanceled:
 		h.onPayout(ctx, clubID, evt)
 	case stripe.EventChargeDisputeCreated, stripe.EventChargeDisputeUpdated, stripe.EventChargeDisputeClosed,
@@ -78,32 +78,44 @@ func (h *StripeWebhookHandler) onPayout(ctx context.Context, clubID string, evt 
 // with manual capture, so completion is an authorization: it goes through
 // the same capture-or-void decision as a Vipps AUTHORIZED, and a payment the
 // order does not need is voided, never charged.
-func (h *StripeWebhookHandler) onSessionCompleted(ctx context.Context, clubID string, evt *stripe.Event) {
+func (h *StripeWebhookHandler) onSessionCompleted(ctx context.Context, clubID string, evt *stripe.Event) error {
 	s, ok := h.decodeSession(evt)
 	if !ok || !sessionAuthorized(s) {
-		return
+		return nil
 	}
-	a, ok := h.orders.attemptByReference(ctx, clubID, stripe.ProviderName, s.ID)
-	if !ok {
-		return
+	a, ok, err := h.sessionAttempt(ctx, clubID, evt, s)
+	if err != nil || !ok {
+		return err
 	}
 	// Without credentials Brygge can neither capture nor void; the attempt is
 	// left as it is and the uncaptured authorization lapses at Stripe.
 	if h.stripe == nil {
-		return
+		return nil
 	}
 	if !sessionAmountMatches(a, s) {
 		h.rejectAmountMismatch(ctx, a, s)
-		return
+		return nil
 	}
 	switch d := h.orders.authorizeAttempt(ctx, a); d {
 	case authSkip:
-		return
+		return nil
 	case authCancelOrderSettled, authCancelSibling:
 		h.cancelStaleAuthorization(ctx, a, s.ID, d)
-		return
+		return nil
 	}
 	h.capture(ctx, a, s)
+	return nil
+}
+
+// sessionAttempt resolves a Checkout Session event to its attempt by the
+// session id. A failed lookup is logged and returned so the webhook answers
+// 5xx.
+func (h *StripeWebhookHandler) sessionAttempt(ctx context.Context, clubID string, evt *stripe.Event, s *stripe.CheckoutSession) (paymentAttempt, bool, error) {
+	a, ok, err := h.orders.attemptByReference(ctx, clubID, stripe.ProviderName, s.ID)
+	if err != nil {
+		h.log.Error().Err(err).Str("event_id", evt.ID).Str("session_id", s.ID).Msg("webhook: attempt lookup failed")
+	}
+	return a, ok, err
 }
 
 // sessionAuthorized reports whether a completed session carries a payment
@@ -219,29 +231,37 @@ func (h *StripeWebhookHandler) cancelStaleAuthorization(ctx context.Context, a p
 	}
 }
 
-func (h *StripeWebhookHandler) onSessionFailed(ctx context.Context, clubID string, evt *stripe.Event) {
+func (h *StripeWebhookHandler) onSessionFailed(ctx context.Context, clubID string, evt *stripe.Event) error {
 	s, ok := h.decodeSession(evt)
 	if !ok {
-		return
+		return nil
 	}
-	if a, ok := h.orders.attemptByReference(ctx, clubID, stripe.ProviderName, s.ID); ok {
-		h.failAttempt(ctx, a)
+	a, ok, err := h.sessionAttempt(ctx, clubID, evt, s)
+	if err != nil || !ok {
+		return err
 	}
+	h.failAttempt(ctx, a)
+	return nil
 }
 
-func (h *StripeWebhookHandler) onIntentCanceled(ctx context.Context, clubID string, evt *stripe.Event) {
-	if a, _, ok := h.intentAttempt(ctx, clubID, evt); ok {
-		h.failAttempt(ctx, a)
+func (h *StripeWebhookHandler) onIntentCanceled(ctx context.Context, clubID string, evt *stripe.Event) error {
+	a, _, ok, err := h.intentAttempt(ctx, clubID, evt)
+	if err != nil || !ok {
+		return err
 	}
+	h.failAttempt(ctx, a)
+	return nil
 }
 
 // onIntentSucceeded settles an attempt whose capture went through. Normally
 // the capture call already did; this covers a capture whose answer was lost.
-func (h *StripeWebhookHandler) onIntentSucceeded(ctx context.Context, clubID string, evt *stripe.Event) {
-	a, pi, ok := h.intentAttempt(ctx, clubID, evt)
-	if ok {
-		h.settleSucceededIntent(ctx, a, pi, time.Unix(evt.Created, 0))
+func (h *StripeWebhookHandler) onIntentSucceeded(ctx context.Context, clubID string, evt *stripe.Event) error {
+	a, pi, ok, err := h.intentAttempt(ctx, clubID, evt)
+	if err != nil || !ok {
+		return err
 	}
+	h.settleSucceededIntent(ctx, a, pi, time.Unix(evt.Created, 0))
+	return nil
 }
 
 // settleSucceededIntent pays the order only when the full amount was
@@ -269,15 +289,19 @@ func (h *StripeWebhookHandler) failAttempt(ctx context.Context, a paymentAttempt
 }
 
 // intentAttempt resolves a PaymentIntent event to its attempt through the
-// attempt id Brygge put in the PaymentIntent's metadata.
-func (h *StripeWebhookHandler) intentAttempt(ctx context.Context, clubID string, evt *stripe.Event) (paymentAttempt, *stripe.PaymentIntent, bool) {
+// attempt id Brygge put in the PaymentIntent's metadata. A failed lookup is
+// logged and returned so the webhook answers 5xx.
+func (h *StripeWebhookHandler) intentAttempt(ctx context.Context, clubID string, evt *stripe.Event) (paymentAttempt, *stripe.PaymentIntent, bool, error) {
 	var pi stripe.PaymentIntent
 	if err := json.Unmarshal(evt.Data.Object, &pi); err != nil {
 		h.log.Warn().Err(err).Str("event_id", evt.ID).Msg("webhook: undecodable payment intent")
-		return paymentAttempt{}, nil, false
+		return paymentAttempt{}, nil, false, nil
 	}
-	a, ok := h.orders.attemptByID(ctx, clubID, stripe.ProviderName, pi.Metadata["attempt_id"])
-	return a, &pi, ok
+	a, ok, err := h.orders.attemptByID(ctx, clubID, stripe.ProviderName, pi.Metadata["attempt_id"])
+	if err != nil {
+		h.log.Error().Err(err).Str("event_id", evt.ID).Msg("webhook: attempt lookup failed")
+	}
+	return a, &pi, ok, err
 }
 
 func (h *StripeWebhookHandler) decodeSession(evt *stripe.Event) (*stripe.CheckoutSession, bool) {

@@ -578,6 +578,14 @@ So the amount cap is a **default**, not a hard ceiling — the per-invoice overr
 
 **Failure mode:** with one reference per order, a payer who re-clicked the pay link and then completed the earlier Vipps window was charged and never matched; and capturing every authorization would charge twice a payer who completed two windows.
 
+### A webhook does not drop an event whose lookup failed
+
+**Rule (BRY-452):** a payment webhook answers 200 for an event only when it was stored and either handled or genuinely not Brygge's. A failed lookup of what the event belongs to answers 5xx, so the provider delivers it again; it is never read as "not our payment". That covers the club (`resolveClub`, `firstClub`), the attempt (`attemptByReference`, `attemptByID`, through `scanAttempt`) and the placement of a dispute or refund (`claimAttempt`, `paymentFromCharge`, `intentPayment.unplaced()`, which also covers Stripe being unreachable): any error other than "no row" fails the event, and only "no row" means ignore. A new provider's webhook uses the same split. Redelivery is safe because the event store dedupes, dispatch runs on every delivery and the settlement writes are guarded.
+
+**Not covered:** the settlement writes after a successful lookup (`authorizeAttempt`'s decision-error path, `markAttemptCaptured`, `markAttemptFailed`, `payOrder`) still log an error and answer 200, so a database error in one of them is not retried by the provider.
+
+**Failure mode:** a transient database error during a lookup was read as an unknown reference, the event was acknowledged, and the provider never sent it again: a captured payment stayed unpaid on the order, or a refund or dispute went unrecorded, until someone noticed.
+
 ### How a payment was made never decides whether it was made
 
 **Rule (BRY-469):** the card brand and wallet of a Stripe payment (`payment_attempts.card_brand` / `card_wallet`) are descriptive and best-effort. They are written only after settlement (`orderSettlement.recordAttemptCard`, and the Stripe balance sync), each write guarded by `card_brand IS NULL` and only logged on failure. Reading them must never fail the call that carries them: `stripe.Client.CapturePaymentIntent` treats a 2xx body it cannot decode as a successful capture (nil PaymentIntent), and `ChargeRef` / `PaymentMethodDetails` decode an unexpected shape as empty rather than failing the PaymentIntent or balance page around them.

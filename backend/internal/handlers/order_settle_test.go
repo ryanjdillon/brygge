@@ -38,9 +38,9 @@ func TestOrderSettlement(t *testing.T) {
 		); err != nil {
 			t.Fatal(err)
 		}
-		a, ok := s.attemptByReference(ctx, clubID, "vipps", ref)
-		if !ok || a.OrderID != orderID || a.Guest != (user == "") {
-			t.Fatalf("attemptByReference = %+v, %v", a, ok)
+		a, ok, err := s.attemptByReference(ctx, clubID, "vipps", ref)
+		if err != nil || !ok || a.OrderID != orderID || a.Guest != (user == "") {
+			t.Fatalf("attemptByReference = %+v, %v, %v", a, ok, err)
 		}
 		return a
 	}
