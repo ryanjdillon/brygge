@@ -363,24 +363,29 @@ func (s *Service) reconcileVippsConfirm(ctx context.Context, clubID, bankRowID, 
 	}
 	// The lines may be an edited or stale preview, so each faktura it
 	// settles is re-checked rather than trusted: an imported one needs its
-	// receivable in the GL by the charge date (BRY-386).
+	// receivable in the GL by the charge date (BRY-386), and a credited one
+	// is refused so 1500 is not credited twice (BRY-508).
 	for _, l := range lines {
 		if l.LinkedInvoiceID == "" {
 			continue
 		}
-		var ok bool
+		var ok, credited bool
 		if err := s.db.QueryRow(ctx,
 			`SELECT `+finance.ImportedReceivableOpenSQL("i",
 				`COALESCE((SELECT COALESCE(v.booking_date, v.tx_at::date) FROM vipps_import_rows v
-				            WHERE v.id::text = $4 AND v.club_id = $2), $3::date)`)+`
+				            WHERE v.id::text = $4 AND v.club_id = $2), $3::date)`)+`,
+			        `+finance.CreditedSQL("i")+`
 			   FROM invoices i
 			  WHERE i.id::text = $1 AND i.club_id = $2`,
 			l.LinkedInvoiceID, clubID, bankDate, l.VippsRowID,
-		).Scan(&ok); err != nil {
+		).Scan(&ok, &credited); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return "", fmt.Errorf("linked invoice %s not found", l.LinkedInvoiceID)
 			}
 			return "", fmt.Errorf("checking linked invoice: %w", err)
+		}
+		if credited {
+			return "", ErrInvoiceCredited
 		}
 		if !ok {
 			return "", ErrImportedNoOpeningBalance

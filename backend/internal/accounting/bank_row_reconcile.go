@@ -226,10 +226,12 @@ func (s *Service) assignBankRowToInvoice(
 type invoiceLockMode int
 
 const (
-	// lockManual is a treasurer's assign (and the Vipps charge assign): it
-	// refuses a voided or paid faktura, one a booked row is recorded
-	// against, or an imported one whose receivable isn't in the GL by the
-	// booking date (ErrImportedNoOpeningBalance).
+	// lockManual is a treasurer's assign (bank row, Stripe charge and Vipps
+	// charge): it refuses a voided, credit-note (ErrInvoiceNotDebt),
+	// credited (ErrInvoiceCredited) or paid faktura, one a booked row is
+	// recorded against, or an imported one
+	// whose receivable isn't in the GL by the booking date
+	// (ErrImportedNoOpeningBalance).
 	lockManual invoiceLockMode = iota
 	// lockAutoAssign adds the auto-assign rule's conditions: still owed,
 	// sent, not imported, nothing booked against it (incl. a KID-matched
@@ -286,6 +288,42 @@ var errInvoicePaid = errors.New("invoice is already paid")
 // errInvoiceVoided means a manual or Vipps assignment found its faktura
 // voided once it held the lock.
 var errInvoiceVoided = errors.New("invoice is voided")
+
+// ErrInvoiceCredited means a manual assignment (bank row, Stripe charge or
+// Vipps charge) found its faktura credited in full once it held the lock:
+// a live credit note links to it (credits_invoice_id), or the credit notes
+// of its card refunds add up to its total (finance.CreditedSQL). Crediting
+// 1500 for it again would leave the receivable negative, so nothing is
+// booked (BRY-508). The text is shown to the treasurer as is, so it is a
+// full Norwegian sentence, like the 409 invoice_credited the handlers answer.
+var ErrInvoiceCredited = errors.New( //nolint:staticcheck // ST1005: a user-facing sentence, see above
+	"Fakturaen er kreditert, så betalingen kan ikke knyttes til den.")
+
+// ErrInvoiceNotDebt means a manual assignment was aimed at a credit note (a
+// faktura whose total is not positive): it is money the club owes back, never
+// a receivable a payment can clear. Nothing is booked; the handlers answer
+// 409 invoice_not_debt. Shown as is, so a full Norwegian sentence.
+var ErrInvoiceNotDebt = errors.New( //nolint:staticcheck // ST1005: a user-facing sentence, see above
+	"Fakturaen er en kreditnota, så betalingen kan ikke knyttes til den.")
+
+// assignableInvoiceSQL is true for a faktura a manual assignment can be
+// offered: an open receivable (finance.OpenReceivableSQL: a debt, not
+// voided, not credited, no payment linked) with no booked row recorded
+// against it (invoiceBookedRowSQL). Every suggestion list that offers
+// fakturas for assignment filters on it, so the UI does not offer what
+// lockInvoiceForAssign (lockManual) would refuse for those reasons.
+// online_paid_at is deliberately not a condition: the online charge that set
+// it is usually the very payment being assigned.
+//
+// An imported faktura without its receivable in the opening balance
+// (finance.ImportedReceivableOpenSQL) is deliberately still offered. The
+// guard refuses the assign (ErrImportedNoOpeningBalance) and the treasurer
+// is told to wait for the opening balance; hiding the faktura would make the
+// deposit look orphaned and invite booking it to revenue instead.
+// lockInvoiceForAssign stays the authority.
+func assignableInvoiceSQL(alias string) string {
+	return finance.OpenReceivableSQL(alias) + ` AND NOT ` + invoiceBookedRowSQL(alias)
+}
 
 // lockInvoiceForAssign locks the faktura for the rest of tx and refuses it
 // when it can't take this payment. It returns the faktura total in øre.
@@ -359,6 +397,10 @@ func lockInvoiceForAssign(ctx context.Context, tx pgx.Tx, clubID, invoiceID stri
 	switch {
 	case invoiceStatus == "voided":
 		return 0, errInvoiceVoided
+	case opts.mode == lockManual && invoiceCents <= 0:
+		return 0, ErrInvoiceNotDebt
+	case opts.mode == lockManual && credited:
+		return 0, ErrInvoiceCredited
 	case paid:
 		return 0, errInvoicePaid
 	case bookedByRow:

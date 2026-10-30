@@ -46,7 +46,7 @@ type BankRowSummary struct {
 	DismissedReason          *string    `json:"dismissed_reason,omitempty"`
 	LikelyDuplicateOfMatched bool       `json:"likely_duplicate_of_matched"`
 	PossibleDoublePayment    bool       `json:"possible_double_payment"`
-	// SuggestionCount is how many open, unpaid invoices match this incoming
+	// SuggestionCount is how many assignable invoices (assignableInvoiceSQL) match this incoming
 	// row's amount — a cheap hint so the UI can flag which anonymous rows are
 	// worth opening (vs a genuinely orphan deposit with no matching invoice).
 	// Advisory only; 0 for outgoing rows.
@@ -160,13 +160,12 @@ func (s *Service) ListUnmatchedBankRows(
 		            AND COALESCE(other.reference, '') <> COALESCE(bir.reference, '')
 		            AND other.journal_entry_id IS NOT NULL
 		       )) AS possible_double_payment,
-		       -- Cheap "worth opening?" hint: how many open unpaid invoices
+		       -- Cheap "worth opening?" hint: how many assignable invoices
 		       -- match this incoming row's amount. Advisory only.
 		       (CASE WHEN bir.amount > 0 THEN (
 		          SELECT count(*) FROM invoices i
 		           WHERE i.club_id = bir.club_id
-		             AND i.status = 'open'
-		             AND i.payment_id IS NULL
+		             AND ` + assignableInvoiceSQL("i") + `
 		             AND ABS(i.total_amount - bir.amount) < 0.005
 		        ) ELSE 0 END) AS suggestion_count,
 		       (` + vippsPayoutRowSQL("bir") + `) AS vipps_payout,
@@ -498,8 +497,7 @@ func (s *Service) rankIncomingInvoices(
 		   LEFT JOIN users u ON u.id = i.user_id
 		   LEFT JOIN price_items pi ON pi.id = i.price_item_id
 		  WHERE i.club_id = $1
-		    AND i.status = 'open'
-		    AND i.payment_id IS NULL
+		    AND `+assignableInvoiceSQL("i")+`
 		    AND ABS(i.total_amount - $2) < 0.005
 		  ORDER BY i.issue_date DESC
 		  LIMIT 50`,
@@ -727,17 +725,16 @@ func (s *Service) PotentialInvoicesForRow(
 	return out, nil
 }
 
-// potentialInvoicesByAmount is PotentialInvoicesForRow's query: the open,
-// unpaid fakturas of exactly amount (±0.5 øre), newest first, narrowed by
-// q, with no payer resolution.
+// potentialInvoicesByAmount is PotentialInvoicesForRow's query: the
+// assignable fakturas (assignableInvoiceSQL) of exactly amount (±0.5 øre),
+// newest first, narrowed by q, with no payer resolution.
 func (s *Service) potentialInvoicesByAmount(ctx context.Context, clubID, q string, limit int, amount float64) ([]InvoiceSuggestion, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 25
 	}
 	where := []string{
 		"i.club_id = $1",
-		"i.status = 'open'",
-		"i.payment_id IS NULL",
+		assignableInvoiceSQL("i"),
 		"ABS(i.total_amount - $2) < 0.005",
 	}
 	args := []any{clubID, amount}

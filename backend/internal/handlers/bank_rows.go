@@ -174,6 +174,35 @@ func importedNoOpeningBalanceConflict(w http.ResponseWriter) {
 	})
 }
 
+// The 409 codes for a payment refused because its faktura is credited in
+// full, or is a credit note (BRY-508). The Stripe assign answers the same
+// codes through accounting.StripeTxnRefusal.
+const (
+	invoiceCreditedCode = "invoice_credited"
+	invoiceNotDebtCode  = "invoice_not_debt"
+)
+
+// invoiceNotAssignableConflict answers 409 invoice_credited or
+// invoice_not_debt, nothing booked, when err is accounting.ErrInvoiceCredited
+// or accounting.ErrInvoiceNotDebt, and reports whether it did. The message is
+// Norwegian and shown as is; the code lets the SPA word it in the
+// treasurer's locale.
+func invoiceNotAssignableConflict(w http.ResponseWriter, err error) bool {
+	for _, refusal := range []struct {
+		err  error
+		code string
+	}{
+		{accounting.ErrInvoiceCredited, invoiceCreditedCode},
+		{accounting.ErrInvoiceNotDebt, invoiceNotDebtCode},
+	} {
+		if errors.Is(err, refusal.err) {
+			JSON(w, http.StatusConflict, map[string]string{"error": refusal.err.Error(), "code": refusal.code})
+			return true
+		}
+	}
+	return false
+}
+
 // providerPayoutCode is the 409 code for a manual assign of a provider
 // payout deposit (accounting.ProviderPayoutDepositError).
 const providerPayoutCode = "provider_payout"
@@ -236,6 +265,9 @@ func (h *BankRowsHandler) HandleAssignInvoice(w http.ResponseWriter, r *http.Req
 		importedNoOpeningBalanceConflict(w)
 		return
 	}
+	if invoiceNotAssignableConflict(w, err) {
+		return
+	}
 	if providerPayoutConflict(w, err) {
 		return
 	}
@@ -285,6 +317,9 @@ func (h *BankRowsHandler) HandleAssignInvoiceMulti(w http.ResponseWriter, r *htt
 	}
 	if errors.Is(err, accounting.ErrImportedNoOpeningBalance) {
 		importedNoOpeningBalanceConflict(w)
+		return
+	}
+	if invoiceNotAssignableConflict(w, err) {
 		return
 	}
 	if providerPayoutConflict(w, err) {

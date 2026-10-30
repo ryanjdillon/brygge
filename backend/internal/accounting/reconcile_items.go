@@ -22,7 +22,7 @@ type ReconcileItem struct {
 	Counterpart string    `json:"counterpart"`
 	Description string    `json:"description"`
 	Reference   string    `json:"reference"` // arkivref (bank) or settlement number (vipps)
-	// SuggestionCount is how many open unpaid invoices match this amount — the
+	// SuggestionCount is how many assignable invoices (assignableInvoiceSQL) match this amount — the
 	// same "worth opening?" hint bank rows carry. Advisory only.
 	SuggestionCount int `json:"suggestion_count"`
 }
@@ -107,8 +107,8 @@ func (s *Service) ListMissingVippsSettlements(ctx context.Context, clubID string
 	return out, nil
 }
 
-// PotentialInvoicesForVippsCharge lists open unpaid invoices whose amount
-// matches the given Vipps charge — the candidate list for assigning the charge
+// PotentialInvoicesForVippsCharge lists assignable invoices (assignableInvoiceSQL)
+// whose amount matches the given Vipps charge — the candidate list for assigning the charge
 // to a faktura. A charge is not a bank row, so it uses the amount-only query
 // rather than PotentialInvoicesForRow, whose payer resolution loads the row
 // from bank_import_rows.
@@ -190,8 +190,7 @@ func (s *Service) ListUnreconciledVippsCharges(ctx context.Context, clubID strin
 		        COALESCE(vir.settlement_number, ''),
 		        (SELECT count(*) FROM invoices i
 		          WHERE i.club_id = vir.club_id
-		            AND i.status = 'open'
-		            AND i.payment_id IS NULL
+		            AND `+assignableInvoiceSQL("i")+`
 		            AND ABS(i.total_amount - vir.amount) < 0.005) AS suggestion_count
 		   FROM vipps_import_rows vir
 		  WHERE vir.club_id = $1

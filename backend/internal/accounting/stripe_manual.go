@@ -55,6 +55,13 @@ const (
 	// paid, a booked payment recorded against it, or imported without its
 	// opening balance by the booking date).
 	StripeTxnInvoiceSettled = "invoice_settled"
+	// StripeTxnInvoiceCredited: the faktura is credited in full (a live
+	// credit note links to it, or its refunds' credit notes add up to its
+	// total), so a payment assigned to it would credit 1500 twice (BRY-508).
+	StripeTxnInvoiceCredited = "invoice_credited"
+	// StripeTxnInvoiceNotDebt: the target is a credit note, which no payment
+	// can clear.
+	StripeTxnInvoiceNotDebt = "invoice_not_debt"
 	// StripeTxnPeriodClosed: the booking date's fiscal period is closed or
 	// locked.
 	StripeTxnPeriodClosed = "period_closed"
@@ -502,11 +509,16 @@ func assignStripeTxnToInvoiceTx(ctx context.Context, tx pgx.Tx, clubID, actorID,
 }
 
 // stripeInvoiceLockRefusal turns lockInvoiceForAssign's refusals into
-// invoice_settled; anything else is a database error and passes through.
+// invoice_settled (invoice_credited for a credited one, invoice_not_debt for
+// a credit note); anything else is a database error and passes through.
 func stripeInvoiceLockRefusal(err error) error {
 	switch {
+	case errors.Is(err, ErrInvoiceCredited):
+		return stripeRefusal(StripeTxnInvoiceCredited, ErrInvoiceCredited.Error())
+	case errors.Is(err, ErrInvoiceNotDebt):
+		return stripeRefusal(StripeTxnInvoiceNotDebt, ErrInvoiceNotDebt.Error())
 	case errors.Is(err, errInvoiceVoided):
-		return stripeRefusal(StripeTxnInvoiceSettled, "fakturaen er kreditert eller annullert")
+		return stripeRefusal(StripeTxnInvoiceSettled, "fakturaen er annullert")
 	case errors.Is(err, errInvoicePaid), errors.Is(err, errInvoiceHasBookedRow):
 		return stripeRefusal(StripeTxnInvoiceSettled, "fakturaen er alt betalt eller har en bokført innbetaling")
 	case errors.Is(err, ErrImportedNoOpeningBalance):

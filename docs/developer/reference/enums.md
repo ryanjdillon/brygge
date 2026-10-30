@@ -362,6 +362,8 @@ Stripe's payout status, refreshed from `GET /v1/payouts/{id}`. It never moves ba
 
 The manual assigns (assign-invoice, assign-invoice-multi, assign-account, assign-account-group) answer 409 `provider_payout`, with `provider` (`vipps` / `stripe`) and `bank_row_id`, for a provider payout deposit.
 
+The faktura assigns of a bank row (assign-invoice, assign-invoice-multi) and of a Vipps charge (`POST /accounting/vipps-charges/{rowID}/assign-invoice`), and the legacy Vipps reconcile confirm, answer 409 `invoice_credited` with a Norwegian `error` when the faktura is credited in full (`accounting.ErrInvoiceCredited`, BRY-508), and 409 `invoice_not_debt` when it is a credit note (`accounting.ErrInvoiceNotDebt`); nothing is booked. The Stripe assign answers the same code in its `StripeTxnRefusal` (table above). Imported fakturas without an opening balance answer 409 `imported_no_opening_balance` on the same routes.
+
 ### Stripe dismissal reasons (`stripe_balance_transactions.dismissed_reason`, no CHECK)
 
 `accounting.IsValidStripeDismissReason`: `booked_manually` (booked another way, e.g. a ledger entry), `test_transaction`, `unidentifiable`, `refund_or_credit`, `duplicate`. The bank-row vocabulary (`internal_transfer`, `bounced`, ...) does not apply to a balance transaction and is refused. The column has no separate note: a note is stored after the code as `<reason>: <note>` (`splitStripeDismissal` reads it back), which is why the dev-query view masks the column.
@@ -412,6 +414,8 @@ Member invoice status (`portal.invoices.status.*`) gained `refunded` (a faktura 
 | `not_allowed` | The action is not one the row's category, status and review reason allow (a dismissed row must be undismissed first) |
 | `amount_mismatch` | The charge is not the faktura total to the øre |
 | `invoice_settled` | The faktura cannot take the payment: voided, paid, a booked payment recorded against it, or imported without its opening balance by the booking date |
+| `invoice_credited` | The faktura is credited in full (a live credit note links to it, or its refunds' credit notes add up to its total): a payment assigned to it would credit 1500 twice (BRY-508) |
+| `invoice_not_debt` | The faktura is a credit note (total not positive): money owed back, so no payment can be assigned to it (BRY-508) |
 | `period_closed` | The booking date's fiscal period is closed or locked; for an unassign, the period of the entry being voided |
 | `already_booked` | The row has its journal entry (unassign it first) |
 | `payout_cleared` | Assign, undismiss or unassign of a row whose payout is cleared in the books (only dismiss remains; undo the payout's bank deposit in Tildel first) |
