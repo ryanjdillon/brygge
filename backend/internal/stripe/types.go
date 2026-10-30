@@ -209,6 +209,19 @@ const (
 	EventChargeDisputeFundsReinstated         = "charge.dispute.funds_reinstated"
 )
 
+// WebhookEventTypes lists the event types above. The webhook's failure metric
+// reports these under their own name and every other type as "other", so its
+// label set stays closed.
+var WebhookEventTypes = []string{
+	EventCheckoutSessionCompleted, EventCheckoutSessionAsyncPaymentSucceeded,
+	EventCheckoutSessionAsyncPaymentFailed, EventCheckoutSessionExpired,
+	EventPaymentIntentSucceeded, EventPaymentIntentCanceled,
+	EventPayoutPaid, EventPayoutFailed, EventPayoutCanceled,
+	EventChargeRefunded, EventChargeRefundUpdated,
+	EventChargeDisputeCreated, EventChargeDisputeUpdated, EventChargeDisputeClosed,
+	EventChargeDisputeFundsWithdrawn, EventChargeDisputeFundsReinstated,
+}
+
 // Balance transaction reporting categories Brygge classifies.
 const (
 	CategoryCharge          = "charge"

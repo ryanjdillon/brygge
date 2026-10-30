@@ -36,7 +36,9 @@ type StripeWebhookHandler struct {
 	// payouts tracks payout ingests still running after their event was
 	// answered.
 	payouts sync.WaitGroup
-	log     zerolog.Logger
+	// failures counts the 5xx answers by event type.
+	failures *payments.WebhookFailures
+	log      zerolog.Logger
 }
 
 // stripePayoutIngester refreshes one payout in the Stripe balance mirror.
@@ -67,6 +69,8 @@ func NewStripeWebhookHandler(db *pgxpool.Pool, cfg *config.Config, client *strip
 		stripe: client,
 		orders: orderSettlement{db: db, log: log},
 		log:    log,
+
+		failures: payments.NewWebhookFailures(stripe.ProviderName, stripe.WebhookEventTypes),
 	}
 	if client != nil {
 		h.canceller = stripe.NewPaymentProvider(client, cfg.ClubSlug)
@@ -141,7 +145,7 @@ func (h *StripeWebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	} else {
 		if clubID, err = h.resolveClub(ctx, reference, attemptID); err != nil {
 			h.log.Error().Err(err).Str("event_id", evt.ID).Msg("webhook: club lookup failed")
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			h.internalError(w, r, evt.Type)
 			return
 		}
 	}
@@ -158,7 +162,7 @@ func (h *StripeWebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		clubID, stripe.ProviderName, evt.ID, evt.Type, reference, json.RawMessage(raw),
 	); err != nil {
 		h.log.Error().Err(err).Str("event_id", evt.ID).Msg("webhook: failed to persist event")
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		h.internalError(w, r, evt.Type)
 		return
 	}
 
@@ -170,11 +174,17 @@ func (h *StripeWebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		Msg("stripe webhook received")
 
 	if err := h.dispatch(ctx, clubID, evt, dispute, refund); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		h.internalError(w, r, evt.Type)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+// internalError answers 5xx, so Stripe delivers the event again, and counts it.
+func (h *StripeWebhookHandler) internalError(w http.ResponseWriter, r *http.Request, eventType string) {
+	h.failures.Record(r.Context(), eventType)
+	http.Error(w, "internal error", http.StatusInternalServerError)
 }
 
 // resolveClub finds the club of the attempt the event belongs to, by

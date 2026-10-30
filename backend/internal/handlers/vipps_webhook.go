@@ -24,7 +24,9 @@ type VippsWebhookHandler struct {
 	// Vipps credentials.
 	canceller payments.Canceller
 	orders    orderSettlement
-	log       zerolog.Logger
+	// failures counts the 5xx answers by event name.
+	failures *payments.WebhookFailures
+	log      zerolog.Logger
 }
 
 func NewVippsWebhookHandler(db *pgxpool.Pool, cfg *config.Config, vippsClient *vipps.Client, log zerolog.Logger) *VippsWebhookHandler {
@@ -35,6 +37,8 @@ func NewVippsWebhookHandler(db *pgxpool.Pool, cfg *config.Config, vippsClient *v
 		vipps:  vippsClient,
 		orders: orderSettlement{db: db, log: log},
 		log:    log,
+
+		failures: payments.NewWebhookFailures(vipps.ProviderName, vipps.WebhookEventNames),
 	}
 	if vippsClient != nil {
 		h.canceller = vipps.NewPaymentProvider(vippsClient)
@@ -74,7 +78,7 @@ func (h *VippsWebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	clubID, err := h.resolveClub(ctx, evt.Reference)
 	if err != nil {
 		h.log.Error().Err(err).Str("reference", evt.Reference).Msg("webhook: club lookup failed")
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		h.internalError(w, r, evt.Name)
 		return
 	}
 	if clubID == "" {
@@ -92,7 +96,7 @@ func (h *VippsWebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	)
 	if err != nil {
 		h.log.Error().Err(err).Str("event_id", eventID).Msg("webhook: failed to persist event")
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		h.internalError(w, r, evt.Name)
 		return
 	}
 
@@ -103,11 +107,17 @@ func (h *VippsWebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		Msg("vipps webhook received")
 
 	if err := h.dispatch(ctx, clubID, evt); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		h.internalError(w, r, evt.Name)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+// internalError answers 5xx, so Vipps delivers the event again, and counts it.
+func (h *VippsWebhookHandler) internalError(w http.ResponseWriter, r *http.Request, eventName string) {
+	h.failures.Record(r.Context(), eventName)
+	http.Error(w, "internal error", http.StatusInternalServerError)
 }
 
 // resolveClub finds the club of the attempt or invoice the reference belongs

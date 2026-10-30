@@ -372,6 +372,9 @@ func main() {
 	productsHandler := handlers.NewProductsHandler(db, &cfg, log)
 	vippsWebhookHandler := handlers.NewVippsWebhookHandler(db, &cfg, vippsClient, log)
 	stripeWebhookHandler := handlers.NewStripeWebhookHandler(db, &cfg, stripeClient, log)
+	if err := payments.NewAuthorizedAttemptAge(db, log).RegisterMetrics(); err != nil {
+		log.Warn().Err(err).Msg("failed to register payment attempt metrics")
+	}
 	if stripeClient != nil {
 		accountingHandler.SetStripe(stripeClient)
 	}

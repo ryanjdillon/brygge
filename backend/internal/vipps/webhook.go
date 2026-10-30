@@ -30,6 +30,15 @@ const (
 	EventPaymentRefunded   = "REFUNDED"
 )
 
+// WebhookEventNames lists the event names above. The webhook's failure metric
+// reports these under their own name and every other name as "other", so its
+// label set stays closed.
+var WebhookEventNames = []string{
+	EventPaymentCreated, EventPaymentAuthorized, EventPaymentCaptured,
+	EventPaymentCancelled, EventPaymentAborted, EventPaymentExpired,
+	EventPaymentTerminated, EventPaymentRefunded,
+}
+
 // maxWebhookBody caps how much of the request body we buffer for hashing.
 const maxWebhookBody = 1 << 20
 
