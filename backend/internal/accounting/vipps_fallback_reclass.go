@@ -68,21 +68,22 @@ const (
 
 // Reason codes; the UI translates them, Reason carries the English text.
 const (
-	reasonCodeAutoAssignOff  = "auto_assign_off"
-	reasonCodeDecisionFailed = "decision_failed"
-	reasonCodeNeedsTildel    = "needs_tildel"
-	reasonCodeSameAccount    = "same_account"
-	reasonCodeMaybePaid      = "maybe_paid_faktura"
-	reasonCodeHasFaktura     = "has_faktura"
-	reasonCodeOrderCharge    = "order_charge"
-	reasonCodeBankLinked     = "bank_linked"
-	reasonCodeShape          = "unexpected_shape"
-	reasonCodeNoTargetAcct   = "target_account_missing"
-	reasonCodeAlreadyMoved   = "already_moved"
-	reasonCodeNotInRequest   = "not_in_request"
-	reasonCodeTargetChanged  = "target_changed"
-	reasonCodePeriodNotOpen  = "period_not_open"
-	reasonCodeReclassifyFail = "failed"
+	reasonCodeAutoAssignOff   = "auto_assign_off"
+	reasonCodeDecisionFailed  = "decision_failed"
+	reasonCodeNeedsTildel     = "needs_tildel"
+	reasonCodeSameAccount     = "same_account"
+	reasonCodeMaybePaid       = "maybe_paid_faktura"
+	reasonCodeHasFaktura      = "has_faktura"
+	reasonCodeOrderCharge     = "order_charge"
+	reasonCodeBankLinked      = "bank_linked"
+	reasonCodeShape           = "unexpected_shape"
+	reasonCodeNoTargetAcct    = "target_account_missing"
+	reasonCodeAlreadyMoved    = "already_moved"
+	reasonCodeNotInRequest    = "not_in_request"
+	reasonCodeTargetChanged   = "target_changed"
+	reasonCodePeriodNotOpen   = "period_not_open"
+	reasonCodeReferencePeriod = "reference_period"
+	reasonCodeReclassifyFail  = "failed"
 )
 
 // VippsFallbackReclassItem is one posted charge on the fallback account.
@@ -317,10 +318,11 @@ func (s *Service) planVippsFallbackReclass(ctx context.Context, clubID, periodID
 	if periodID != "" {
 		var year int
 		var status string
+		var reference bool
 		err := s.db.QueryRow(ctx,
-			`SELECT year, status FROM fiscal_periods WHERE id = $1 AND club_id = $2`,
+			`SELECT year, status, reference_only FROM fiscal_periods WHERE id = $1 AND club_id = $2`,
 			periodID, clubID,
-		).Scan(&year, &status)
+		).Scan(&year, &status, &reference)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil, fmt.Errorf("fiscal period not found")
 		}
@@ -329,6 +331,10 @@ func (s *Service) planVippsFallbackReclass(ctx context.Context, clubID, periodID
 		}
 		if status != "open" {
 			return nil, nil, fmt.Errorf("fiscal period %d is %s: %w", year, status, ErrPeriodClosed)
+		}
+		// A reference year's charges are not this club's books (BRY-418).
+		if reference {
+			return nil, nil, ErrReferencePeriod
 		}
 	}
 
@@ -376,7 +382,7 @@ func (s *Service) planVippsFallbackReclass(ctx context.Context, clubID, periodID
 		   JOIN journal_lines jl ON jl.journal_entry_id = je.id AND jl.credit > 0
 		   JOIN accounts a ON a.id = jl.account_id AND a.club_id = je.club_id AND a.code = $2
 		  WHERE je.club_id = $1 AND je.source = 'vipps' AND je.status = 'posted'
-		    AND je.source_table = 'vipps_import_rows' AND fp.status <> 'open'
+		    AND je.source_table = 'vipps_import_rows' AND fp.status <> 'open' AND NOT fp.reference_only
 		    AND ($3 = '' OR fp.id::text = $3)`,
 		clubID, fallbackRevenueCode, periodID,
 	).Scan(&res.ClosedPeriodCharges, &res.ClosedPeriodAmount); err != nil {
@@ -418,7 +424,7 @@ func (s *Service) loadFallbackCharges(ctx context.Context, clubID, periodID stri
 		   JOIN vipps_import_rows r ON r.club_id = je.club_id AND r.journal_entry_id = je.id
 		                           AND r.id::text = je.source_id AND r.row_type = 'belastning'
 		  WHERE je.club_id = $1 AND je.source = 'vipps' AND je.status = 'posted'
-		    AND je.source_table = 'vipps_import_rows' AND fp.status = 'open'
+		    AND je.source_table = 'vipps_import_rows' AND fp.status = 'open' AND NOT fp.reference_only
 		    AND ($3 = '' OR fp.id::text = $3)
 		    AND EXISTS (SELECT 1 FROM journal_lines jl JOIN accounts a ON a.id = jl.account_id
 		                 WHERE jl.journal_entry_id = je.id AND a.club_id = je.club_id
@@ -591,6 +597,9 @@ func (s *Service) applyFallbackReclassOne(ctx context.Context, clubID, actor str
 	case errors.Is(err, ErrPeriodClosed):
 		it.fail(fmt.Errorf("the fiscal period is not open: %w", err))
 		it.ReasonCode = reasonCodePeriodNotOpen
+	case errors.Is(err, ErrReferencePeriod):
+		it.fail(err)
+		it.ReasonCode = reasonCodeReferencePeriod
 	case err != nil:
 		it.fail(err)
 	default:
@@ -664,15 +673,17 @@ func (s *Service) reclassifyFallbackCharge(ctx context.Context, clubID, actor, c
 		entryNumber                                         int
 		description                                         string
 		bankLinked                                          bool
+		periodReference                                     bool
 	)
 	err = tx.QueryRow(ctx,
 		`SELECT je.status::text, je.source::text, COALESCE(je.source_table, ''), COALESCE(je.source_id, ''),
 		        fp.status::text, je.entry_number, je.description,
-		        EXISTS (SELECT 1 FROM bank_import_rows b WHERE b.club_id = je.club_id AND b.journal_entry_id = je.id)
+		        EXISTS (SELECT 1 FROM bank_import_rows b WHERE b.club_id = je.club_id AND b.journal_entry_id = je.id),
+		        fp.reference_only
 		   FROM journal_entries je JOIN fiscal_periods fp ON fp.id = je.fiscal_period_id
 		  WHERE je.id = $1 AND je.club_id = $2`,
 		c.entryID, clubID,
-	).Scan(&status, &source, &sourceTable, &sourceID, &periodStatus, &entryNumber, &description, &bankLinked)
+	).Scan(&status, &source, &sourceTable, &sourceID, &periodStatus, &entryNumber, &description, &bankLinked, &periodReference)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, errFallbackMoved
 	}
@@ -687,6 +698,9 @@ func (s *Service) reclassifyFallbackCharge(ctx context.Context, clubID, actor, c
 	}
 	if periodStatus != "open" {
 		return nil, ErrPeriodClosed
+	}
+	if periodReference {
+		return nil, ErrReferencePeriod
 	}
 	lines, err := entryLineTotals(ctx, tx, c.entryID)
 	if err != nil {

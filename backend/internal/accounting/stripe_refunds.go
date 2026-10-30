@@ -410,6 +410,11 @@ func bookDuplicateCaptureTx(ctx context.Context, tx pgx.Tx, clubID, actorID stri
 	if status != "open" {
 		return stripeOutcomeDeferred, StripeDeferPeriodClosed, nil, nil
 	}
+	if ref, err := periodIsReferenceIn(ctx, tx, clubID, chargePeriod); err != nil {
+		return stripeOutcomeSkipped, "", nil, err
+	} else if ref {
+		return stripeOutcomeDeferred, StripeDeferReferencePeriod, nil, nil
+	}
 	clearing, feeAccount, err := stripeAccountsIn(ctx, tx, clubID)
 	if err != nil {
 		return stripeOutcomeSkipped, "", nil, err

@@ -17,24 +17,28 @@ type ReportLine struct {
 
 // IncomeStatement is the resultatregnskap / aktivitetsregnskap.
 type IncomeStatement struct {
-	PeriodID string       `json:"period_id"`
-	Year     int          `json:"year"`
-	Revenue  []ReportLine `json:"revenue"`
-	Expenses []ReportLine `json:"expenses"`
-	TotalRevenue  float64 `json:"total_revenue"`
-	TotalExpenses float64 `json:"total_expenses"`
-	Result        float64 `json:"result"`
+	PeriodID      string       `json:"period_id"`
+	Year          int          `json:"year"`
+	Revenue       []ReportLine `json:"revenue"`
+	Expenses      []ReportLine `json:"expenses"`
+	TotalRevenue  float64      `json:"total_revenue"`
+	TotalExpenses float64      `json:"total_expenses"`
+	Result        float64      `json:"result"`
+	// ReferenceOnly is set for a reference year's report (BRY-418): the
+	// figures are for comparison and are not carried into later years.
+	ReferenceOnly bool `json:"reference_only"`
 }
 
 // BalanceSheet is the balanse.
 type BalanceSheet struct {
-	PeriodID    string       `json:"period_id"`
-	Year        int          `json:"year"`
-	Assets      []ReportLine `json:"assets"`
-	Liabilities []ReportLine `json:"liabilities"`
-	TotalAssets      float64 `json:"total_assets"`
-	TotalLiabilities float64 `json:"total_liabilities"`
-	IsBalanced       bool    `json:"is_balanced"`
+	PeriodID         string       `json:"period_id"`
+	Year             int          `json:"year"`
+	Assets           []ReportLine `json:"assets"`
+	Liabilities      []ReportLine `json:"liabilities"`
+	TotalAssets      float64      `json:"total_assets"`
+	TotalLiabilities float64      `json:"total_liabilities"`
+	IsBalanced       bool         `json:"is_balanced"`
+	ReferenceOnly    bool         `json:"reference_only"`
 }
 
 // TrialBalanceLine includes both debit and credit totals.
@@ -47,12 +51,13 @@ type TrialBalanceLine struct {
 
 // TrialBalance is the saldobalanse.
 type TrialBalance struct {
-	PeriodID    string             `json:"period_id"`
-	Year        int                `json:"year"`
-	Lines       []TrialBalanceLine `json:"lines"`
-	TotalDebit  float64            `json:"total_debit"`
-	TotalCredit float64            `json:"total_credit"`
-	IsBalanced  bool               `json:"is_balanced"`
+	PeriodID      string             `json:"period_id"`
+	Year          int                `json:"year"`
+	Lines         []TrialBalanceLine `json:"lines"`
+	TotalDebit    float64            `json:"total_debit"`
+	TotalCredit   float64            `json:"total_credit"`
+	IsBalanced    bool               `json:"is_balanced"`
+	ReferenceOnly bool               `json:"reference_only"`
 }
 
 // GeneralLedgerEntry is one journal entry's impact on an account.
@@ -67,13 +72,14 @@ type GeneralLedgerEntry struct {
 
 // GeneralLedger is the hovedbok for a specific account.
 type GeneralLedger struct {
-	PeriodID    string               `json:"period_id"`
-	AccountCode string               `json:"account_code"`
-	AccountName string               `json:"account_name"`
-	Entries     []GeneralLedgerEntry `json:"entries"`
-	TotalDebit  float64              `json:"total_debit"`
-	TotalCredit float64              `json:"total_credit"`
-	Balance     float64              `json:"balance"`
+	PeriodID      string               `json:"period_id"`
+	AccountCode   string               `json:"account_code"`
+	AccountName   string               `json:"account_name"`
+	Entries       []GeneralLedgerEntry `json:"entries"`
+	TotalDebit    float64              `json:"total_debit"`
+	TotalCredit   float64              `json:"total_credit"`
+	Balance       float64              `json:"balance"`
+	ReferenceOnly bool                 `json:"reference_only"`
 }
 
 // ── Queries ─────────────────────────────────────────────────
@@ -96,7 +102,8 @@ var cashWhereClause = `
 // When cashFilter is true only entries that touch a cash/bank account are included.
 func (s *Service) IncomeStatement(ctx context.Context, clubID, periodID string, cashFilter bool) (*IncomeStatement, error) {
 	var year int
-	err := s.db.QueryRow(ctx, `SELECT year FROM fiscal_periods WHERE id = $1 AND club_id = $2`, periodID, clubID).Scan(&year)
+	var reference bool
+	err := s.db.QueryRow(ctx, `SELECT year, reference_only FROM fiscal_periods WHERE id = $1 AND club_id = $2`, periodID, clubID).Scan(&year, &reference)
 	if err != nil {
 		return nil, fmt.Errorf("getting period: %w", err)
 	}
@@ -126,7 +133,7 @@ func (s *Service) IncomeStatement(ctx context.Context, clubID, periodID string, 
 	}
 	defer rows.Close()
 
-	stmt := &IncomeStatement{PeriodID: periodID, Year: year}
+	stmt := &IncomeStatement{PeriodID: periodID, Year: year, ReferenceOnly: reference}
 
 	for rows.Next() {
 		var code, name string
@@ -163,15 +170,20 @@ func (s *Service) IncomeStatement(ctx context.Context, clubID, periodID string, 
 }
 
 // BalanceSheet generates the balanse — cumulative through the selected period.
+// Reference periods (BRY-418) other than the selected one are skipped: a year
+// whose books live elsewhere must not feed the balances carried into later
+// years, which come from the opening balance. Picking the reference year
+// itself still shows it, with the periods before it.
 // When cashFilter is true only entries that touch a cash/bank account are included,
 // which hides receivables/payables that haven't been settled yet.
 func (s *Service) BalanceSheet(ctx context.Context, clubID, periodID string, cashFilter bool) (*BalanceSheet, error) {
 	var year int
 	var endDate string
+	var reference bool
 	err := s.db.QueryRow(ctx,
-		`SELECT year, end_date::text FROM fiscal_periods WHERE id = $1 AND club_id = $2`,
+		`SELECT year, end_date::text, reference_only FROM fiscal_periods WHERE id = $1 AND club_id = $2`,
 		periodID, clubID,
-	).Scan(&year, &endDate)
+	).Scan(&year, &endDate, &reference)
 	if err != nil {
 		return nil, fmt.Errorf("getting period: %w", err)
 	}
@@ -193,17 +205,18 @@ func (s *Service) BalanceSheet(ctx context.Context, clubID, periodID string, cas
 		 WHERE je.club_id = $1
 		   AND `+bookedEntryFilter+`
 		   AND fp.end_date <= $2
+		   AND (fp.id = $3 OR NOT fp.reference_only)
 		   AND a.account_type IN ('asset', 'liability')`+extra+`
 		 GROUP BY a.code, a.name, a.account_type, a.sort_order
 		 ORDER BY a.sort_order, a.code`,
-		clubID, endDate,
+		clubID, endDate, periodID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("querying balance sheet: %w", err)
 	}
 	defer rows.Close()
 
-	bs := &BalanceSheet{PeriodID: periodID, Year: year}
+	bs := &BalanceSheet{PeriodID: periodID, Year: year, ReferenceOnly: reference}
 
 	for rows.Next() {
 		var code, name string
@@ -243,7 +256,8 @@ func (s *Service) BalanceSheet(ctx context.Context, clubID, periodID string, cas
 // When cashFilter is true only entries that touch a cash/bank account are included.
 func (s *Service) TrialBalance(ctx context.Context, clubID, periodID string, cashFilter bool) (*TrialBalance, error) {
 	var year int
-	err := s.db.QueryRow(ctx, `SELECT year FROM fiscal_periods WHERE id = $1 AND club_id = $2`, periodID, clubID).Scan(&year)
+	var reference bool
+	err := s.db.QueryRow(ctx, `SELECT year, reference_only FROM fiscal_periods WHERE id = $1 AND club_id = $2`, periodID, clubID).Scan(&year, &reference)
 	if err != nil {
 		return nil, fmt.Errorf("getting period: %w", err)
 	}
@@ -272,7 +286,7 @@ func (s *Service) TrialBalance(ctx context.Context, clubID, periodID string, cas
 	}
 	defer rows.Close()
 
-	tb := &TrialBalance{PeriodID: periodID, Year: year}
+	tb := &TrialBalance{PeriodID: periodID, Year: year, ReferenceOnly: reference}
 
 	for rows.Next() {
 		var line TrialBalanceLine
@@ -318,10 +332,15 @@ func (s *Service) GeneralLedger(ctx context.Context, clubID, periodID, accountID
 	}
 	defer rows.Close()
 
+	reference, err := periodIsReferenceIn(ctx, s.db, clubID, periodID)
+	if err != nil {
+		return nil, err
+	}
 	gl := &GeneralLedger{
-		PeriodID:    periodID,
-		AccountCode: accountCode,
-		AccountName: accountName,
+		ReferenceOnly: reference,
+		PeriodID:      periodID,
+		AccountCode:   accountCode,
+		AccountName:   accountName,
 	}
 
 	var runningBalance float64

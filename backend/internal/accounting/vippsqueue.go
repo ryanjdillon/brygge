@@ -32,6 +32,7 @@ func (s *Service) ListVippsQueue(ctx context.Context, clubID string, limit int) 
 		  WHERE vir.club_id = $1
 		    AND vir.row_type = 'belastning'
 		    AND vir.journal_entry_id IS NULL
+		    AND NOT `+referenceDateSQL("vir.club_id", "COALESCE(vir.booking_date, vir.tx_at::date)")+`
 		  ORDER BY vir.booking_date DESC NULLS LAST, vir.tx_at DESC NULLS LAST
 		  LIMIT $2`,
 		clubID, limit,

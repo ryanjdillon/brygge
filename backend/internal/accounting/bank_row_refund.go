@@ -51,6 +51,7 @@ func (s *Service) ListPendingRefunds(ctx context.Context, clubID string) ([]Refu
 		  WHERE bir.club_id = $1
 		    AND bir.dismissed_reason IN ('double_payment', 'overpayment', 'refund_or_credit')
 		    AND bir.refund_paired_with IS NULL
+		    AND NOT `+referenceDateSQL("bir.club_id", "bir.row_date")+`
 		  ORDER BY bir.row_date DESC`,
 		clubID,
 	)
@@ -79,10 +80,11 @@ func (s *Service) CountPendingRefunds(ctx context.Context, clubID string) (int, 
 	var n int
 	err := s.db.QueryRow(ctx,
 		`SELECT COUNT(*)
-		   FROM bank_import_rows
-		  WHERE club_id = $1
-		    AND dismissed_reason IN ('double_payment', 'overpayment', 'refund_or_credit')
-		    AND refund_paired_with IS NULL`,
+		   FROM bank_import_rows bir
+		  WHERE bir.club_id = $1
+		    AND bir.dismissed_reason IN ('double_payment', 'overpayment', 'refund_or_credit')
+		    AND bir.refund_paired_with IS NULL
+		    AND NOT `+referenceDateSQL("bir.club_id", "bir.row_date"),
 		clubID,
 	).Scan(&n)
 	return n, err
@@ -114,6 +116,7 @@ func (s *Service) SuggestRefundOutbound(ctx context.Context, clubID, inboundRowI
 		    AND journal_entry_id IS NULL
 		    AND dismissed_at IS NULL
 		    AND refund_paired_with IS NULL
+		    AND NOT `+referenceDateSQL("bank_import_rows.club_id", "bank_import_rows.row_date")+`
 		  ORDER BY row_date DESC
 		  LIMIT 20`,
 		clubID, targetAbs,

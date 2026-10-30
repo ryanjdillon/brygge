@@ -250,6 +250,10 @@ func (s *Service) backlogPeriodYear(ctx context.Context, clubID, periodID string
 	if status != "open" {
 		return 0, fmt.Errorf("fiscal period %d is %s — reopen it before posting drafts", year, status)
 	}
+	// A reference year's drafts are never posted (BRY-418).
+	if err := s.refuseReferencePeriod(ctx, clubID, periodID); err != nil {
+		return 0, err
+	}
 	return year, nil
 }
 

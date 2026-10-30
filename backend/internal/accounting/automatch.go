@@ -151,6 +151,9 @@ func (s *Service) DeleteRule(ctx context.Context, ruleID string) error {
 // "Stripe") would book money the provider's postings already put on a
 // clearing account a second time.
 func (s *Service) AutoMatchImport(ctx context.Context, clubID, importID, periodID, matchedBy string) (int, error) {
+	if err := s.refuseReferencePeriod(ctx, clubID, periodID); err != nil {
+		return 0, err
+	}
 	rules, err := s.ListRules(ctx, clubID)
 	if err != nil {
 		return 0, err
@@ -244,13 +247,15 @@ type autoMatchRow struct {
 }
 
 // loadAutoMatchRows lists the import's unbooked rows, leaving out provider
-// payout deposits.
+// payout deposits and rows dated in a reference year (BRY-418: the caller's
+// period says nothing about which year a row belongs to).
 func (s *Service) loadAutoMatchRows(ctx context.Context, clubID, importID string, payouts providerPayouts) ([]autoMatchRow, error) {
 	rows, err := s.db.Query(ctx,
 		`SELECT bir.id, bir.row_date, bir.description, bir.amount, bir.counterpart, bir.kid_number
 		 FROM bank_import_rows bir
 		 JOIN bank_imports bi ON bi.id = bir.bank_import_id
 		 WHERE bi.id = $1 AND bi.club_id = $2 AND bir.journal_entry_id IS NULL
+		   AND NOT `+referenceDateSQL("bir.club_id", "bir.row_date")+`
 		 ORDER BY bir.row_date`,
 		importID, clubID,
 	)

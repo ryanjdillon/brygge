@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
+	"github.com/brygge-klubb/brygge/internal/accounting"
 	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/finance"
@@ -316,8 +317,10 @@ type cashFlowMonthRow struct {
 // Income is summed from credits to revenue accounts and expense from
 // debits to expense accounts — using account_type rather than code
 // ranges sidesteps intra-bank transfers (asset↔asset moves never touch
-// either side). Voided entries are excluded. Used by the accounting
-// dashboard's cash-flow chart. See DIL-362.
+// either side). Voided entries are excluded, and so are entries in or dated in
+// a reference year (BRY-418): the chart counts drafts, and a year kept in
+// another system would show the Vipps drafts imported for it as income. Used
+// by the accounting dashboard's cash-flow chart. See DIL-362.
 func (h *FinancialsHandler) HandleGetCashFlow(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -346,6 +349,7 @@ func (h *FinancialsHandler) HandleGetCashFlow(w http.ResponseWriter, r *http.Req
 		 WHERE je.club_id = $1
 		   AND je.status <> 'voided'
 		   AND EXTRACT(YEAR FROM je.entry_date) = $2
+		   AND `+accounting.NotReferenceEntrySQL("je")+`
 		   AND a.account_type IN ('revenue','expense')
 		 GROUP BY month
 		 ORDER BY month`,

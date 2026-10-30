@@ -8,6 +8,25 @@ import (
 	"github.com/go-pdf/fpdf"
 )
 
+// reportPDF is an A4 PDF whose text goes through the core font's translator, so
+// Norwegian letters in labels, club names and account names draw as themselves
+// and not as the bytes of their UTF-8 encoding.
+type reportPDF struct {
+	*fpdf.Fpdf
+	tr func(string) string
+}
+
+func newReportPDF() *reportPDF {
+	pdf := fpdf.New("P", "mm", "A4", "")
+	return &reportPDF{Fpdf: pdf, tr: pdf.UnicodeTranslatorFromDescriptor("")}
+}
+
+func (p *reportPDF) Cell(w, h float64, txt string) { p.Fpdf.Cell(w, h, p.tr(txt)) }
+
+func (p *reportPDF) CellFormat(w, h float64, txt, border string, ln int, align string, fill bool, link int, linkStr string) {
+	p.Fpdf.CellFormat(w, h, p.tr(txt), border, ln, align, fill, link, linkStr)
+}
+
 // ReportHeader holds club info for PDF headers.
 type ReportHeader struct {
 	ClubName  string
@@ -17,7 +36,7 @@ type ReportHeader struct {
 
 // IncomeStatementPDF renders the resultatregnskap as an A4 PDF.
 func IncomeStatementPDF(header ReportHeader, stmt *IncomeStatement) ([]byte, error) {
-	pdf := fpdf.New("P", "mm", "A4", "")
+	pdf := newReportPDF()
 	pdf.SetAutoPageBreak(true, 20)
 	pdf.AddPage()
 
@@ -34,7 +53,12 @@ func IncomeStatementPDF(header ReportHeader, stmt *IncomeStatement) ([]byte, err
 	if header.OrgNumber != "" {
 		pdf.Cell(95, 5, fmt.Sprintf("Org.nr: %s", header.OrgNumber))
 	}
-	pdf.Ln(10)
+	pdf.Ln(5)
+	if stmt.ReferenceOnly {
+		pdf.Cell(190, 5, "Referanseår - ikke klubbens regnskap i Brygge")
+		pdf.Ln(5)
+	}
+	pdf.Ln(5)
 
 	// Section A: Anskaffede midler (Revenue)
 	pdf.SetFont("Helvetica", "B", 11)
@@ -78,7 +102,7 @@ func IncomeStatementPDF(header ReportHeader, stmt *IncomeStatement) ([]byte, err
 
 // BalanceSheetPDF renders the balanse as an A4 PDF.
 func BalanceSheetPDF(header ReportHeader, bs *BalanceSheet) ([]byte, error) {
-	pdf := fpdf.New("P", "mm", "A4", "")
+	pdf := newReportPDF()
 	pdf.SetAutoPageBreak(true, 20)
 	pdf.AddPage()
 
@@ -95,7 +119,12 @@ func BalanceSheetPDF(header ReportHeader, bs *BalanceSheet) ([]byte, error) {
 	if header.OrgNumber != "" {
 		pdf.Cell(95, 5, fmt.Sprintf("Org.nr: %s", header.OrgNumber))
 	}
-	pdf.Ln(10)
+	pdf.Ln(5)
+	if bs.ReferenceOnly {
+		pdf.Cell(190, 5, "Referanseår - ikke klubbens regnskap i Brygge")
+		pdf.Ln(5)
+	}
+	pdf.Ln(5)
 
 	// Eiendeler (Assets)
 	pdf.SetFont("Helvetica", "B", 11)
@@ -138,7 +167,7 @@ func BalanceSheetPDF(header ReportHeader, bs *BalanceSheet) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func reportTable(pdf *fpdf.Fpdf, lines []ReportLine) {
+func reportTable(pdf *reportPDF, lines []ReportLine) {
 	pdf.SetFont("Helvetica", "B", 9)
 	pdf.SetFillColor(240, 240, 240)
 	pdf.CellFormat(25, 6, "Konto", "1", 0, "", true, 0, "")
@@ -155,7 +184,7 @@ func reportTable(pdf *fpdf.Fpdf, lines []ReportLine) {
 	}
 }
 
-func pdfFooter(pdf *fpdf.Fpdf, header ReportHeader) {
+func pdfFooter(pdf *reportPDF, header ReportHeader) {
 	pdf.SetFont("Helvetica", "I", 8)
 	pdf.SetTextColor(128, 128, 128)
 	pdf.Cell(0, 5, fmt.Sprintf("%s | Org.nr: %s | Generert %s",

@@ -98,7 +98,8 @@ func (s *Service) RegenerateOpenPeriodVippsReconciliations(ctx context.Context, 
 		  WHERE je.club_id = $1 AND je.source = 'vipps'
 		    AND je.source_table = 'bank_import_rows' AND je.source_id IS NOT NULL
 		    AND je.status IN ('draft','posted')
-		    AND fp.status = 'open'`+notPerChargeEntry+`
+		    AND fp.status = 'open'
+		    AND `+notReferenceEntrySQL("je")+notPerChargeEntry+`
 		  ORDER BY je.entry_date, je.id`,
 		clubID,
 	)

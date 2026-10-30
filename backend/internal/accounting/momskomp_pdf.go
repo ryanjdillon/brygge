@@ -3,13 +3,11 @@ package accounting
 import (
 	"bytes"
 	"fmt"
-
-	"github.com/go-pdf/fpdf"
 )
 
 // MomskompPDF renders the momskompensasjon report as an A4 PDF.
 func MomskompPDF(header ReportHeader, report *MomskompReport) ([]byte, error) {
-	pdf := fpdf.New("P", "mm", "A4", "")
+	pdf := newReportPDF()
 	pdf.SetAutoPageBreak(true, 20)
 	pdf.AddPage()
 
@@ -108,7 +106,7 @@ func MomskompPDF(header ReportHeader, report *MomskompReport) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func summaryRow(pdf *fpdf.Fpdf, label string, amount float64) {
+func summaryRow(pdf *reportPDF, label string, amount float64) {
 	pdf.CellFormat(130, 6, label, "", 0, "", false, 0, "")
 	pdf.CellFormat(60, 6, formatKr(amount), "", 0, "R", false, 0, "")
 	pdf.Ln(6)

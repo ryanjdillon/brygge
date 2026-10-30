@@ -83,7 +83,8 @@ func (s *Service) ResyncVippsBilags(ctx context.Context, clubID, createdBy strin
 		    AND je.status = 'draft'
 		    AND a.code IN ($2, $3)
 		    AND je.source_table = 'bank_import_rows'
-		    AND je.source_id IS NOT NULL`,
+		    AND je.source_id IS NOT NULL
+		    AND `+notReferenceEntrySQL("je"),
 		clubID, vippsClearingAccountCode, fallbackRevenueCode,
 	)
 	if err != nil {

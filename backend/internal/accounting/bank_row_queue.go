@@ -2,10 +2,14 @@ package accounting
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 )
+
+// ErrInvalidBankRowKind is a Tildel kind filter the queue does not know.
+var ErrInvalidBankRowKind = errors.New("invalid kind")
 
 // DIL-392 Phase 1: read paths backing the Tildel-tab UI.
 //
@@ -79,6 +83,10 @@ type BankRowSummary struct {
 	// rows, not just the listed page, so a partner on another page or in
 	// another year still shows.
 	PartnerHint *string `json:"partner_hint"`
+	// ReferencePeriod is true for a row dated in a reference year (BRY-418).
+	// Only the Referanseår filter lists such rows, and the only actions left
+	// on them are booking an outgoing row to a cost account and dismissing it.
+	ReferencePeriod bool `json:"reference_period"`
 }
 
 // ListUnmatchedBankRows returns the paginated set of rows that still
@@ -86,7 +94,9 @@ type BankRowSummary struct {
 // that combine with AND, e.g. "incoming,bank,duplicate": a direction
 // ("incoming" | "outgoing" | "dismissed"), a source ("bank" | "vipps")
 // and flags ("duplicate", "double_payment"). Empty or "all" means no
-// filter. Only "dismissed" includes dismissed rows. q filters
+// filter. Only "dismissed" includes dismissed rows. "reference" is not a
+// filter but a mode switch: the club's outgoing rows dated in a reference
+// year, which the other kinds leave out entirely (see tildelScope). q filters
 // substrings against description + counterpart or matches the raw
 // amount. year (0 = no filter) restricts to rows whose row_date falls
 // in that calendar year. The row set is tildelScope's, shared with the counts.
@@ -169,7 +179,8 @@ func (s *Service) ListUnmatchedBankRows(
 		             AND ABS(i.total_amount - bir.amount) < 0.005
 		        ) ELSE 0 END) AS suggestion_count,
 		       (` + vippsPayoutRowSQL("bir") + `) AS vipps_payout,
-		       (` + provisionalRowSQL("bir") + `) AS provisional
+		       (` + provisionalRowSQL("bir") + `) AS provisional,
+		       ` + referenceDateSQL("bir.club_id", "bir.row_date") + ` AS reference_period
 		  FROM bank_import_rows bir
 		  JOIN bank_imports bi ON bi.id = bir.bank_import_id
 		 WHERE ` + strings.Join(where, " AND ") + `
@@ -188,7 +199,7 @@ func (s *Service) ListUnmatchedBankRows(
 		if err := rows.Scan(&r.ID, &r.RowDate, &r.Amount, &r.KIDNumber,
 			&r.Reference, &r.Counterpart, &r.Description, &r.BankAccountCode,
 			&r.DismissedAt, &r.DismissedReason, &r.LikelyDuplicateOfMatched,
-			&r.PossibleDoublePayment, &r.SuggestionCount, &r.VippsPayout, &r.Provisional); err != nil {
+			&r.PossibleDoublePayment, &r.SuggestionCount, &r.VippsPayout, &r.Provisional, &r.ReferencePeriod); err != nil {
 			return nil, fmt.Errorf("scan: %w", err)
 		}
 		out = append(out, r)
@@ -270,12 +281,30 @@ func (s *Service) markProviderPayouts(ctx context.Context, clubID string, rows [
 // the dismissed clause keeps it out of Tildel. Provider payout deposits stay
 // in scope because the tab lists them (a quiet item that clears itself, or
 // one a person clears by hand), so the badge counts them too.
+//
+// A row dated in a reference year (BRY-418, referenceDateSQL on the row's own
+// date) is outside every default view and count. Kind "reference" lists the
+// outgoing ones, the only rows of that year that can still be booked.
 func tildelScope(clubID, kind string, year int) (clauses []string, args []any, err error) {
-	filters, err := bankRowKindClauses(kind)
+	rest, reference := splitReferenceKind(kind)
+	filters, err := bankRowKindClauses(rest)
 	if err != nil {
 		return nil, nil, err
 	}
 	clauses = append([]string{"bir.club_id = $1", "bir.journal_entry_id IS NULL"}, filters...)
+	if reference {
+		// A mode switch, not a filter that ANDs with the rest: it swaps the
+		// year exclusion for its opposite. With "dismissed" it lists the
+		// dismissed ones, so a mistaken dismissal can be undone.
+		clauses = append(clauses, "bir.amount < 0", referenceDateSQL("bir.club_id", "bir.row_date"))
+		// A dismissal that is final is not offered for undoing (see
+		// finalDismissalSQL), so those rows are left out of the dismissed list.
+		clauses = append(clauses, "COALESCE(bir.dismissed_reason, '') NOT IN "+finalDismissalSQL)
+	} else {
+		// A reference year is out of every queue, count and badge: its rows
+		// are listed only under the reference filter, which needs them.
+		clauses = append(clauses, "NOT "+referenceDateSQL("bir.club_id", "bir.row_date"))
+	}
 	args = []any{clubID}
 	if year > 0 {
 		clauses = append(clauses, "EXTRACT(YEAR FROM bir.row_date)::int = $2")
@@ -284,12 +313,31 @@ func tildelScope(clubID, kind string, year int) (clauses []string, args []any, e
 	return clauses, args, nil
 }
 
+// splitReferenceKind takes the "reference" token out of a kind set.
+func splitReferenceKind(kind string) (rest string, reference bool) {
+	var kept []string
+	for _, tok := range strings.Split(kind, ",") {
+		if strings.TrimSpace(tok) == "reference" {
+			reference = true
+			continue
+		}
+		kept = append(kept, tok)
+	}
+	return strings.Join(kept, ","), reference
+}
+
 // CountUnmatchedBankRows is how many rows the Tildel tab lists for the year
 // (0 = all years) with no filter: the sidebar and tab badge, and the number a
 // board task reports. It is ListUnmatchedBankRows's row set for kind "" (see
 // tildelScope), so the two always agree.
 func (s *Service) CountUnmatchedBankRows(ctx context.Context, clubID string, year int) (int, error) {
-	clauses, args, err := tildelScope(clubID, "", year)
+	return s.CountUnmatchedBankRowsKind(ctx, clubID, "", year)
+}
+
+// CountUnmatchedBankRowsKind is CountUnmatchedBankRows for one kind filter;
+// the Referanseår chip counts kind "reference".
+func (s *Service) CountUnmatchedBankRowsKind(ctx context.Context, clubID, kind string, year int) (int, error) {
+	clauses, args, err := tildelScope(clubID, kind, year)
 	if err != nil {
 		return 0, err
 	}
@@ -853,7 +901,7 @@ func bankRowKindClauses(kind string) ([]string, error) {
 		}
 		clause, ok := bankRowKindFilters[tok]
 		if !ok {
-			return nil, fmt.Errorf("invalid kind %q", tok)
+			return nil, fmt.Errorf("%w %q", ErrInvalidBankRowKind, tok)
 		}
 		if tok == "dismissed" {
 			dismissed = true

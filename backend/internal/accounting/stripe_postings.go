@@ -40,6 +40,9 @@ const (
 	// StripeDeferNoPeriod: no fiscal period covers the booking date. Stripe
 	// booking never creates one; the treasurer opens the year.
 	StripeDeferNoPeriod = "no_period"
+	// StripeDeferReferencePeriod: the booking date lies in a reference year
+	// (BRY-418), which takes cost bookings only. The row stays as it is.
+	StripeDeferReferencePeriod = "reference_period"
 )
 
 const stripeBookFailedText = "Bokføring av Stripe-transaksjoner feilet – prøv igjen, eller se loggen"
@@ -320,11 +323,20 @@ func (s *Service) bookStripeTxn(ctx context.Context, clubID, actorID, rowID stri
 		out.kind, out.reason = stripeOutcomeDeferred, StripeDeferPeriodClosed
 		return out, nil
 	}
+	if ref, err := periodIsReferenceIn(ctx, tx, clubID, periodID); err != nil {
+		return out, err
+	} else if ref {
+		out.kind, out.reason = stripeOutcomeDeferred, StripeDeferReferencePeriod
+		return out, nil
+	}
 
 	booked, err := bookStripeRowTx(ctx, tx, clubID, actorID, &row, &out, periodID)
 	switch {
 	case errors.Is(err, ErrPeriodClosed):
 		out.kind, out.reason = stripeOutcomeDeferred, StripeDeferPeriodClosed
+		return out, nil
+	case errors.Is(err, ErrReferencePeriod):
+		out.kind, out.reason = stripeOutcomeDeferred, StripeDeferReferencePeriod
 		return out, nil
 	case errors.Is(err, errChargeRaced):
 		return stripeBookOutcome{btID: row.btID}, nil

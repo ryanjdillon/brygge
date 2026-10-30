@@ -752,7 +752,9 @@ func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID
 		       ))
 		 WHERE r1.bank_import_id = $1
 		   AND r1.club_id        = $2
-		   AND r1.journal_entry_id IS NULL`,
+		   AND r1.journal_entry_id IS NULL
+		   AND NOT `+referenceDateSQL("r1.club_id", "r1.row_date")+`
+		   AND NOT `+referenceDateSQL("r2.club_id", "r2.row_date"),
 		importID, clubID,
 	)
 	if err != nil {

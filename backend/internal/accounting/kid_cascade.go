@@ -11,8 +11,10 @@ import (
 
 // kidCascadeEligibleSQL is true for a bank row the payment-match cascade
 // (KID → invoice number → counterpart name, at bank import and bank sync)
-// may book: not booked, not dismissed and not paired as a refund. alias is
-// the bank_import_rows alias, "" for an unaliased table.
+// may book: not booked, not dismissed, not paired as a refund and not dated
+// in a reference year (BRY-418: that year's deposits are left alone, whatever
+// period an import override names). alias is the bank_import_rows alias, ""
+// for an unaliased table.
 //
 // Bank sync lists its candidates with it, and both cascades guard the row
 // link with it, so a row the treasurer dismissed while a sync was waiting
@@ -24,7 +26,15 @@ func kidCascadeEligibleSQL(alias string) string {
 	if alias != "" {
 		p = alias + "."
 	}
-	return "(" + p + "journal_entry_id IS NULL AND " + p + "dismissed_at IS NULL AND " + p + "refund_paired_with IS NULL)"
+	// The reference check runs in a subquery over fiscal_periods, where a bare
+	// club_id would resolve to the period's own column and always be true, so
+	// it names the table even when the rest is unqualified.
+	t := alias
+	if t == "" {
+		t = "bank_import_rows"
+	}
+	return "(" + p + "journal_entry_id IS NULL AND " + p + "dismissed_at IS NULL AND " + p + "refund_paired_with IS NULL AND NOT " +
+		referenceDateSQL(t+".club_id", t+".row_date") + ")"
 }
 
 // findCascadeInvoice is the cascade's choice of faktura for an incoming row,

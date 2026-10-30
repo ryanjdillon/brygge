@@ -208,7 +208,8 @@ func (d bankDepositDecision) item(entryID string) AutoAssignItem {
 // loadBankDeposits loads the club's incoming rows the rule may book: unbooked,
 // undismissed, not refund-paired, not a provider payout deposit, not
 // provisional (partnerEligibleSQL and providerPayouts), without one of our
-// KIDs and not a bounced transfer. Each carries the status of the fiscal
+// KIDs and not a bounced transfer. A row dated in a reference year, or one an
+// import override would post into one, is not a candidate (BRY-418). Each carries the status of the fiscal
 // period it would post to, or "" when none exists.
 func (s *Service) loadBankDeposits(ctx context.Context, clubID string, opts BankAutoAssignOpts) ([]bankDeposit, error) {
 	payouts, err := loadProviderPayouts(ctx, s.db, clubID)
@@ -223,7 +224,7 @@ func (s *Service) loadBankDeposits(ctx context.Context, clubID string, opts Bank
 		   FROM bank_import_rows bir
 		   JOIN bank_imports bi ON bi.id = bir.bank_import_id
 		   LEFT JOIN LATERAL (
-		        SELECT p.status FROM fiscal_periods p
+		        SELECT p.status, p.reference_only FROM fiscal_periods p
 		         WHERE p.club_id = bir.club_id
 		           AND CASE WHEN $2 <> '' AND bir.bank_import_id::text = $3 THEN p.id::text = $2
 		                    ELSE bir.row_date BETWEEN p.start_date AND p.end_date END
@@ -231,6 +232,8 @@ func (s *Service) loadBankDeposits(ctx context.Context, clubID string, opts Bank
 		         LIMIT 1) fp ON true
 		  WHERE bir.club_id = $1 AND bir.amount > 0
 		    AND `+partnerEligibleSQL("bir")+`
+		    AND NOT `+referenceDateSQL("bir.club_id", "bir.row_date")+`
+		    AND NOT COALESCE(fp.reference_only, false)
 		  ORDER BY bir.row_date, bir.id`,
 		clubID, opts.PeriodOverride, opts.ImportID,
 	)

@@ -51,6 +51,7 @@ func (s *Service) ListMissingVippsSettlements(ctx context.Context, clubID string
 		    AND journal_entry_id IS NULL
 		    AND dismissed_at IS NULL
 		    AND description ~* 'Utb\.\s*[0-9]+\s+Vippsnr\s+[0-9]+'
+		    AND NOT `+referenceDateSQL("bank_import_rows.club_id", "bank_import_rows.row_date")+`
 		  ORDER BY row_date`,
 		clubID,
 	)
@@ -198,6 +199,7 @@ func (s *Service) ListUnreconciledVippsCharges(ctx context.Context, clubID strin
 		    AND vir.journal_entry_id IS NULL
 		    AND vir.dismissed_at IS NULL
 		    AND vir.amount > 0
+		    AND NOT `+referenceDateSQL("vir.club_id", "COALESCE(vir.booking_date, vir.tx_at::date)")+`
 		  ORDER BY d NULLS LAST, vir.id`,
 		clubID, string(VippsRowBelastning),
 	)

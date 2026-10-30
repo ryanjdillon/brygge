@@ -18,6 +18,8 @@ type MomskompReport struct {
 	CompensationAmount  float64            `json:"compensation_amount"`
 	BreakdownByAccount  []AccountBreakdown `json:"breakdown_by_account"`
 	HasDraftEntries     bool               `json:"has_draft_entries"`
+	// ReferenceOnly marks a reference year's report (BRY-418).
+	ReferenceOnly bool `json:"reference_only"`
 }
 
 // AccountBreakdown shows per-account detail for the momskomp report.
@@ -34,23 +36,30 @@ type AccountBreakdown struct {
 // Momskompensasjon calculates the VAT compensation report for a fiscal period.
 func (s *Service) Momskompensasjon(ctx context.Context, clubID, periodID, model string) (*MomskompReport, error) {
 	var year int
+	var reference bool
 	err := s.db.QueryRow(ctx,
-		`SELECT year FROM fiscal_periods WHERE id = $1 AND club_id = $2`,
+		`SELECT year, reference_only FROM fiscal_periods WHERE id = $1 AND club_id = $2`,
 		periodID, clubID,
-	).Scan(&year)
+	).Scan(&year, &reference)
 	if err != nil {
 		return nil, fmt.Errorf("getting period: %w", err)
 	}
 
-	// Check for draft entries (incomplete data warning)
+	// Check for draft entries (incomplete data warning). In a reference year
+	// only a draft the guard would let post counts: the year's Vipps drafts
+	// stay drafts for good and must not mark its momskompensasjon incomplete.
 	var hasDrafts bool
-	err = s.db.QueryRow(ctx,
-		`SELECT EXISTS(
-			SELECT 1 FROM journal_entries
-			WHERE club_id = $1 AND fiscal_period_id = $2 AND status = 'draft'
-		)`,
-		clubID, periodID,
-	).Scan(&hasDrafts)
+	if reference {
+		hasDrafts, err = referenceExpenseDrafts(ctx, s.db, clubID, periodID)
+	} else {
+		err = s.db.QueryRow(ctx,
+			`SELECT EXISTS(
+				SELECT 1 FROM journal_entries
+				WHERE club_id = $1 AND fiscal_period_id = $2 AND status = 'draft'
+			)`,
+			clubID, periodID,
+		).Scan(&hasDrafts)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("checking drafts: %w", err)
 	}
@@ -89,6 +98,7 @@ func (s *Service) Momskompensasjon(ctx context.Context, clubID, periodID, model 
 		Year:            year,
 		Model:           model,
 		HasDraftEntries: hasDrafts,
+		ReferenceOnly:   reference,
 	}
 
 	for rows.Next() {

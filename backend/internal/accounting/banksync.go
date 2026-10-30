@@ -292,6 +292,7 @@ func (s *Service) healStrandedKIDDrafts(ctx context.Context, clubID string) (int
 	rows, err := tx.Query(ctx,
 		`SELECT je.id FROM journal_entries je
 		  WHERE je.club_id = $1 AND je.status = 'draft' AND je.source = 'bank_import'
+		    AND `+notReferenceEntrySQL("je")+`
 		    AND je.created_at < now() - $3::interval
 		    AND EXISTS (SELECT 1 FROM bank_import_rows b
 		                 WHERE b.club_id = je.club_id AND b.journal_entry_id = je.id AND b.auto_matched
@@ -372,6 +373,7 @@ func (s *Service) backfillUnlinkedPayments(ctx context.Context, clubID string) (
 		    AND i.status = 'open'
 		    AND bir.amount > 0
 		    AND bir.amount = i.total_amount
+		    AND NOT `+referenceDateSQL("bir.club_id", "bir.row_date")+`
 		    AND EXISTS (
 		      SELECT 1 FROM journal_lines jl
 		        JOIN accounts a ON a.id = jl.account_id
@@ -450,6 +452,7 @@ func (s *Service) backfillInvoiceNumberPayments(ctx context.Context, clubID stri
 		    AND i.status = 'open'
 		    AND a.code = $2
 		    AND jl.credit > 0
+		    AND NOT `+referenceDateSQL("bir.club_id", "bir.row_date")+`
 		  ORDER BY i.id, bir.row_date ASC`,
 		clubID, receivablesAccountCode,
 	)
@@ -647,7 +650,8 @@ func (s *Service) syncVippsReconciliations(ctx context.Context, clubID, createdB
 		`SELECT id FROM bank_import_rows
 		 WHERE club_id = $1
 		   AND journal_entry_id IS NULL
-		   AND description ~* '^utb\.\s*[0-9]+\s+vippsnr\s+[0-9]+'`,
+		   AND description ~* '^utb\.\s*[0-9]+\s+vippsnr\s+[0-9]+'
+		   AND NOT `+referenceDateSQL("bank_import_rows.club_id", "bank_import_rows.row_date"),
 		clubID,
 	)
 	if qerr != nil {

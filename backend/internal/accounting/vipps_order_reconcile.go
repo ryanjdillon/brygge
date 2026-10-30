@@ -148,6 +148,7 @@ func (s *Service) AutoReconcileOrderCharges(ctx context.Context, clubID, created
 		  WHERE r.club_id = $1 AND r.row_type = 'belastning'
 		    AND r.journal_entry_id IS NULL AND r.dismissed_at IS NULL
 		    AND r.order_id <> ''
+		    AND NOT `+referenceDateSQL("r.club_id", "COALESCE(r.booking_date, r.tx_at::date)")+`
 		    AND EXISTS (SELECT 1 FROM orders o WHERE o.club_id = r.club_id AND o.vipps_reference = r.order_id)
 		  ORDER BY r.tx_at`,
 		clubID,

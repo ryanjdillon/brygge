@@ -110,6 +110,12 @@ func (s *Service) ClearReadyVippsPayouts(ctx context.Context, clubID, actor stri
 				s.log.Warn().Err(err).Str("bank_row_id", d.id).Msg("vipps payout sweep: clearing failed")
 			}
 		case !r.Ready:
+			if ref, rerr := s.vippsSettlementIsReference(ctx, clubID, d.msn, d.settlement); rerr == nil && ref {
+				// A reference year's charges are drafts that never post.
+				item.Reason, _ = payoutSweepReason(ErrReferencePeriod)
+				res.Skipped = append(res.Skipped, item)
+				break
+			}
 			item.Reason = waitingReason(r.UnreconciledCharges)
 			res.Waiting = append(res.Waiting, item)
 		case r.AlreadyCleared:
@@ -141,6 +147,7 @@ func (s *Service) payoutsWithoutOpenDeposit(ctx context.Context, clubID string, 
 		  WHERE club_id = $1 AND row_type = 'payout'
 		    AND journal_entry_id IS NULL AND dismissed_at IS NULL
 		    AND settlement_number IS NOT NULL AND settlement_number <> ''
+		    AND NOT `+referenceDateSQL("vipps_import_rows.club_id", "vipps_import_rows.booking_date")+`
 		  ORDER BY booking_date, settlement_number`,
 		clubID,
 	)
@@ -209,6 +216,7 @@ func (s *Service) vippsPayoutDeposits(ctx context.Context, clubID string) ([]vip
 		   FROM bank_import_rows
 		  WHERE club_id = $1
 		    AND description ~* 'utb\.\s*[0-9]+\s+vippsnr\s+[0-9]+'
+		    AND NOT `+referenceDateSQL("bank_import_rows.club_id", "bank_import_rows.row_date")+`
 		  ORDER BY row_date, id`,
 		clubID,
 	)
@@ -246,6 +254,8 @@ func waitingReason(n int) string {
 // the cause is logged by the caller.
 func payoutSweepReason(err error) (reason string, skip bool) {
 	switch {
+	case errors.Is(err, ErrReferencePeriod):
+		return "oppgjøret hører til et referanseår: før beløpet i inngående balanse, og bokfør innbetalingen med et bilag", true
 	case errors.Is(err, ErrVippsSettlementNotImported):
 		return "Vipps-oppgjøret er ikke importert", true
 	case errors.Is(err, ErrVippsSettlementAlreadyCleared):

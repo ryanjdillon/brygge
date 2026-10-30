@@ -84,6 +84,7 @@ func (s *Service) AutoAssignVippsCharges(ctx context.Context, clubID, createdBy 
 		   FROM vipps_import_rows r
 		  WHERE r.club_id = $1 AND r.row_type = 'belastning' AND r.amount > 0
 		    AND r.journal_entry_id IS NULL AND r.dismissed_at IS NULL
+		    AND NOT `+referenceDateSQL("r.club_id", "COALESCE(r.booking_date, r.tx_at::date)")+`
 		    AND NOT (r.order_id <> '' AND EXISTS (
 		        SELECT 1 FROM orders o WHERE o.club_id = r.club_id AND o.vipps_reference = r.order_id))
 		  ORDER BY r.tx_at`,
@@ -346,6 +347,9 @@ var ErrVippsChargeInSettlement = errors.New( //nolint:staticcheck // ST1005: a u
 // cleared against the bank deposit is refused with
 // *ChargeInClearedSettlementError (see vipps_cleared_settlement.go).
 func (s *Service) UnassignVippsCharge(ctx context.Context, clubID, actorID, rowID string) (priorEntryID, priorInvoiceID string, err error) { //nolint:gocognit,cyclop // reverses each posting kind inside one transaction; split tracked in BRY-424
+	if err := s.refuseReferenceVippsCharge(ctx, clubID, rowID); err != nil {
+		return "", "", err
+	}
 	var entryID, invoiceID *string
 	var orderRef string
 	err = s.db.QueryRow(ctx,
