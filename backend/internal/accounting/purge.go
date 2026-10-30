@@ -10,6 +10,11 @@ import (
 // converge on the same "no PII left" state.
 const anonymizedEmailSentinel = "deleted@deleted"
 
+// ErasedEmailSuffix marks a user whose identity the GDPR deletion flow erased
+// immediately: a random local part plus this suffix. The sweep leaves these
+// alone rather than rewriting them to the shared sentinel.
+const ErasedEmailSuffix = "@deleted.local"
+
 // PurgeExpiredMemberPII anonymizes the PII of deactivated members whose
 // financial records have all cleared the retention window (BRY-207). It never
 // deletes the user row — invoices reference it (no ON DELETE cascade) and keep
@@ -22,12 +27,13 @@ func (s *Service) PurgeExpiredMemberPII(ctx context.Context) (int64, error) {
 		`SELECT id, club_id FROM users u
 		  WHERE u.deactivated_at IS NOT NULL
 		    AND u.email <> $1
+		    AND u.email NOT LIKE '%' || $3
 		    AND NOT EXISTS (
 		        SELECT 1 FROM invoices i
 		         WHERE i.user_id = u.id
 		           AND make_date(EXTRACT(YEAR FROM i.issue_date)::int + $2, 1, 1) > now()
 		    )`,
-		anonymizedEmailSentinel, RetentionYears+1,
+		anonymizedEmailSentinel, RetentionYears+1, ErasedEmailSuffix,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("select purge-eligible members: %w", err)
