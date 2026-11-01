@@ -1538,6 +1538,7 @@ async function doUnassign(rowId: string) {
     <!-- Dismiss reason modal -->
     <Modal v-model:open="dismissOpen" size="md" :title="t('admin.bankReconcile.dismissTitle')">
       <p class="text-sm text-gray-700">{{ t('admin.bankReconcile.dismissHint') }}</p>
+      <p v-if="activeSource === 'vipps'" class="mt-2 text-sm text-amber-700">{{ t('admin.bankReconcile.dismissVippsHint') }}</p>
       <fieldset class="mt-4 space-y-2">
         <label v-for="r in DISMISS_REASONS" :key="r" class="flex cursor-pointer items-start gap-2 rounded-md border border-gray-200 p-3 hover:bg-gray-50">
           <input v-model="dismissReason" type="radio" :value="r" class="mt-0.5" />

@@ -1406,6 +1406,7 @@
       "accountSuggestions": "Suggested",
       "dismissTitle": "Dismiss this row",
       "dismissHint": "Pick a reason. The row drops out of the queue but stays in the audit log.",
+      "dismissVippsHint": "Dismiss a Vipps charge only if Vipps left it out of the payout. A dismissed charge that Vipps paid out stops its settlement from clearing, and the dismissal cannot be undone here yet.",
       "confidence": {
         "sterk": "Strong match",
         "sannsynleg": "Likely",

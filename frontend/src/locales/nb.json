@@ -2343,6 +2343,7 @@
       "accountSuggestions": "Foreslåtte",
       "dismissTitle": "Avvis denne raden",
       "dismissHint": "Vel ein grunn. Raden vert fjerna frå køen men ligg igjen i revisjonsloggen.",
+      "dismissVippsHint": "Avvis bare en Vipps-betaling som Vipps har holdt utenfor utbetalingen. En avvist betaling som Vipps har utbetalt hindrer at oppgjøret avstemmes, og avvisningen kan ikke angres her ennå.",
       "confidence": {
         "sterk": "Sterk",
         "sannsynleg": "Sannsynleg",
