@@ -69,7 +69,11 @@ func (s *Service) vippsAutoAssignConfig(ctx context.Context, clubID string) (vip
 // AutoAssignVippsCharges books every unambiguous charge in the queue (see the
 // rules above) and reports what it booked and how many charges still need a
 // human. Charges naming a checkout order are left to
-// AutoReconcileOrderCharges. Idempotent: booked charges leave the queue.
+// AutoReconcileOrderCharges. Idempotent: booked charges leave the queue. A
+// cancelled ctx stops it with the partial result and the context's error.
+//
+// It never takes the club's Vipps booking slot: a request books through
+// BookVippsQueue, which holds the slot around the three Vipps booking passes.
 func (s *Service) AutoAssignVippsCharges(ctx context.Context, clubID, createdBy string) (*AutoAssignResult, error) {
 	res := &AutoAssignResult{Source: AutoAssignSourceVipps, Assigned: []AutoAssignItem{}, SkippedDetails: []SkippedItem{}}
 	cfg, err := s.vippsAutoAssignConfig(ctx, clubID)
@@ -122,7 +126,17 @@ func (s *Service) AutoAssignVippsCharges(ctx context.Context, clubID, createdBy 
 	}
 
 	for _, c := range queue {
+		// A cancelled request stops here with what it booked, instead of
+		// turning every remaining charge into a skipped one.
+		if err := ctx.Err(); err != nil {
+			return res, err
+		}
 		item, _, err := s.autoAssignOne(ctx, clubID, createdBy, cfg, c.id, c.customer, c.message, c.amount, c.paidOn)
+		if errors.Is(err, errChargeBookedConcurrently) {
+			// Someone else booked it while this pass decided: it is neither
+			// this pass's booking nor a charge still waiting for a human.
+			continue
+		}
 		if err != nil {
 			res.SkippedDetails = append(res.SkippedDetails, SkippedItem{Ref: fmt.Sprintf("%s %.2f kr", c.date, c.amount), Reason: err.Error()})
 			res.NeedsReview++
@@ -264,35 +278,47 @@ func (s *Service) decideVippsCharge(ctx context.Context, clubID string, cfg vipp
 	return &vippsChargeDecision{Rule: autoAssignRulePriceItem, Account: account, Label: chosen[single].label()}, nil
 }
 
+// errChargeBookedConcurrently is autoAssignOne's outcome for a charge that a
+// concurrent booking (a person in Tildel, another process) won between the
+// queue read and the booking. It is not a failure and not this pass's booking.
+var errChargeBookedConcurrently = errors.New("charge was booked concurrently")
+
 // bookVippsChargeDecision books an unbooked charge per a decision and
-// records the rule. It returns the posted entry. Only the automatic pass
-// reaches it, so it books into an existing open period and never opens a
-// fiscal year: a charge dated in a year the treasurer has not created stays
-// unbooked (*noFiscalYearError) and is booked in its own year once it exists.
-func (s *Service) bookVippsChargeDecision(ctx context.Context, clubID, createdBy, rowID string, d *vippsChargeDecision) (string, error) {
-	var entryID string
+// records the rule. It returns the posted entry, and alreadyReconciled when
+// the charge was already booked by a concurrent winner: the winner's entry is
+// returned, and the auto-assign rule and audit row are NOT written for it,
+// because they would claim a booking this pass did not make (possibly a
+// person's, in Tildel). Only the automatic pass reaches it, so it books into
+// an existing open period and never opens a fiscal year: a charge dated in a
+// year the treasurer has not created stays unbooked (*noFiscalYearError) and
+// is booked in its own year once it exists.
+func (s *Service) bookVippsChargeDecision(ctx context.Context, clubID, createdBy, rowID string, d *vippsChargeDecision) (entryID string, alreadyReconciled bool, err error) {
 	switch d.Rule {
 	case autoAssignRuleMemberInvoice:
 		r, err := s.assignVippsChargeToInvoice(ctx, clubID, rowID, d.InvoiceID, createdBy, periodExistingOnly)
 		if err != nil {
-			return "", err
+			return "", false, err
 		}
-		entryID = r.EntryID
+		entryID, alreadyReconciled = r.EntryID, r.AlreadyReconciled
 	case autoAssignRulePriceItem:
 		r, err := s.createVippsChargeBilag(ctx, clubID, rowID, d.Account, "auto: "+d.Label, createdBy, periodExistingOnly)
 		if err != nil {
-			return "", err
+			return "", false, err
 		}
-		entryID = r.EntryID
+		entryID, alreadyReconciled = r.EntryID, r.AlreadyReconciled
 	default:
-		return "", fmt.Errorf("no booking rule for this charge")
+		return "", false, fmt.Errorf("no booking rule for this charge")
+	}
+	if alreadyReconciled {
+		return entryID, true, nil
 	}
 	s.markAutoAssigned(ctx, clubID, createdBy, rowID, d.Rule, d.Target(), entryID)
-	return entryID, nil
+	return entryID, false, nil
 }
 
 // autoAssignOne applies the rules to one charge. It returns the booking, or
-// nil with the reason it was left for a human.
+// nil with the reason it was left for a human, or errChargeBookedConcurrently
+// when someone else booked the charge first.
 func (s *Service) autoAssignOne(ctx context.Context, clubID, createdBy string, cfg vippsAutoAssignConfig, rowID, customer, message string, amount float64, paidOn time.Time) (*AutoAssignItem, string, error) {
 	d, err := s.decideVippsCharge(ctx, clubID, cfg, customer, message, amount, paidOn)
 	if err != nil {
@@ -301,9 +327,12 @@ func (s *Service) autoAssignOne(ctx context.Context, clubID, createdBy string, c
 	if d.Rule == "" {
 		return nil, d.Reason, nil
 	}
-	entryID, err := s.bookVippsChargeDecision(ctx, clubID, createdBy, rowID, d)
+	entryID, alreadyReconciled, err := s.bookVippsChargeDecision(ctx, clubID, createdBy, rowID, d)
 	if err != nil {
 		return nil, "", err
+	}
+	if alreadyReconciled {
+		return nil, "", errChargeBookedConcurrently
 	}
 	return &AutoAssignItem{Source: AutoAssignSourceVipps, RowID: rowID, Rule: d.Rule, Target: d.Target(), EntryID: entryID}, "", nil
 }

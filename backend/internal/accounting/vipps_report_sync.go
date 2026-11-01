@@ -2,6 +2,7 @@ package accounting
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/brygge-klubb/brygge/internal/vipps"
@@ -18,6 +19,10 @@ type VippsReportSyncResult struct {
 	Orders     *VippsOrderReconcileResult
 	AutoAssign *AutoAssignResult
 	Payouts    *VippsPayoutSweepResult
+	// BookingDeferred is true when the booking slot stayed busy past the
+	// person's wait: the rows are imported, nothing was booked, and the next
+	// sync books them.
+	BookingDeferred bool
 }
 
 // VippsReportSource is the part of the Vipps Report API the settlement sync
@@ -112,19 +117,21 @@ func (s *Service) SyncVippsReport(ctx context.Context, src VippsReportSource, cl
 	// Book order-linked charges, and clear the payouts they complete, right
 	// away when someone is acting; the nightly run has no user to record as
 	// creator, so it only repairs row types and leaves the booking to the
-	// next operator sync.
+	// next operator sync. The booking runs in the club's booking slot; when it
+	// stays busy the import stands and the booking is deferred.
 	if actorID != "" {
-		orders, err := s.AutoReconcileOrderCharges(ctx, clubID, actorID)
-		if err != nil {
-			return res, fmt.Errorf("booking order-linked charges: %w", err)
+		booked, err := s.BookVippsQueue(ctx, clubID, actorID, 0)
+		switch {
+		case errors.Is(err, ErrVippsBookingBusy):
+			res.BookingDeferred = true
+		case err != nil:
+			if booked != nil {
+				res.Orders, res.AutoAssign = booked.Orders, booked.AutoAssign
+			}
+			return res, err
+		default:
+			res.Orders, res.AutoAssign, res.Payouts = booked.Orders, booked.AutoAssign, booked.Payouts
 		}
-		res.Orders = orders
-		auto, err := s.AutoAssignVippsCharges(ctx, clubID, actorID)
-		if err != nil {
-			return res, fmt.Errorf("auto-assigning charges: %w", err)
-		}
-		res.AutoAssign = auto
-		res.Payouts = s.ClearReadyVippsPayoutsReported(ctx, clubID, actorID)
 	} else if _, _, err := s.RepairVippsReportRows(ctx, clubID); err != nil {
 		return res, fmt.Errorf("repairing report rows: %w", err)
 	}

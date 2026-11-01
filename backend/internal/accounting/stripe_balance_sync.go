@@ -7,7 +7,6 @@ import (
 	"slices"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -232,50 +231,6 @@ func newStripeSyncResult() StripeSyncResult {
 
 func (r *StripeSyncResult) fail(id string, err error) {
 	r.Errors = append(r.Errors, fmt.Sprintf("%s: %v", id, err))
-}
-
-// stripeSyncGuard lets one Stripe ingest run per club at a time within the
-// process. A run calls Stripe for minutes at most and holds no database
-// lock meanwhile, so the guard is in memory rather than in Postgres.
-type stripeSyncGuard struct {
-	mu    sync.Mutex
-	slots map[string]chan struct{}
-}
-
-func (g *stripeSyncGuard) slot(clubID string) chan struct{} {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	if g.slots == nil {
-		g.slots = map[string]chan struct{}{}
-	}
-	ch, ok := g.slots[clubID]
-	if !ok {
-		ch = make(chan struct{}, 1)
-		g.slots[clubID] = ch
-	}
-	return ch
-}
-
-// tryAcquire takes the club's slot if it is free.
-func (g *stripeSyncGuard) tryAcquire(clubID string) (release func(), ok bool) {
-	ch := g.slot(clubID)
-	select {
-	case ch <- struct{}{}:
-		return func() { <-ch }, true
-	default:
-		return nil, false
-	}
-}
-
-// acquire waits for the club's slot until ctx ends.
-func (g *stripeSyncGuard) acquire(ctx context.Context, clubID string) (release func(), err error) {
-	ch := g.slot(clubID)
-	select {
-	case ch <- struct{}{}:
-		return func() { <-ch }, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
 }
 
 // SyncStripeBalance mirrors the club's Stripe balance transactions into

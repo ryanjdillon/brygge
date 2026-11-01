@@ -103,6 +103,10 @@ type BankSyncResult struct {
 	// VippsPayouts reports the per-charge payout sweep (pass 5); its cleared
 	// settlements are also counted in VippsReconciled. Nil on the legacy model.
 	VippsPayouts *VippsPayoutSweepResult `json:"vipps_payouts,omitempty"`
+	// BookingDeferred is true when pass 5 could not take the Vipps booking
+	// slot within a person's wait (another Vipps booking holds it): the other
+	// passes stand, the payouts are cleared by the next sync.
+	BookingDeferred bool `json:"booking_deferred,omitempty"`
 	// ProvisionalSuperseded counts provisional rows dismissed because their
 	// settled row is imported (pass 0b); ProvisionalAmbiguous lists those
 	// that could not be paired one to one.
@@ -134,7 +138,9 @@ type BankSyncResult struct {
 //
 // On the per-charge Vipps model pass 2 stands down and a final pass clears
 // every payout deposit whose settlement has all its charges booked
-// (ClearReadyVippsPayouts). Last, the Stripe charges and fees that are
+// (ClearReadyVippsPayouts, in the club's Vipps booking slot: a slot still
+// busy after a person's wait defers the pass, BankSyncResult.BookingDeferred).
+// Last, the Stripe charges and fees that are
 // ready are booked and the Stripe payouts that are ready cleared
 // (BookStripeBalanceReported).
 //
@@ -247,9 +253,12 @@ func (s *Service) BankSync(ctx context.Context, clubID, createdBy string) (*Bank
 	if perCharge, perr := s.VippsPerChargeEnabled(ctx, clubID); perr != nil {
 		return nil, fmt.Errorf("checking vipps model: %w", perr)
 	} else if perCharge {
-		sweep := s.ClearReadyVippsPayoutsReported(ctx, clubID, createdBy)
+		sweep, deferred := s.sweepVippsPayoutsInSlot(ctx, clubID, createdBy)
 		res.VippsPayouts = sweep
-		res.VippsReconciled += len(sweep.Cleared)
+		res.BookingDeferred = deferred
+		if sweep != nil {
+			res.VippsReconciled += len(sweep.Cleared)
+		}
 	}
 
 	// Pass 6: book the Stripe charges and fees that are ready, then clear

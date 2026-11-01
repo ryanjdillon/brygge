@@ -271,6 +271,14 @@ type ImportResult struct {
 	// StripePayouts reports the Stripe payout sweep after that booking;
 	// nil when there was nothing to look at or no importing user.
 	StripePayouts *StripePayoutSweepResult
+	// VippsPayouts reports the Vipps payout sweep after the import, so a
+	// deposit uploaded after its charges clears on upload; nil on the legacy
+	// model, without an importing user, or when BookingDeferred.
+	VippsPayouts *VippsPayoutSweepResult
+	// BookingDeferred is true when the Vipps booking slot stayed busy past
+	// the person's wait (another Vipps booking holds it): the import stands
+	// and the payouts are cleared by the next sync.
+	BookingDeferred bool
 }
 
 // ImportRowError is one auto-match failure on an imported bank row.
@@ -496,6 +504,11 @@ func kidMatchCandidates(row BankRow) []string {
 	return out
 }
 
+// ImportBankRows stores a bank statement's rows and runs the cascade that
+// brings the books up to date as the importing user: the KID match, transfers,
+// bank auto-assign, the Stripe booking and payout sweep, and the Vipps payout
+// sweep (in the club's Vipps booking slot; ImportResult.BookingDeferred when it
+// stays busy past a person's wait, the import itself standing).
 func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOverride string, rows []BankRow) (ImportResult, error) { //nolint:gocognit,cyclop // per-row import and cascade in one pass; split tracked in BRY-424
 	var res ImportResult
 	closedYears := map[int]bool{}
@@ -659,6 +672,19 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 	// this upload brought the deposits of, as the bank sync does, so an
 	// upload alone brings the books up to date.
 	res.StripeBooking, res.StripePayouts = s.BookStripeBalanceReported(ctx, clubID, importedBy)
+
+	// Clear the Vipps payouts this upload brought the deposits of, symmetric
+	// with Stripe: a deposit uploaded after its charges are booked clears on
+	// upload, not at the next sync. The sweep only opens existing periods and
+	// skips a settlement that is not posted, referenced or netting, as in a
+	// sync. Without an importing user nothing is booked.
+	if importedBy != "" {
+		if perCharge, perr := s.VippsPerChargeEnabled(ctx, clubID); perr != nil {
+			s.log.Warn().Err(perr).Str("club_id", clubID).Msg("bank import: checking the vipps model failed; payout sweep skipped")
+		} else if perCharge {
+			res.VippsPayouts, res.BookingDeferred = s.sweepVippsPayoutsInSlot(ctx, clubID, importedBy)
+		}
+	}
 
 	for y := range closedYears {
 		res.ClosedPeriods = append(res.ClosedPeriods, fmt.Sprintf("%d", y))

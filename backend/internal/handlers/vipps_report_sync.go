@@ -66,10 +66,11 @@ func (h *AccountingHandler) HandleVippsReportSync(w http.ResponseWriter, r *http
 		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
 			"accounting.vipps_report_synced", "vipps_import", res.ImportID,
 			map[string]any{
-				"date":        req.Date,
-				"ledger_id":   res.LedgerID,
-				"imported":    res.Imported,
-				"skipped_dup": res.SkippedDup,
+				"date":             req.Date,
+				"ledger_id":        res.LedgerID,
+				"imported":         res.Imported,
+				"skipped_dup":      res.SkippedDup,
+				"booking_deferred": res.BookingDeferred,
 			})
 	}
 
@@ -80,5 +81,7 @@ func (h *AccountingHandler) HandleVippsReportSync(w http.ResponseWriter, r *http
 		"orders":      res.Orders,
 		"auto_assign": res.AutoAssign,
 		"payouts":     res.Payouts,
+		// The booking slot stayed busy; the rows are imported and wait.
+		"booking_deferred": res.BookingDeferred,
 	})
 }

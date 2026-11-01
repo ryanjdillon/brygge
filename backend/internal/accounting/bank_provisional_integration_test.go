@@ -108,13 +108,20 @@ func TestProvisionalPayoutRowIsSupersededAndPayoutClears(t *testing.T) {
 		t.Errorf("audit rows for the supersede = %d, want 1", audited)
 	}
 
-	again := f.bankSync(t)
-	if _, ok := settlementsOf(again.VippsPayouts.Cleared)[s.number]; !ok {
-		t.Errorf("sync after the settled row arrived cleared %+v, want %s", again.VippsPayouts.Cleared, s.number)
+	// The upload that brings the settled row clears the payout itself (the
+	// upload runs the Vipps sweep), so the sync after it has nothing left.
+	if second.VippsPayouts == nil {
+		t.Fatalf("second import ran no Vipps payout sweep")
+	}
+	if _, ok := settlementsOf(second.VippsPayouts.Cleared)[s.number]; !ok {
+		t.Errorf("import that brought the settled row cleared %+v, want %s", second.VippsPayouts.Cleared, s.number)
 	}
 	finalID, _ := f.rowByRef(t, "SYNP-B1")
 	if f.bankEntry(t, finalID) == nil {
 		t.Errorf("settled row not booked by the sweep")
+	}
+	if again := f.bankSync(t); len(again.VippsPayouts.Cleared) != 0 || len(again.VippsPayouts.Failed) != 0 {
+		t.Errorf("sync after the upload cleared %+v / failed %+v, want nothing left to do", again.VippsPayouts.Cleared, again.VippsPayouts.Failed)
 	}
 
 	rerun, err := f.svc.SupersedeProvisionalBankRows(ctx, f.club.ID, f.club.Treasurer.ID)
@@ -279,12 +286,19 @@ func TestSettledRowRefreshesProvisionalRowWithSameReference(t *testing.T) {
 		t.Errorf("audit rows for the refresh = %d, want 1", audited)
 	}
 
-	sync := f.bankSync(t)
-	if _, ok := settlementsOf(sync.VippsPayouts.Cleared)[s.number]; !ok {
-		t.Errorf("sync cleared %+v, want %s", sync.VippsPayouts.Cleared, s.number)
+	// The re-export that refreshed the row also cleared the payout: the upload
+	// runs the Vipps sweep, so the sync after it has nothing left.
+	if res.VippsPayouts == nil {
+		t.Fatalf("re-export ran no Vipps payout sweep")
+	}
+	if _, ok := settlementsOf(res.VippsPayouts.Cleared)[s.number]; !ok {
+		t.Errorf("re-export cleared %+v, want %s", res.VippsPayouts.Cleared, s.number)
 	}
 	if f.bankEntry(t, provID) == nil {
 		t.Errorf("refreshed row not booked by the sweep")
+	}
+	if sync := f.bankSync(t); len(sync.VippsPayouts.Cleared) != 0 {
+		t.Errorf("sync after the re-export cleared %+v, want nothing left to do", sync.VippsPayouts.Cleared)
 	}
 
 	// Importing the same statement again changes nothing.

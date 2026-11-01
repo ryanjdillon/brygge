@@ -139,7 +139,11 @@ func orderReceivableRefusal(orderRef string, err error) error {
 // AutoReconcileOrderCharges first repairs Report API rows imported before the
 // funds entries were classified (RepairVippsReportRows), then books every
 // unbooked, non-dismissed charge whose merchant reference names a checkout
-// order. Charges that cannot be booked are reported, not swallowed.
+// order. Charges that cannot be booked are reported, not swallowed. A
+// cancelled ctx stops it with the partial result and the context's error.
+//
+// It never takes the club's Vipps booking slot: a request books through
+// BookVippsQueue, which holds the slot around the three Vipps booking passes.
 func (s *Service) AutoReconcileOrderCharges(ctx context.Context, clubID, createdBy string) (*VippsOrderReconcileResult, error) {
 	res := &VippsOrderReconcileResult{SkippedDetails: []SkippedItem{}}
 
@@ -180,6 +184,11 @@ func (s *Service) AutoReconcileOrderCharges(ctx context.Context, clubID, created
 	}
 
 	for _, c := range charges {
+		// A cancelled request stops with what it booked, not with every
+		// remaining charge reported as skipped on a context error.
+		if err := ctx.Err(); err != nil {
+			return res, err
+		}
 		r, _, err := s.assignVippsChargeToOrder(ctx, clubID, c.id, createdBy)
 		if err != nil {
 			res.SkippedDetails = append(res.SkippedDetails, SkippedItem{Ref: "ordre " + c.ref, Reason: err.Error()})

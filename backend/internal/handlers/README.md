@@ -161,6 +161,14 @@ Online payment goes through the provider-neutral interfaces in [`internal/paymen
 - How a Stripe payment was made (`payment_attempts.card_brand` / `card_wallet`) is recorded by `recordAttemptCard` *after* settlement and is best-effort. `CapturePaymentIntent` answers a 2xx it cannot decode as success with a nil PaymentIntent, and `ChargeRef` / `PaymentMethodDetails` decode an odd shape as empty, so a change in Stripe's charge object can never fail a capture or a balance page. Keep it that way when reading more of the charge.
 - A filter on the harbor overview (`harbor_payments.go`; `kind` takes one group slug or a comma-separated list) belongs in the SQL, before `LIMIT`: filtering rows in Go after the limit let newer rows of another group fill the page and hide the ones asked for. The group of an order is `paymentfilters.OrderGroupLateralSQL` joined into the query (BRY-522); `recentPaymentKindSQL` and its `CASE` are gone, so do not add a kind by editing SQL here. Change the rule, or what a group is, in `internal/paymentfilters` (README there), which the SMS alerts (BRY-521) use too. The `kind` values are bound as a `text[]` argument and never spliced into the SQL (a unit test asserts it).
 
+### Vipps bookings from a request (BRY-564)
+
+A handler never calls the Vipps booking primitives (`AutoReconcileOrderCharges`, `AutoAssignVippsCharges`, `ClearReadyVippsPayouts`) itself. It calls `svc.BookVippsQueue(ctx, club, actor, 0)` (CSV upload, **Synk Vipps**; the operator Report API sync reaches it through `SyncVippsReport`) or a service method that sweeps in the club's booking slot (bank upload, bank sync, backlog apply). The slot is bounded for a person (10 s), so the handler maps a held slot in one of two ways, by what the request was for:
+- the booking is the whole action (**Synk Vipps**, `HandleResyncVipps`): 409 `{error, code: "vipps_booking_busy"}` through `vippsBookingBusy`, nothing done;
+- the request also ingested or uploaded (Vipps CSV upload, Report API sync, bank upload, bank sync, backlog apply): the work stands, the response carries `booking_deferred: true` (and the audit row the same), and the SPA shows `BookingDeferredNotice`.
+
+`TestVippsBookingSlotBusyAnswersPeople` holds the slot by blocking a booking on a faktura row lock (`testutil.HoldRowLock`), so the handler tests need no seam into the service.
+
 ## Common files worth knowing
 
 - `responses.go` — `Error`, `JSON` helpers

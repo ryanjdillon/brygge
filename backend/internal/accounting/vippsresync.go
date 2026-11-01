@@ -35,6 +35,10 @@ type VippsResyncResult struct {
 // clearing account (2900) or the new fallback revenue account (3900).
 // Operator-edited or posted bilags are left untouched. See DIL-367.
 //
+// On the per-charge model it books through BookVippsQueue and waits at most a
+// person's bound for the club's booking slot: ErrVippsBookingBusy, with
+// nothing done, when another Vipps booking still holds it.
+//
 // Mechanism:
 //  1. Find candidate draft bilags (source='vipps', status='draft',
 //     any line credits 2900 or 3900).
@@ -58,18 +62,14 @@ func (s *Service) ResyncVippsBilags(ctx context.Context, clubID, createdBy strin
 	}
 	if perCharge {
 		// The per-charge model books charges one by one; the ones that name
-		// their checkout order can be booked without a human.
-		orders, err := s.AutoReconcileOrderCharges(ctx, clubID, createdBy)
+		// their checkout order can be booked without a human. The booking
+		// tail runs in the club's booking slot; a person waits for it a few
+		// seconds, then gets ErrVippsBookingBusy and nothing is done.
+		booked, err := s.BookVippsQueue(ctx, clubID, createdBy, 0)
 		if err != nil {
-			return nil, fmt.Errorf("booking order-linked charges: %w", err)
+			return nil, err
 		}
-		res.Orders = orders
-		auto, err := s.AutoAssignVippsCharges(ctx, clubID, createdBy)
-		if err != nil {
-			return nil, fmt.Errorf("auto-assigning charges: %w", err)
-		}
-		res.AutoAssign = auto
-		res.Payouts = s.ClearReadyVippsPayoutsReported(ctx, clubID, createdBy)
+		res.Orders, res.AutoAssign, res.Payouts = booked.Orders, booked.AutoAssign, booked.Payouts
 		return res, nil
 	}
 

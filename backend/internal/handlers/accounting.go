@@ -1068,6 +1068,8 @@ func (h *AccountingHandler) importBankStatement(w http.ResponseWriter, r *http.R
 				"auto_assigned":          autoAssignedCount(result.AutoAssign),
 				"stripe_booked":          stripeBookedCount(result.StripeBooking),
 				"stripe_payouts_cleared": stripePayoutsClearedCount(result.StripePayouts),
+				"vipps_payouts_cleared":  vippsPayoutsClearedCount(result.VippsPayouts),
+				"booking_deferred":       result.BookingDeferred,
 			})
 	}
 
@@ -1097,6 +1099,10 @@ func (h *AccountingHandler) importBankStatement(w http.ResponseWriter, r *http.R
 		"auto_assign":           result.AutoAssign,
 		"stripe_booking":        result.StripeBooking,
 		"stripe_payouts":        result.StripePayouts,
+		"vipps_payouts":         result.VippsPayouts,
+		// The Vipps booking slot stayed busy; the import stands and the
+		// payouts clear at the next sync.
+		"booking_deferred": result.BookingDeferred,
 	}
 	if overwrite {
 		resp["deleted"] = result.Deleted
@@ -2399,6 +2405,8 @@ func (h *AccountingHandler) vippsDraftBacklog(w http.ResponseWriter, r *http.Req
 				"unchecked":     result.Unchecked,
 				"stale":         len(result.StaleIDs),
 				"posted_totals": result.PostedTotals,
+				// The Vipps booking slot stayed busy, so the payout sweep did not run.
+				"booking_deferred": result.BookingDeferred,
 			})
 	}
 
@@ -2524,6 +2532,10 @@ func (h *AccountingHandler) HandleResyncVipps(w http.ResponseWriter, r *http.Req
 		return
 	}
 	result, err := h.svc.ResyncVippsBilags(r.Context(), claims.ClubID, claims.UserID)
+	if errors.Is(err, accounting.ErrVippsBookingBusy) {
+		vippsBookingBusy(w)
+		return
+	}
 	if err != nil {
 		h.log.Error().Err(err).Msg("vipps resync failed")
 		Error(w, http.StatusInternalServerError, err.Error())
@@ -2567,6 +2579,7 @@ func (h *AccountingHandler) HandleBankSync(w http.ResponseWriter, r *http.Reques
 				"auto_assigned":          autoAssignedCount(result.AutoAssign),
 				"stripe_booked":          stripeBookedCount(result.StripeBooking),
 				"stripe_payouts_cleared": stripePayoutsClearedCount(result.StripePayouts),
+				"booking_deferred":       result.BookingDeferred,
 			})
 	}
 	JSON(w, http.StatusOK, result)
@@ -2584,6 +2597,15 @@ func stripeBookedCount(r *accounting.StripeBookResult) int {
 // stripePayoutsClearedCount is how many Stripe payouts a sweep cleared, for
 // the audit summary of the import or sync that ran it.
 func stripePayoutsClearedCount(r *accounting.StripePayoutSweepResult) int {
+	if r == nil {
+		return 0
+	}
+	return len(r.Cleared)
+}
+
+// vippsPayoutsClearedCount is how many Vipps payouts a sweep cleared, for the
+// audit summary of the import that ran it.
+func vippsPayoutsClearedCount(r *accounting.VippsPayoutSweepResult) int {
 	if r == nil {
 		return 0
 	}
@@ -2723,30 +2745,34 @@ func (h *AccountingHandler) HandleImportVippsSettlement(w http.ResponseWriter, r
 
 	// On the per-charge model, charges that name their checkout order are
 	// booked straight away (BRY-337); the rest wait in the Tildel queue.
-	var orders *accounting.VippsOrderReconcileResult
-	var autoAssign *accounting.AutoAssignResult
-	var payouts *accounting.VippsPayoutSweepResult
+	// The booking runs in the club's booking slot. A person waits for it a
+	// few seconds; when it stays busy the upload stands and the booking is
+	// deferred (booking_deferred) to the next sync.
+	var booked accounting.VippsBookingResult
+	bookingDeferred := false
 	if perCharge, perr := h.svc.VippsPerChargeEnabled(r.Context(), claims.ClubID); perr == nil && perCharge {
-		orders, err = h.svc.AutoReconcileOrderCharges(r.Context(), claims.ClubID, claims.UserID)
-		if err != nil {
-			h.log.Error().Err(err).Msg("booking order-linked vipps charges failed")
+		res, berr := h.svc.BookVippsQueue(r.Context(), claims.ClubID, claims.UserID, 0)
+		switch {
+		case errors.Is(berr, accounting.ErrVippsBookingBusy):
+			bookingDeferred = true
+		case berr != nil:
+			h.log.Error().Err(berr).Msg("booking vipps charges after upload failed")
 		}
-		autoAssign, err = h.svc.AutoAssignVippsCharges(r.Context(), claims.ClubID, claims.UserID)
-		if err != nil {
-			h.log.Error().Err(err).Msg("auto-assigning vipps charges failed")
+		if res != nil {
+			booked = *res
 		}
-		payouts = h.svc.ClearReadyVippsPayoutsReported(r.Context(), claims.ClubID, claims.UserID)
 	}
 
 	if h.audit != nil {
 		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
 			"accounting.vipps_imported", "vipps_import", importID,
 			map[string]any{
-				"filename":    header.Filename,
-				"msn":         msn,
-				"rows_total":  len(rows),
-				"imported":    result.Imported,
-				"skipped_dup": result.SkippedDup,
+				"filename":         header.Filename,
+				"msn":              msn,
+				"rows_total":       len(rows),
+				"imported":         result.Imported,
+				"skipped_dup":      result.SkippedDup,
+				"booking_deferred": bookingDeferred,
 			})
 	}
 
@@ -2757,9 +2783,24 @@ func (h *AccountingHandler) HandleImportVippsSettlement(w http.ResponseWriter, r
 		"rows_total":  len(rows),
 		"imported":    result.Imported,
 		"skipped_dup": result.SkippedDup,
-		"orders":      orders,
-		"auto_assign": autoAssign,
-		"payouts":     payouts,
+		"orders":      booked.Orders,
+		"auto_assign": booked.AutoAssign,
+		"payouts":     booked.Payouts,
+		// The booking slot stayed busy; the rows are imported and wait.
+		"booking_deferred": bookingDeferred,
+	})
+}
+
+// vippsBookingBusyCode is the 409 code when the club's Vipps booking slot
+// stayed held past a person's wait and the whole action was the booking.
+const vippsBookingBusyCode = "vipps_booking_busy"
+
+// vippsBookingBusy answers a Vipps sync that found the booking slot held.
+// Nothing was done; the person tries again.
+func vippsBookingBusy(w http.ResponseWriter) {
+	JSON(w, http.StatusConflict, map[string]string{
+		"error": "Vipps-bokføring kjører allerede – prøv igjen om et minutt",
+		"code":  vippsBookingBusyCode,
 	})
 }
 

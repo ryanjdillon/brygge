@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -19,7 +20,15 @@ type Service struct {
 	log   zerolog.Logger
 	// stripeSync serialises the Stripe balance ingest per club across the
 	// nightly job, the sync endpoint and the payout webhook.
-	stripeSync stripeSyncGuard
+	stripeSync clubSlot
+	// vippsBooking serialises the Vipps booking tail (order-linked charges,
+	// the auto-assign rules, the payout sweep) per club, so two Vipps bookings
+	// of one club never run at the same time. People wait for it at most
+	// vippsBookingSlotWait.
+	vippsBooking clubSlot
+	// vippsBookingSlotWait bounds a person's wait for vippsBooking; zero is
+	// defaultVippsBookingSlotWait. Tests shorten it.
+	vippsBookingSlotWait time.Duration
 	// kickDeliveries nudges the delivery worker after the booking pass
 	// queued a refund document (SetDeliveryKick); nil leaves the rows for
 	// the worker's next tick.

@@ -41,7 +41,8 @@ const sweepFailedText = "Automatisk avstemming av Vipps-utbetalinger feilet – 
 
 // ClearReadyVippsPayoutsReported runs ClearReadyVippsPayouts as the last step
 // of a sync or import. A failure is logged and carried in the result's Error
-// instead of failing the caller, whose own work is already done.
+// instead of failing the caller, whose own work is already done. Like the
+// sweep itself it does not take the booking slot (sweepVippsPayoutsInSlot does).
 func (s *Service) ClearReadyVippsPayoutsReported(ctx context.Context, clubID, actor string) *VippsPayoutSweepResult {
 	res, err := s.ClearReadyVippsPayouts(ctx, clubID, actor)
 	if err != nil {
@@ -76,9 +77,12 @@ func newVippsPayoutSweepResult() *VippsPayoutSweepResult {
 // single-bilag model get an empty result: their payouts are matched by
 // syncVippsReconciliations instead.
 //
-// On error the partial result is returned alongside it.
+// On error the partial result is returned alongside it; a cancelled ctx stops
+// the sweep the same way.
 //
-// Callers must sit behind the same gate as any other posting path.
+// Callers must sit behind the same gate as any other posting path. It never
+// takes the club's Vipps booking slot: a request sweeps through BookVippsQueue
+// or sweepVippsPayoutsInSlot.
 func (s *Service) ClearReadyVippsPayouts(ctx context.Context, clubID, actor string) (*VippsPayoutSweepResult, error) {
 	res := newVippsPayoutSweepResult()
 	perCharge, err := s.VippsPerChargeEnabled(ctx, clubID)
@@ -98,6 +102,10 @@ func (s *Service) ClearReadyVippsPayouts(ctx context.Context, clubID, actor stri
 	for _, d := range deposits {
 		if d.booked || d.dismissed {
 			continue
+		}
+		// A cancelled request stops with what it cleared.
+		if err := ctx.Err(); err != nil {
+			return res, err
 		}
 		seen[d.key()] = true
 		item := VippsPayoutSweepItem{SettlementNumber: d.settlement, MSN: d.msn, BankRowID: d.id}

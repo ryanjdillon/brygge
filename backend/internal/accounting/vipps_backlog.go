@@ -114,6 +114,10 @@ type VippsBacklogResult struct {
 	// Payouts reports the settlements an apply completed and cleared; nil in
 	// a preview.
 	Payouts *VippsPayoutSweepResult `json:"payouts,omitempty"`
+	// BookingDeferred is true when an apply could not take the Vipps booking
+	// slot within a person's wait, so its payout sweep did not run; the posted
+	// drafts stand and the next sync clears what they completed.
+	BookingDeferred bool `json:"booking_deferred,omitempty"`
 }
 
 // VippsBacklogChoice is one reclassification the treasurer ticked: the
@@ -227,7 +231,7 @@ func (s *Service) PostVippsDraftBacklog(ctx context.Context, clubID, periodID, a
 
 	// Posting the backlog books charges, which can complete settlements.
 	if apply {
-		res.Payouts = s.ClearReadyVippsPayoutsReported(ctx, clubID, actor)
+		res.Payouts, res.BookingDeferred = s.sweepVippsPayoutsInSlot(ctx, clubID, actor)
 	}
 	return res, nil
 }
