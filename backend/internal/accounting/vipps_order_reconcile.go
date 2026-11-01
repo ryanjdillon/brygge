@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -141,11 +143,12 @@ func orderReceivableRefusal(orderRef string, err error) error {
 func (s *Service) AutoReconcileOrderCharges(ctx context.Context, clubID, createdBy string) (*VippsOrderReconcileResult, error) {
 	res := &VippsOrderReconcileResult{SkippedDetails: []SkippedItem{}}
 
-	repaired, err := s.RepairVippsReportRows(ctx, clubID)
+	repaired, repairSkipped, err := s.RepairVippsReportRows(ctx, clubID)
 	if err != nil {
 		return nil, err
 	}
 	res.Repaired = repaired
+	res.SkippedDetails = append(res.SkippedDetails, repairSkipped...)
 
 	rows, err := s.db.Query(ctx,
 		`SELECT r.id, r.order_id
@@ -197,18 +200,24 @@ func (s *Service) AutoReconcileOrderCharges(ctx context.Context, clubID, created
 // row, the stale "other" row is removed instead. Only unbooked rows from
 // Report API imports are touched — a CSV row's message is the payer's free
 // text and must never be read as an entry type. Idempotent.
-func (s *Service) RepairVippsReportRows(ctx context.Context, clubID string) (int, error) {
+//
+// A row that cannot be repaired is returned in the skipped list and logged,
+// never turned into an error: the nightly sync and AutoReconcileOrderCharges
+// run this first, so one bad row would otherwise stop all order booking. An
+// error is returned only when the pass itself cannot run (the listing query).
+func (s *Service) RepairVippsReportRows(ctx context.Context, clubID string) (int, []SkippedItem, error) {
 	rows, err := s.db.Query(ctx,
 		`SELECT r.id, r.tx_at, r.amount, COALESCE(r.order_id, ''), COALESCE(r.psp_ref, ''), COALESCE(r.message, '')
 		   FROM vipps_import_rows r
 		   JOIN vipps_imports vi ON vi.id = r.vipps_import_id
 		  WHERE r.club_id = $1 AND r.row_type = 'other'
 		    AND r.journal_entry_id IS NULL AND r.dismissed_at IS NULL
-		    AND vi.filename LIKE 'Vipps Report API %'`,
+		    AND vi.filename LIKE 'Vipps Report API %'
+		  ORDER BY r.created_at, r.id`,
 		clubID,
 	)
 	if err != nil {
-		return 0, fmt.Errorf("listing report rows to repair: %w", err)
+		return 0, nil, fmt.Errorf("listing report rows to repair: %w", err)
 	}
 	type fix struct {
 		id         string
@@ -220,9 +229,17 @@ func (s *Service) RepairVippsReportRows(ctx context.Context, clubID string) (int
 	for rows.Next() {
 		var row VippsRow
 		var id string
-		if err := rows.Scan(&id, &row.TxAt, &row.Amount, &row.OrderID, &row.PSPRef, &row.Message); err != nil {
+		// tx_at is NULL for an entry the Report API gave no time. The import
+		// hashed such a row with the zero time (ImportVippsRows stores NULL for
+		// a zero TxAt), so the zero value here reproduces that hash and a
+		// re-pull of the date still dedups against the repaired row.
+		var txAt *time.Time
+		if err := rows.Scan(&id, &txAt, &row.Amount, &row.OrderID, &row.PSPRef, &row.Message); err != nil {
 			rows.Close()
-			return 0, fmt.Errorf("scanning report row: %w", err)
+			return 0, nil, fmt.Errorf("scanning report row: %w", err)
+		}
+		if txAt != nil {
+			row.TxAt = *txAt
 		}
 		row.RowType, row.SettlementNumber = classifyReportFunds(row.Message, row.OrderID, row.PSPRef)
 		if row.RowType == VippsRowOther {
@@ -232,11 +249,19 @@ func (s *Service) RepairVippsReportRows(ctx context.Context, clubID string) (int
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 
 	repaired := 0
+	var skipped []SkippedItem
+	skip := func(id string, err error) {
+		s.log.Warn().Err(err).Str("vipps_row_id", id).Msg("vipps report row repair skipped")
+		skipped = append(skipped, SkippedItem{Ref: "vipps-rad " + id, Reason: err.Error()})
+	}
 	for _, f := range fixes {
+		if err := ctx.Err(); err != nil {
+			return repaired, skipped, fmt.Errorf("repairing report rows: %w", err)
+		}
 		_, err := s.db.Exec(ctx,
 			`UPDATE vipps_import_rows SET row_type = $3, settlement_number = $4, row_hash = $5
 			  WHERE id = $1 AND club_id = $2 AND row_type = 'other' AND journal_entry_id IS NULL`,
@@ -249,15 +274,35 @@ func (s *Service) RepairVippsReportRows(ctx context.Context, clubID string) (int
 				`DELETE FROM vipps_import_rows WHERE id = $1 AND club_id = $2 AND row_type = 'other' AND journal_entry_id IS NULL`,
 				f.id, clubID,
 			); derr != nil {
-				return repaired, fmt.Errorf("removing superseded report row: %w", derr)
+				if !isRowRefusal(ctx, derr) {
+					return repaired, skipped, fmt.Errorf("removing superseded report row: %w", derr)
+				}
+				skip(f.id, fmt.Errorf("removing superseded report row: %w", derr))
+				continue
 			}
 			repaired++
 			continue
 		}
 		if err != nil {
-			return repaired, fmt.Errorf("repairing report row: %w", err)
+			if !isRowRefusal(ctx, err) {
+				return repaired, skipped, fmt.Errorf("repairing report row: %w", err)
+			}
+			skip(f.id, fmt.Errorf("repairing report row: %w", err))
+			continue
 		}
 		repaired++
 	}
-	return repaired, nil
+	return repaired, skipped, nil
+}
+
+// isRowRefusal reports whether err is the server refusing this one statement
+// (a constraint, a trigger, a lock timeout), which a person can look at later.
+// A cancelled context, a lost connection or a server shutdown (SQLSTATE class
+// 08 and 57) says nothing about the row and must stop the pass instead.
+func isRowRefusal(ctx context.Context, err error) bool {
+	var pgErr *pgconn.PgError
+	if ctx.Err() != nil || !errors.As(err, &pgErr) {
+		return false
+	}
+	return !strings.HasPrefix(pgErr.Code, "08") && !strings.HasPrefix(pgErr.Code, "57")
 }

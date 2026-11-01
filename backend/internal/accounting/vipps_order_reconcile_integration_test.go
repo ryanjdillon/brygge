@@ -196,7 +196,7 @@ func TestRepairReportRowsThenPayoutClears(t *testing.T) {
 	if err := club.Pool.QueryRow(ctx, `SELECT row_type FROM vipps_import_rows WHERE id = $1`, csv).Scan(&typ); err != nil || typ != "other" {
 		t.Errorf("CSV row was reclassified to %s (err %v)", typ, err)
 	}
-	if n, err := svc.RepairVippsReportRows(ctx, club.ID); err != nil || n != 0 {
+	if n, _, err := svc.RepairVippsReportRows(ctx, club.ID); err != nil || n != 0 {
 		t.Errorf("second repair = %d (err %v), want 0", n, err)
 	}
 
