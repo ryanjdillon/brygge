@@ -1553,6 +1553,8 @@
         "tooltipDescription": "Kva dette bilaget gjeld",
         "tooltipStatus": "Kladd = ikkje ferdigstilt, Postert = ferdigstilt, Annullert = reversert",
         "tooltipSource": "Korleis bilaget vart oppretta (manuelt, synkronisert, bankimport)",
+        "automatic": "Automatisk",
+        "automaticTooltip": "Bokført automatisk av systemet",
         "tooltipAccounts": "Kva kontoar som er påverka",
         "resplitInvoiceBilags": "Korriger inntektsfordeling",
         "resplitTooltip": "Flytt bokførte fakturainntekter til rette inntektskontoar per priskategori. Bokfører korreksjonsbilag; eksisterande bilag blir ikkje endra.",

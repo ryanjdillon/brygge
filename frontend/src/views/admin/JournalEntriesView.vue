@@ -48,6 +48,7 @@ import {
 import Select from '@/components/ui/form/Select.vue'
 import NumberInput from '@/components/ui/form/NumberInput.vue'
 import VippsFallbackReclass from '@/components/admin/VippsFallbackReclass.vue'
+import AutomaticEntryBadge from '@/components/admin/AutomaticEntryBadge.vue'
 import { ApiError } from '@/lib/errors'
 import { asClearedSettlementRefusal, type ClearedSettlementRefusal } from '@/composables/useClearedSettlement'
 import ClearedSettlementRefusalNote from '@/components/admin/ClearedSettlementRefusal.vue'
@@ -874,7 +875,12 @@ function formatNOK(amount: number): string {
               </td>
               <td class="whitespace-nowrap px-4 py-3 text-sm font-mono text-gray-900">{{ entry.entry_number }}</td>
               <td class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ entry.entry_date }}</td>
-              <td class="px-4 py-3 text-sm text-gray-900">{{ entry.description }}</td>
+              <td class="px-4 py-3 text-sm text-gray-900">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span>{{ entry.description }}</span>
+                  <AutomaticEntryBadge v-if="entry.automatic" />
+                </div>
+              </td>
               <td class="px-4 py-3">
                 <div v-if="entry.lines?.length" class="flex flex-wrap gap-1">
                   <span
@@ -945,6 +951,9 @@ function formatNOK(amount: number): string {
             </tr>
             <tr v-if="expandedId === entry.id">
               <td colspan="9" class="bg-gray-50 px-8 py-4">
+                <p v-if="entry.automatic" class="mb-3">
+                  <AutomaticEntryBadge />
+                </p>
                 <div v-if="entry.lines?.length">
                   <table class="min-w-full text-sm">
                     <thead>

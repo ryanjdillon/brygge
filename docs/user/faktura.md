@@ -189,6 +189,8 @@ Read-only history of voided fakturas. Cannot be un-voided; create a new one if y
 
 **Avstem periode** in Bilag is a repair step, not part of the normal flow: it books any sent faktura that is still missing from the accounts and reverses voided ones that are still booked. There is no separate "sync fakturas" step: a faktura is booked when you send it and reversed when you void it.
 
+A bilag that Brygge booked by itself, with no person behind it, carries a blue **Automatisk** badge in the Bilag list and when you open it (hovering over it shows *Bokført automatisk av systemet*). Bilag you or another member of the board made never carry it.
+
 ### Imported
 
 Fakturas imported from the club's previous system, kept for reference and payment status. They are the previous system's record, so Brygge doesn't change them: they can't be edited, sent, voided or deleted (the server refuses, and the list says why), and regenerate PDF and reissue KID skip them. They have no KID and were never booked in Brygge's accounts.

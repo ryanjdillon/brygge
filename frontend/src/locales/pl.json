@@ -945,6 +945,8 @@
         "tooltipDescription": "What this entry is for",
         "tooltipStatus": "Draft = not finalized, Posted = finalized, Voided = reversed",
         "tooltipSource": "How this entry was created (manual, payment sync, bank import)",
+        "automatic": "Automatyczny",
+        "automaticTooltip": "Zaksięgowano automatycznie przez system",
         "tooltipAccounts": "Which accounts are affected",
         "vippsDraftsAutoAssignOff": "Automatyczne przypisywanie jest wyłączone, więc płatności na 3900 Andre inntekter zostaną tam zaksięgowane bez klasyfikacji. Najpierw włącz je w Økonomiinnstillinger → Vipps, aby je sklasyfikować.",
         "vippsDraftsChecklist": "Przeksięguj (odznacz, aby zostawić szkic bez zmian; szkice opłaty i wypłaty rozliczenia też pozostaną szkicami)",

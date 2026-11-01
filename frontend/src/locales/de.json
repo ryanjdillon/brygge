@@ -962,6 +962,8 @@
         "tooltipDescription": "What this entry is for",
         "tooltipStatus": "Draft = not finalized, Posted = finalized, Voided = reversed",
         "tooltipSource": "How this entry was created (manual, payment sync, bank import)",
+        "automatic": "Automatisch",
+        "automaticTooltip": "Automatisch vom System gebucht",
         "tooltipAccounts": "Which accounts are affected",
         "vippsDrafts": "Vipps-Entwürfe buchen",
         "vippsDraftsTooltip": "Bucht die Vipps-Belege dieser Periode, die als Entwurf liegen geblieben sind. Geparkte Zahlungen werden zuerst klassifiziert, wenn die automatische Zuordnung aktiv ist; unsichere Entwürfe werden aufgelistet und nicht angetastet.",

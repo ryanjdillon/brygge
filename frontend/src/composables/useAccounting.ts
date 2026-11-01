@@ -97,6 +97,8 @@ export interface JournalEntry {
   voided_by: string | null
   voided_at: string | null
   created_at: string
+  /** Booked by the club's system actor, not a person (derived server-side). */
+  automatic: boolean
   lines?: JournalLine[]
 }
 

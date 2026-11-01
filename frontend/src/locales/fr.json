@@ -961,6 +961,8 @@
         "tooltipDescription": "What this entry is for",
         "tooltipStatus": "Draft = not finalized, Posted = finalized, Voided = reversed",
         "tooltipSource": "How this entry was created (manual, payment sync, bank import)",
+        "automatic": "Automatique",
+        "automaticTooltip": "Comptabilisé automatiquement par le système",
         "tooltipAccounts": "Which accounts are affected",
         "vippsDrafts": "Comptabiliser les brouillons Vipps",
         "vippsDraftsTooltip": "Comptabilise les pièces Vipps de la période restées en brouillon. Les paiements en attente sont d'abord classés si l'attribution automatique est activée ; les brouillons douteux sont listés et laissés tels quels.",
