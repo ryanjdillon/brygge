@@ -12,6 +12,10 @@ A faktura run depends on three pieces of data being in good shape. Verify them o
 
 Fakturas are bound to a fiscal period (typically one calendar year). Check at **Admin → Accounting** that the current year's period exists and is **open**. If you're rolling into a new year, create the new period there before generating any fakturas — the system refuses to write to a closed period.
 
+Open the new year yourself, in time: Brygge's automatic booking never does it for you. A Vipps payment dated 1 January (or any date in a year without a period) that Brygge would book by itself stays in **Tildel**, counted as needing review (the automatic-booking summary shows counts only, not the reason), until you create the year. The payout sweep's summary does list the reason, **ingen regnskapsår for <år>**, for a deposit it cannot clear. You create the year on the **Bilag** page (**Admin → Accounting → Journal entries**): the bar at the top has **Opprett periode** (*Create period*). The next sync then books the payment in its own year, dated the day it was paid. Booking a payment by hand in **Tildel** still opens the year for you, as before. Showing the skipped reasons for automatic booking and order-linked payments in the results is tracked in BRY-579.
+
+Create the new year **before** you close the old one: a Vipps settlement that straddles the year end books its fee in the old year, and if that year is closed first the payout sweep fails with **regnskapsperioden er lukket** until you reopen it.
+
 ### 2. Price items (Admin → Pricing)
 
 Each line that can appear on a faktura is a **price item** with these fields:
@@ -476,6 +480,7 @@ Everything else stays in **Tildel**. The upload and Synk Vipps results list what
 You do not need to clear the daily Vipps payout (the **Utb. … Vippsnr …** deposit in the bank statement) by hand. As soon as every payment in that settlement is booked or dismissed (dismiss only a payment Vipps left out of the payout), the next **Synkroniser**, **Synk Vipps**, Vipps upload or **Bokfør Vipps-utkast** books the Vipps fee and the deposit, and the result shows how many payouts were cleared. Payouts that stay open are listed with the reason:
 
 - **Venter på belastninger** — some payments in the settlement are not booked: still in **Tildel**, or only a draft bilag (post it with **Bokfør Vipps-utkast**). Book or dismiss them and sync again.
+- **Ingen regnskapsår for <år>** — the deposit is dated in a year that has no fiscal period yet. Nothing is booked. Create the year on the **Bilag** page (**Opprett periode**); the next sync clears the settlement and dates the deposit entry on the day the money arrived. A payment in such a year is not listed with this reason in the upload and **Synk Vipps** results: it stays in **Tildel** and is counted as needing review (rendering its reason is tracked in BRY-579). A year that exists but is closed gives **regnskapsperioden er lukket** instead: reopen the period on the same page first. A locked period (**regnskapsperioden er låst**) cannot be reopened in the app.
 - **Ingen bankinnbetaling** — the bank statement with that deposit is not uploaded yet, or the deposit text has no Utb./Vippsnr reference.
 - **Bare en foreløpig «Overførsel»** — the deposit is in the bank only as a provisional row (see below). Export that day again and upload it.
 - **Ikke importert** — the bank deposit names a settlement whose Vipps export is not uploaded yet.

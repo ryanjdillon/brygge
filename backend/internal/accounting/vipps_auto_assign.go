@@ -21,7 +21,7 @@ import (
 //     member), and decideMemberInvoice finds that member's single open
 //     faktura, issued by the charge date, with nothing booked against it and
 //     a total equal to the amount. Booked through
-//     AssignVippsChargeToInvoice, so the faktura reads as paid.
+//     assignVippsChargeToInvoice, so the faktura reads as paid.
 //  2. price_item — the amount fits the club's active price items, and they
 //     all share one category (several items in one category book to the same
 //     account). When they span categories, the club's configured tie
@@ -31,7 +31,7 @@ import (
 //     category must then have a single-unit match: an amount that fits only
 //     as several nights (2,700 = 9 × 300) is left manual. An item for
 //     members only also needs the payer to resolve to a member. Booked
-//     through CreateVippsChargeBilag to the category's revenue account.
+//     through createVippsChargeBilag to the category's revenue account.
 //
 // The whole feature is opt-in per club (clubs.vipps_auto_assign). Postings
 // follow the per-charge model and post on creation (BRY-339).
@@ -265,18 +265,21 @@ func (s *Service) decideVippsCharge(ctx context.Context, clubID string, cfg vipp
 }
 
 // bookVippsChargeDecision books an unbooked charge per a decision and
-// records the rule. It returns the posted entry.
+// records the rule. It returns the posted entry. Only the automatic pass
+// reaches it, so it books into an existing open period and never opens a
+// fiscal year: a charge dated in a year the treasurer has not created stays
+// unbooked (*noFiscalYearError) and is booked in its own year once it exists.
 func (s *Service) bookVippsChargeDecision(ctx context.Context, clubID, createdBy, rowID string, d *vippsChargeDecision) (string, error) {
 	var entryID string
 	switch d.Rule {
 	case autoAssignRuleMemberInvoice:
-		r, err := s.AssignVippsChargeToInvoice(ctx, clubID, rowID, d.InvoiceID, createdBy)
+		r, err := s.assignVippsChargeToInvoice(ctx, clubID, rowID, d.InvoiceID, createdBy, periodExistingOnly)
 		if err != nil {
 			return "", err
 		}
 		entryID = r.EntryID
 	case autoAssignRulePriceItem:
-		r, err := s.CreateVippsChargeBilag(ctx, clubID, rowID, d.Account, "auto: "+d.Label, createdBy)
+		r, err := s.createVippsChargeBilag(ctx, clubID, rowID, d.Account, "auto: "+d.Label, createdBy, periodExistingOnly)
 		if err != nil {
 			return "", err
 		}

@@ -42,7 +42,7 @@ func (f *payoutSweepFixture) orderSettlement(t *testing.T, number string, day in
 
 func (f *payoutSweepFixture) bookOrderCharge(t *testing.T, rowID string) {
 	t.Helper()
-	if _, found, err := f.svc.AssignVippsChargeToOrder(context.Background(), f.club.ID, rowID, f.club.Treasurer.ID); err != nil || !found {
+	if _, found, err := f.svc.assignVippsChargeToOrder(context.Background(), f.club.ID, rowID, f.club.Treasurer.ID); err != nil || !found {
 		t.Fatalf("book the order charge: found=%v err=%v", found, err)
 	}
 }

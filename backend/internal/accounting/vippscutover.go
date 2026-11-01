@@ -243,7 +243,7 @@ func (s *Service) regenerateOneSettlement(ctx context.Context, clubID, createdBy
 		}
 		bel := b // capture
 		desc := fmt.Sprintf("Vipps innbetaling: %s", bel.customerName)
-		if _, err := s.postVippsCharge(ctx, clubID, createdBy, account, desc, &bel); err != nil {
+		if _, err := s.postVippsCharge(ctx, clubID, createdBy, account, desc, &bel, periodMayCreate); err != nil {
 			if err == errChargeRaced {
 				continue
 			}

@@ -480,6 +480,50 @@ func existingPeriodIn(ctx context.Context, q dbtx, clubID string, date time.Time
 	return id, status, err
 }
 
+// noFiscalYearError: no fiscal year exists for the booking date, and an
+// automatic pass must not open one. The text is shown to the treasurer as the
+// reason a payment stays unbooked; errors.Is matches errNoFiscalPeriod.
+type noFiscalYearError struct{ year int }
+
+func (e *noFiscalYearError) Error() string { return fmt.Sprintf("ingen regnskapsår for %d", e.year) }
+
+func (e *noFiscalYearError) Is(target error) bool { return target == errNoFiscalPeriod }
+
+// periodNotOpenError: the booking date's fiscal period is closed or locked.
+// errors.Is matches ErrVippsPeriodClosed for both, so a locked period is
+// refused with its own reason instead of surfacing as the generic
+// ErrPeriodClosed from the entry insert.
+type periodNotOpenError struct {
+	year   int
+	status string
+}
+
+func (e *periodNotOpenError) Error() string {
+	if e.status == "locked" {
+		return fmt.Sprintf("regnskapsperioden for %d er låst", e.year)
+	}
+	return fmt.Sprintf("regnskapsperioden for %d er lukket", e.year)
+}
+
+func (e *periodNotOpenError) Is(target error) bool { return target == ErrVippsPeriodClosed }
+
+// existingOpenPeriodIn is the period an automatic booking dated date may use:
+// one that already exists and is open. It returns *noFiscalYearError when
+// there is none and *periodNotOpenError when it is closed or locked.
+func existingOpenPeriodIn(ctx context.Context, q dbtx, clubID string, date time.Time) (string, error) {
+	id, status, err := existingPeriodIn(ctx, q, clubID, date, "")
+	if errors.Is(err, errNoFiscalPeriod) {
+		return "", &noFiscalYearError{year: date.Year()}
+	}
+	if err != nil {
+		return "", fmt.Errorf("resolving fiscal period: %w", err)
+	}
+	if status != "open" {
+		return "", &periodNotOpenError{year: date.Year(), status: status}
+	}
+	return id, nil
+}
+
 // AssignBankRowToAccount creates a journal entry against an operator-
 // picked GL account instead of an invoice. kind selects which side the
 // chosen account sits on:

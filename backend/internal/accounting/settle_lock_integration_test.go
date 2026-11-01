@@ -132,7 +132,7 @@ func TestVippsSettlePathsRefuseFakturaChangedSinceLookup(t *testing.T) {
 
 			order := c.NewOrderForInvoice(t, inv)
 			orderCharge := c.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000, OrderID: order.VippsReference})
-			_, found, err := f.svc.AssignVippsChargeToOrder(ctx, c.ID, orderCharge, c.Treasurer.ID)
+			_, found, err := f.svc.assignVippsChargeToOrder(ctx, c.ID, orderCharge, c.Treasurer.ID)
 			if !found || !errors.Is(err, tc.want) {
 				t.Errorf("order charge: found %v, err %v; want found and %v", found, err, tc.want)
 			}
@@ -235,7 +235,7 @@ func TestVippsSettlePathsSeeChangeCommittedWhileWaiting(t *testing.T) {
 			charge := c.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000, OrderID: order.VippsReference})
 			return booking{
 				book: func() error {
-					_, _, err := f.svc.AssignVippsChargeToOrder(context.Background(), c.ID, charge, c.Treasurer.ID)
+					_, _, err := f.svc.assignVippsChargeToOrder(context.Background(), c.ID, charge, c.Treasurer.ID)
 					return err
 				},
 				booked: func() bool { return f.vippsBooked(t, charge) },

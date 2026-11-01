@@ -300,7 +300,7 @@ func TestAssignVippsChargeToOrderForImportedFaktura(t *testing.T) {
 	order := f.club.NewOrderForInvoice(t, inv)
 	charge := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000, Date: day(2026, 6, 4), OrderID: order.VippsReference})
 
-	if _, found, err := f.svc.AssignVippsChargeToOrder(ctx, f.club.ID, charge, f.club.Treasurer.ID); !found || !errors.Is(err, ErrImportedNoOpeningBalance) {
+	if _, found, err := f.svc.assignVippsChargeToOrder(ctx, f.club.ID, charge, f.club.Treasurer.ID); !found || !errors.Is(err, ErrImportedNoOpeningBalance) {
 		t.Fatalf("assign to order: found %v, err %v; want found and ErrImportedNoOpeningBalance", found, err)
 	}
 	if f.paid(t, inv) {
@@ -308,7 +308,7 @@ func TestAssignVippsChargeToOrderForImportedFaktura(t *testing.T) {
 	}
 
 	f.openingBalance(t, day(2026, 1, 1), 45000)
-	if _, _, err := f.svc.AssignVippsChargeToOrder(ctx, f.club.ID, charge, f.club.Treasurer.ID); err != nil {
+	if _, _, err := f.svc.assignVippsChargeToOrder(ctx, f.club.ID, charge, f.club.Treasurer.ID); err != nil {
 		t.Fatalf("assign to order with an opening balance: %v", err)
 	}
 	if !f.paid(t, inv) {

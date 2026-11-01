@@ -23,8 +23,9 @@ type VippsPayoutSweepResult struct {
 	Waiting []VippsPayoutSweepItem `json:"waiting"`
 	// Skipped settlements cannot be cleared from what is imported: a bank
 	// deposit naming a settlement that was never imported or already cleared
-	// by another deposit, several settlements sharing a booking date, or an
-	// imported payout with no usable bank deposit carrying its reference.
+	// by another deposit, several settlements sharing a booking date, an
+	// imported payout with no usable bank deposit carrying its reference, or
+	// a deposit dated in a year with no fiscal year (the sweep never opens one).
 	Skipped []VippsPayoutSweepItem `json:"skipped"`
 	// Failed settlements were ready but posting refused (amount mismatch,
 	// closed period, a concurrent clear); the next sweep retries them.
@@ -70,8 +71,10 @@ func newVippsPayoutSweepResult() *VippsPayoutSweepResult {
 // against it and the sweep moves on. Imported payouts with no matching bank
 // deposit are reported as skipped so the treasurer can see why they stay
 // open. Already-linked deposits are never candidates, so re-running is a
-// no-op. Clubs on the legacy single-bilag model get an empty result: their
-// payouts are matched by syncVippsReconciliations instead.
+// no-op. The sweep never opens a fiscal year: a deposit dated in a year the
+// treasurer has not created is skipped until it exists. Clubs on the legacy
+// single-bilag model get an empty result: their payouts are matched by
+// syncVippsReconciliations instead.
 //
 // On error the partial result is returned alongside it.
 //
@@ -98,7 +101,7 @@ func (s *Service) ClearReadyVippsPayouts(ctx context.Context, clubID, actor stri
 		}
 		seen[d.key()] = true
 		item := VippsPayoutSweepItem{SettlementNumber: d.settlement, MSN: d.msn, BankRowID: d.id}
-		r, err := s.ClearVippsPayout(ctx, clubID, d.id, actor)
+		r, err := s.clearVippsPayout(ctx, clubID, d.id, actor, periodExistingOnly)
 		switch {
 		case err != nil:
 			reason, skip := payoutSweepReason(err)
@@ -248,6 +251,17 @@ func waitingReason(n int) string {
 	return fmt.Sprintf("%d belastninger er ikke bokført (i Tildel, som utkast eller på et annullert bilag)", n)
 }
 
+// noFiscalYearReason is the sweep's reason for a deposit whose date has no
+// fiscal year. The treasurer opens the year on the Bilag page (Opprett
+// periode); the next sweep books the deposit in its own year.
+func noFiscalYearReason(err error) string {
+	var noYear *noFiscalYearError
+	if errors.As(err, &noYear) {
+		return fmt.Sprintf("ingen regnskapsår for %d – opprett året (Bilag, Opprett periode), så avstemmes oppgjøret ved neste synkronisering", noYear.year)
+	}
+	return "ingen regnskapsår – opprett året (Bilag, Opprett periode), så avstemmes oppgjøret ved neste synkronisering"
+}
+
 // payoutSweepReason turns a ClearVippsPayout error into the reason shown to
 // the treasurer, and whether the deposit is skipped (needs a human) rather
 // than failed (retried by the next sweep). Unknown errors get a generic text;
@@ -264,9 +278,15 @@ func payoutSweepReason(err error) (reason string, skip bool) {
 		return "flere Vipps-oppgjør samme dag på samme Vippsnr – avstem manuelt", true
 	case errors.Is(err, ErrVippsSettlementNotNetting):
 		return "oppgjøret går ikke i null på Vipps-kontoen og kan ikke avstemmes i appen ennå: en betaling er avvist selv om Vipps utbetalte den (avvisningen kan ikke angres ennå), oppgjøret har en refusjon eller reversering fra Vipps-portalen, eller et gebyr stemmer ikke", true
+	case errors.Is(err, errNoFiscalPeriod):
+		return noFiscalYearReason(err), true
 	case errors.Is(err, ErrVippsPayoutAmountMismatch):
 		return "beløpet på bankinnbetalingen stemmer ikke med Vipps-utbetalingen", false
 	case errors.Is(err, ErrVippsPeriodClosed):
+		var notOpen *periodNotOpenError
+		if errors.As(err, &notOpen) && notOpen.status == "locked" {
+			return "regnskapsperioden er låst", false
+		}
 		return "regnskapsperioden er lukket", false
 	case errors.Is(err, ErrVippsPayoutRaced):
 		return "ble bokført samtidig av en annen handling – synkroniser igjen", false

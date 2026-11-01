@@ -106,9 +106,28 @@ type chargePosting struct {
 	// savepoint names the savepoint the Tx form takes before its entry.
 	savepoint string
 	// periodID, when set, is the open period the caller already resolved;
-	// otherwise postChargeTx resolves (and may create) it.
+	// otherwise postChargeTx resolves it as periodPolicy says.
 	periodID string
+	// periodPolicy says whether postChargeTx may open a fiscal year when no
+	// period is set and none covers the date. The zero value forbids it.
+	periodPolicy periodPolicy
 }
+
+// periodPolicy is whether a posting may create the fiscal year of its date.
+// The zero value is periodExistingOnly, so a posting built without choosing
+// can never open a year: only a path a person drives says periodMayCreate.
+type periodPolicy int
+
+const (
+	// periodExistingOnly books only into a period that already exists and is
+	// open (existingOpenPeriodIn). Every automatic pass uses it: nobody
+	// decided that a fiscal year is opened.
+	periodExistingOnly periodPolicy = iota
+	// periodMayCreate resolves the period with resolvePeriod / resolvePeriodIn,
+	// which creates a calendar-year period on demand. A person's booking, or
+	// a supervised tool, uses it.
+	periodMayCreate
+)
 
 // entryInput is the journal entry for the posting in periodID.
 func (p *chargePosting) entryInput(periodID string) CreateJournalEntryInput {
@@ -137,13 +156,21 @@ func (p *chargePosting) entryInput(periodID string) CreateJournalEntryInput {
 // caller that goes on to commit never commits the losing draft.
 func postChargeTx(ctx context.Context, tx pgx.Tx, p *chargePosting) (string, error) {
 	periodID := p.periodID
-	if periodID == "" {
+	switch {
+	case periodID != "":
+	case p.periodPolicy == periodMayCreate:
 		id, periodStatus, err := resolvePeriodIn(ctx, tx, p.clubID, p.date, "")
 		if err != nil {
 			return "", fmt.Errorf("resolving fiscal period: %w", err)
 		}
 		if periodStatus == "closed" {
 			return "", fmt.Errorf("fiscal period %d is closed — reopen it or pick a different period", p.date.Year())
+		}
+		periodID = id
+	default:
+		id, err := existingOpenPeriodIn(ctx, tx, p.clubID, p.date)
+		if err != nil {
+			return "", err
 		}
 		periodID = id
 	}

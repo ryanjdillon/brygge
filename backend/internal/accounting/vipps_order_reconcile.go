@@ -23,7 +23,7 @@ type VippsOrderReconcileResult struct {
 	SkippedDetails []SkippedItem `json:"skipped_details"`
 }
 
-// AssignVippsChargeToOrder books one belastning against the checkout order its
+// assignVippsChargeToOrder books one belastning against the checkout order its
 // merchant reference names. It refuses when the order's split does not add up
 // to the charge, or when a faktura it would settle can no longer take a
 // payment (voided, credited, a credit note, already paid, a booked row
@@ -33,7 +33,12 @@ type VippsOrderReconcileResult struct {
 // credit note, payment or booking that landed after the caller last looked is
 // seen. Idempotent per charge. found=false means no order carries the
 // charge's reference.
-func (s *Service) AssignVippsChargeToOrder(ctx context.Context, clubID, vippsRowID, createdBy string) (res *VippsChargePostResult, found bool, err error) {
+//
+// Its only caller is AutoReconcileOrderCharges, an automatic pass, so it books
+// into an existing open period (periodExistingOnly) and never opens a fiscal
+// year: a charge dated in a year the treasurer has not created stays unbooked
+// (*noFiscalYearError).
+func (s *Service) assignVippsChargeToOrder(ctx context.Context, clubID, vippsRowID, createdBy string) (res *VippsChargePostResult, found bool, err error) {
 	b, err := s.loadVippsBelastning(ctx, clubID, vippsRowID)
 	if err != nil {
 		return nil, false, err
@@ -77,7 +82,7 @@ func (s *Service) AssignVippsChargeToOrder(ctx context.Context, clubID, vippsRow
 	}
 
 	desc := fmt.Sprintf("Vipps innbetaling ordre %s", b.orderRef)
-	entryID, err := postVippsChargeSplitTx(ctx, tx, clubID, createdBy, desc, b, credits)
+	entryID, err := postVippsChargeSplitTx(ctx, tx, clubID, createdBy, desc, b, credits, periodExistingOnly)
 	if errors.Is(err, errChargeRaced) {
 		return &VippsChargePostResult{EntryID: entryID, AlreadyReconciled: true}, true, nil
 	}
@@ -172,7 +177,7 @@ func (s *Service) AutoReconcileOrderCharges(ctx context.Context, clubID, created
 	}
 
 	for _, c := range charges {
-		r, _, err := s.AssignVippsChargeToOrder(ctx, clubID, c.id, createdBy)
+		r, _, err := s.assignVippsChargeToOrder(ctx, clubID, c.id, createdBy)
 		if err != nil {
 			res.SkippedDetails = append(res.SkippedDetails, SkippedItem{Ref: "ordre " + c.ref, Reason: err.Error()})
 			continue
