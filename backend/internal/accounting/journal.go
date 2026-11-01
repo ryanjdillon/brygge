@@ -70,7 +70,9 @@ func (s *Service) DeleteDraftJournalEntry(ctx context.Context, clubID, entryID s
 	return nil
 }
 
-// JournalEntry represents a bilag (voucher) with its lines.
+// JournalEntry represents a bilag (voucher) with its lines. Automatic is
+// derived read-only: the club's system actor (ACC-13) booked the entry, not a
+// person.
 type JournalEntry struct {
 	ID             string        `json:"id"`
 	ClubID         string        `json:"club_id"`
@@ -89,8 +91,16 @@ type JournalEntry struct {
 	VoidedBy       *string       `json:"voided_by"`
 	VoidedAt       *time.Time    `json:"voided_at"`
 	CreatedAt      time.Time     `json:"created_at"`
+	Automatic      bool          `json:"automatic"`
 	Lines          []JournalLine `json:"lines,omitempty"`
 }
+
+// automaticEntrySQL is the select-list expression behind JournalEntry.Automatic.
+// It is an EXISTS rather than a join so the entry query keeps one row per entry
+// and exposes nothing about the system user beyond this boolean. Qualified with
+// the table name so it holds in INSERT ... RETURNING as well as in a plain
+// SELECT.
+const automaticEntrySQL = `EXISTS (SELECT 1 FROM users su WHERE su.id = journal_entries.created_by AND su.club_id = journal_entries.club_id AND su.kind = 'system')`
 
 // JournalLine represents a single debit or credit posting.
 type JournalLine struct {
@@ -205,14 +215,14 @@ func createJournalEntryTx(ctx context.Context, tx pgx.Tx, input CreateJournalEnt
 		return tx.QueryRow(ctx,
 			`INSERT INTO journal_entries (club_id, fiscal_period_id, entry_number, entry_date, description, source, source_id, source_table, attachment_url, created_by)
 			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-			 RETURNING id, club_id, fiscal_period_id, entry_number, entry_date::text, description, status, source, source_id, source_table, attachment_url, created_by, posted_by, posted_at, voided_by, voided_at, created_at`,
+			 RETURNING id, club_id, fiscal_period_id, entry_number, entry_date::text, description, status, source, source_id, source_table, attachment_url, created_by, posted_by, posted_at, voided_by, voided_at, created_at, `+automaticEntrySQL,
 			input.ClubID, input.FiscalPeriodID, entryNumber, input.EntryDate, input.Description,
 			source, input.SourceID, input.SourceTable, input.AttachmentURL, input.CreatedBy,
 		).Scan(
 			&entry.ID, &entry.ClubID, &entry.FiscalPeriodID, &entry.EntryNumber, &entry.EntryDate,
 			&entry.Description, &entry.Status, &entry.Source, &entry.SourceID, &entry.SourceTable,
 			&entry.AttachmentURL, &entry.CreatedBy, &entry.PostedBy, &entry.PostedAt,
-			&entry.VoidedBy, &entry.VoidedAt, &entry.CreatedAt,
+			&entry.VoidedBy, &entry.VoidedAt, &entry.CreatedAt, &entry.Automatic,
 		)
 	})
 	if err != nil {
@@ -543,14 +553,14 @@ func voidJournalEntryTx(ctx context.Context, tx pgx.Tx, clubID, entryID, voidedB
 		return tx.QueryRow(ctx,
 			`INSERT INTO journal_entries (club_id, fiscal_period_id, entry_number, entry_date, description, status, source, created_by, posted_by, posted_at)
 			 VALUES ($1, $2, $3, $4, $5, 'posted', 'manual', $6, $6, now())
-			 RETURNING id, club_id, fiscal_period_id, entry_number, entry_date::text, description, status, source, created_by, posted_by, posted_at, created_at`,
+			 RETURNING id, club_id, fiscal_period_id, entry_number, entry_date::text, description, status, source, created_by, posted_by, posted_at, created_at, `+automaticEntrySQL,
 			entry.ClubID, entry.FiscalPeriodID, nextNumber, entry.EntryDate,
 			fmt.Sprintf("Reversering av bilag #%d: %s", entry.EntryNumber, entry.Description),
 			voidedBy,
 		).Scan(
 			&reversal.ID, &reversal.ClubID, &reversal.FiscalPeriodID, &reversal.EntryNumber,
 			&reversal.EntryDate, &reversal.Description, &reversal.Status, &reversal.Source,
-			&reversal.CreatedBy, &reversal.PostedBy, &reversal.PostedAt, &reversal.CreatedAt,
+			&reversal.CreatedBy, &reversal.PostedBy, &reversal.PostedAt, &reversal.CreatedAt, &reversal.Automatic,
 		)
 	})
 	if err != nil {
@@ -578,14 +588,15 @@ func (s *Service) GetJournalEntry(ctx context.Context, clubID, entryID string) (
 	var entry JournalEntry
 	err := s.db.QueryRow(ctx,
 		`SELECT id, club_id, fiscal_period_id, entry_number, entry_date::text, description, status, source,
-		        source_id, source_table, attachment_url, created_by, posted_by, posted_at, voided_by, voided_at, created_at
+		        source_id, source_table, attachment_url, created_by, posted_by, posted_at, voided_by, voided_at, created_at,
+		        `+automaticEntrySQL+`
 		 FROM journal_entries WHERE id = $1 AND club_id = $2`,
 		entryID, clubID,
 	).Scan(
 		&entry.ID, &entry.ClubID, &entry.FiscalPeriodID, &entry.EntryNumber, &entry.EntryDate,
 		&entry.Description, &entry.Status, &entry.Source, &entry.SourceID, &entry.SourceTable,
 		&entry.AttachmentURL, &entry.CreatedBy, &entry.PostedBy, &entry.PostedAt,
-		&entry.VoidedBy, &entry.VoidedAt, &entry.CreatedAt,
+		&entry.VoidedBy, &entry.VoidedAt, &entry.CreatedAt, &entry.Automatic,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -652,7 +663,8 @@ var journalSortCols = map[string]string{
 // ListJournalEntries returns journal entries for a club with optional filters.
 func (s *Service) ListJournalEntries(ctx context.Context, clubID string, filters JournalFilters) ([]JournalEntry, error) {
 	query := `SELECT id, club_id, fiscal_period_id, entry_number, entry_date::text, description, status, source,
-	                  source_id, source_table, attachment_url, created_by, posted_by, posted_at, voided_by, voided_at, created_at
+	                  source_id, source_table, attachment_url, created_by, posted_by, posted_at, voided_by, voided_at, created_at,
+	                  ` + automaticEntrySQL + `
 	           FROM journal_entries WHERE club_id = $1`
 	args := []any{clubID}
 	argIdx := 2
@@ -710,7 +722,7 @@ func (s *Service) ListJournalEntries(ctx context.Context, clubID string, filters
 			&e.ID, &e.ClubID, &e.FiscalPeriodID, &e.EntryNumber, &e.EntryDate,
 			&e.Description, &e.Status, &e.Source, &e.SourceID, &e.SourceTable,
 			&e.AttachmentURL, &e.CreatedBy, &e.PostedBy, &e.PostedAt,
-			&e.VoidedBy, &e.VoidedAt, &e.CreatedAt,
+			&e.VoidedBy, &e.VoidedAt, &e.CreatedAt, &e.Automatic,
 		); err != nil {
 			return nil, fmt.Errorf("scanning entry: %w", err)
 		}
