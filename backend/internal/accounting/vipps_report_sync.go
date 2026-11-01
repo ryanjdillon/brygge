@@ -20,6 +20,30 @@ type VippsReportSyncResult struct {
 	Payouts    *VippsPayoutSweepResult
 }
 
+// VippsReportSource is the part of the Vipps Report API the settlement sync
+// reads. *vipps.Client implements it; tests substitute a fake so the sync runs
+// without the network. Callers holding a possibly-nil client build the source
+// with NewVippsReportSource, never by assigning a *vipps.Client directly, so a
+// missing client reaches the sync as a nil interface.
+type VippsReportSource interface {
+	MSN() string
+	LedgersParsed(ctx context.Context) ([]vipps.Ledger, error)
+	FundsForDate(ctx context.Context, ledgerID, date string) (entries []vipps.FundsEntry, tryLater bool, err error)
+	FeesForDate(ctx context.Context, ledgerID, date string) (entries []vipps.FeeEntry, tryLater bool, err error)
+}
+
+var _ VippsReportSource = (*vipps.Client)(nil)
+
+// NewVippsReportSource wraps a Vipps client as a report source. A nil client
+// yields a nil interface: a typed-nil *vipps.Client stored in the interface
+// would compare non-nil and pass SyncVippsReport's "not configured" guard.
+func NewVippsReportSource(c *vipps.Client) VippsReportSource {
+	if c == nil {
+		return nil
+	}
+	return c
+}
+
 // SyncVippsReport pulls the Report API v2 funds + fees for a settlement date and
 // ingests them through the same idempotent pipeline as the Vipps CSV export
 // (BRY-4). It backs both the operator-triggered endpoint and the nightly cron.
@@ -28,14 +52,14 @@ type VippsReportSyncResult struct {
 // as NULL imported_by). Pass ledgerID to skip resolution, or "" to use the
 // merchant's first ledger. Re-running for the same date is idempotent (row_hash
 // dedup), so recent days can be re-pulled safely.
-func (s *Service) SyncVippsReport(ctx context.Context, vc *vipps.Client, clubID, actorID, ledgerID, date string) (VippsReportSyncResult, error) {
+func (s *Service) SyncVippsReport(ctx context.Context, src VippsReportSource, clubID, actorID, ledgerID, date string) (VippsReportSyncResult, error) {
 	var res VippsReportSyncResult
-	if vc == nil {
+	if src == nil {
 		return res, fmt.Errorf("vipps client not configured")
 	}
 
 	if ledgerID == "" {
-		ledgers, err := vc.LedgersParsed(ctx)
+		ledgers, err := src.LedgersParsed(ctx)
 		if err != nil {
 			return res, fmt.Errorf("resolve ledger: %w", err)
 		}
@@ -46,11 +70,11 @@ func (s *Service) SyncVippsReport(ctx context.Context, vc *vipps.Client, clubID,
 	}
 	res.LedgerID = ledgerID
 
-	funds, fundsTryLater, err := vc.FundsForDate(ctx, ledgerID, date)
+	funds, fundsTryLater, err := src.FundsForDate(ctx, ledgerID, date)
 	if err != nil {
 		return res, fmt.Errorf("funds report: %w", err)
 	}
-	fees, feesTryLater, err := vc.FeesForDate(ctx, ledgerID, date)
+	fees, feesTryLater, err := src.FeesForDate(ctx, ledgerID, date)
 	if err != nil {
 		return res, fmt.Errorf("fees report: %w", err)
 	}
@@ -59,7 +83,7 @@ func (s *Service) SyncVippsReport(ctx context.Context, vc *vipps.Client, clubID,
 		return res, nil
 	}
 
-	rows := VippsReportRows(vc.MSN(), funds, fees)
+	rows := VippsReportRows(src.MSN(), funds, fees)
 	res.Rows = len(rows)
 	if len(rows) == 0 {
 		return res, nil
@@ -73,7 +97,7 @@ func (s *Service) SyncVippsReport(ctx context.Context, vc *vipps.Client, clubID,
 	if err := s.DB().QueryRow(ctx,
 		`INSERT INTO vipps_imports (club_id, filename, msn, imported_by, row_count)
 		 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-		clubID, "Vipps Report API "+date, vc.MSN(), actor, len(rows),
+		clubID, "Vipps Report API "+date, src.MSN(), actor, len(rows),
 	).Scan(&res.ImportID); err != nil {
 		return res, fmt.Errorf("create import: %w", err)
 	}

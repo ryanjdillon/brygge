@@ -1612,7 +1612,7 @@ func main() {
 					ledgerID := ledgers[0].LedgerID
 					for d := 1; d <= 4; d++ {
 						date := time.Now().AddDate(0, 0, -d).Format("2006-01-02")
-						res, err := accountingSvc.SyncVippsReport(ctx, vippsClient, clubID, "", ledgerID, date)
+						res, err := accountingSvc.SyncVippsReport(ctx, accounting.NewVippsReportSource(vippsClient), clubID, "", ledgerID, date)
 						switch {
 						case err != nil:
 							log.Warn().Err(err).Str("date", date).Msg("vipps report sync failed")

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/brygge-klubb/brygge/internal/accounting"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 )
 
@@ -39,7 +40,7 @@ func (h *AccountingHandler) HandleVippsReportSync(w http.ResponseWriter, r *http
 		return
 	}
 
-	res, err := h.svc.SyncVippsReport(ctx, h.vipps, claims.ClubID, claims.UserID, req.LedgerID, req.Date)
+	res, err := h.svc.SyncVippsReport(ctx, accounting.NewVippsReportSource(h.vipps), claims.ClubID, claims.UserID, req.LedgerID, req.Date)
 	if err != nil {
 		h.log.Error().Err(err).Str("date", req.Date).Msg("vipps report sync failed")
 		Error(w, http.StatusBadGateway, "Vipps report sync failed")
