@@ -45,6 +45,7 @@ SELECT
     hide_in_directory, preferred_language, deactivated_at, deactivated_by,
     NULL::bytea AS webauthn_handle,
     NULL::text  AS payables_token,
+    kind,                                -- person | system, not PII
     (email IS NOT NULL) AS has_email
 FROM public.users;
 
@@ -82,7 +83,8 @@ SELECT
     exemption_expense_account,
     online_max_amount, payment_fee_account, stripe_clearing_account,
     stripe_payout_descriptor, stripe_suspense_account, stripe_dispute_account,
-    vipps_portal_url                     -- club's own portal address, host-restricted
+    vipps_portal_url,                    -- club's own portal address, host-restricted
+    automatic_booking                    -- boolean switch
 FROM public.clubs;
 
 CREATE VIEW dev_masked.billing_recipients AS
@@ -139,7 +141,7 @@ SELECT
     psp_ref, order_id, settlement_number, payout_account,
     scheduled_payout_date, msn, journal_entry_id, created_at,
     dismissed_at, dismissed_reason, dismissed_by,
-    invoice_id, auto_assign_rule,
+    invoice_id, auto_assign_rule, auto_declined_at,
     substring(message from '[0-9]{6,}') AS message_kid,
     length(message)                      AS message_length
 FROM public.vipps_import_rows;
@@ -154,7 +156,7 @@ SELECT
     NULL::text AS from_account,
     NULL::text AS to_account,
     dismissed_at, dismissed_by, dismissed_reason, invoice_id,
-    refund_paired_with, reseen_at,
+    refund_paired_with, reseen_at, auto_declined_at,
     substring(description from '[0-9]{6,}') AS description_kid,
     length(description)                     AS description_length
 FROM public.bank_import_rows;

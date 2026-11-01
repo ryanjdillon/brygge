@@ -96,7 +96,7 @@ Unqualified names (`users`) resolve to the view through the role's search_path;
 
 | Table | NULL-masked (identity / credential / free text / blob) | Derived hint |
 |-------|--------------------------------------------------------|--------------|
-| `users` | email, phone, address_line, postal_code, city, first_name, last_name, full_name, admin_notes, totp_secret_encrypted, webauthn_handle, payables_token | `has_email` |
+| `users` | email, phone, address_line, postal_code, city, first_name, last_name, full_name, admin_notes, totp_secret_encrypted, webauthn_handle, payables_token | `has_email` (`kind` passes through) |
 | `clubs` | config, faktura_logo_data, site_logo_data, all `*_email` (board), phone, feedback_linear_* + anthropic_api_key (secrets) | — |
 | `billing_recipients` | contact_person, email | `has_email` |
 | `orders` | guest_email, guest_name, token (pay-link capability) | `has_guest_email` |
@@ -118,6 +118,8 @@ Unqualified names (`users`) resolve to the view through the role's search_path;
 | `slips`, `dock_fingers` | notes | — |
 
 Org fields (`*_org_name/number/address`), the club's own `bank_account`/`org_number`/`address` (printed on fakturas), and `customer_phone_masked` (masked at import) pass through.
+
+Four columns of migration 000129 (BRY-554) pass through raw, none is PII, so the automatic-booking checks can be queried read-only: `users.kind` (`person` or `system`, which tells the system actor's bilags apart), `clubs.automatic_booking` (the club switch) and `auto_declined_at` on `vipps_import_rows` and `bank_import_rows` (when a person's undo took the row out of the automatic passes; the column exists before anything sets it). `dev_masked_test.go`'s column-parity test fails until each is classified.
 
 ### Allowlist — readable raw (verified no PII)
 

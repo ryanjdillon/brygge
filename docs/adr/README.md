@@ -6,7 +6,7 @@ Read the area's file before proposing a design in that area, and don't re-open a
 
 | Area | File | Covers |
 |------|------|--------|
-| Accounting | [accounting.md](accounting.md) | Bookkeeping standard, credit notes, refunds and disputes in the ledger, imported history, exemptions |
+| Accounting | [accounting.md](accounting.md) | Bookkeeping standard, credit notes, refunds and disputes in the ledger, imported history, exemptions, reference years, automatic booking |
 | Payments | [payments.md](payments.md) | Online payment providers, Stripe card payments, refund button, provider fees |
 | Board workflows | [board-workflows.md](board-workflows.md) | Board task inbox, responsibility allocation, automation of manual steps, notifications, board visibility in the member directory |
 | Platform | [platform.md](platform.md) | Cross-cutting product rules: multi-club configuration, mobile support |

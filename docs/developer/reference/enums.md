@@ -152,6 +152,14 @@ eligible   ineligible   partial   not_applicable
 
 These are not Postgres enums but the codebase treats them as fixed sets. New values need synchronized updates across multiple files.
 
+### `users.kind` (CHECK since migration 000129, BRY-554)
+
+```
+person   system
+```
+
+`person` (the default) is every member, board member and admin. `system` is the club's automatic-booking actor (ACC-13): one per club (partial unique index), created by `accounting.Service.SystemActor` on first use, never by a migration, with the address `automatikk@system.invalid` and the name "Automatisk bokføring". It holds no role (a trigger on `user_roles` refuses one), never logs in and is not a member. A new value needs the same care as a new principal type: every query that lists, matches or loads users filters `kind = 'person'`, so a new kind is invisible to them until each is reviewed. See [invariants.md](invariants.md#the-system-actor-is-not-a-person).
+
 ### `price_items.category`
 
 ```

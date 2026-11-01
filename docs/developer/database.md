@@ -299,7 +299,7 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   default-language, the legacy `bank_account` text column (read-only mirror
   pending removal), and six `feature_*` BOOLEAN columns added in migration
   000049 that override env-var defaults at runtime.
-- `users`, `user_roles` — accounts and RBAC.
+- `users`, `user_roles` — accounts and RBAC. `users.kind` is `person` or `system`; a club's system actor (000129) is not a member.
 - `slips`, `dock_fingers`, `docks` — harbor map geometry + metadata.
 - `slip_assignments` — joins `users` ↔ `slips` (a user can hold multiple
   active assignments; each slip can only be held by one active user, via
@@ -499,6 +499,33 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   who, when and which fields, not the values. Rows already in the new form and
   rows whose details are not an object are left alone, so it is idempotent; its
   down is a no-op.
+- **Automatic booking schema.** 000129 (BRY-554, BRY-563, ACC-13) carries all of
+  the automatic-booking schema, so later changes need no migration.
+  `users.kind` (`person` | `system`, default `person`, CHECK `users_kind_check`)
+  separates people from the club's system actor, the principal the automatic run
+  books as; vocabulary in [`enums.md`](reference/enums.md#userskind-check-since-migration-000129-bry-554).
+  The partial unique index `idx_users_one_system_per_club` (`club_id WHERE
+  kind = 'system'`) allows one system user per club and is the conflict target of
+  `accounting.Service.SystemActor`'s insert. The system user is **not inserted by
+  the migration**: `SystemActor` creates it per club on first use (PLAT-1), so
+  neither a fresh database nor the deploy dry-run holds one. The trigger
+  `user_roles_refuse_system_user` (BEFORE INSERT OR UPDATE on `user_roles`)
+  raises `check_violation` for it, so it can never count as an admin or a board
+  member. `clubs.automatic_booking` (BOOLEAN, default false) is the club's master
+  switch for unattended booking; it is read and written by the
+  `/admin/settings/site` GET and PATCH like the other club switches.
+  `vipps_import_rows.auto_declined_at` and `bank_import_rows.auto_declined_at`
+  (TIMESTAMPTZ, nullable) are for a person's undo taking a row out of every
+  automatic pass; **only the columns exist so far**, nothing sets or reads them yet.
+  All four new columns are passed through the `dev_masked` views raw (none is
+  PII). **The down** drops the four `dev_masked` views (the repeatable file
+  rebuilds them), the trigger and function, both `auto_declined_at` columns,
+  `clubs.automatic_booking`, the index and the CHECK. It deletes a system user
+  only when nothing references it (a journal entry it authored, or an audit row,
+  makes the foreign key refuse, and the actor is kept); `users.kind` is dropped only
+  when no system user remains, otherwise it stays so that row is still told apart
+  from a person. Every query that lists, matches or loads users must filter
+  `kind = 'person'`; see the accounting README "System actor".
 - `invoice_pdf_archive` (migration 000050) — preserves prior PDF bytes when
   `invoices.pdf_data` is regenerated, so Norwegian bokføringsloven §13's
   5-year retention requirement is satisfied.
