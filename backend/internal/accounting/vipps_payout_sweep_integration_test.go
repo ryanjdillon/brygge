@@ -238,10 +238,13 @@ func TestBankSyncClearsReadyVippsPayouts(t *testing.T) {
 // A dismissed charge counts as resolved, so it does not hold the payout back.
 func TestClearReadyVippsPayoutsTreatsDismissedChargesAsResolved(t *testing.T) {
 	f := newPayoutSweepFixture(t)
-	s := f.settlement(t, "3000201", 2, []int64{40000, 2500}, 2000, true)
-	f.book(t, s.charges[0])
+	s := f.settlement(t, "3000201", 2, []int64{40000}, 2000, true)
+	f.book(t, s.charges...)
+	// A charge Vipps reversed before the payout: not in the net payout, so
+	// dismissing it leaves the settlement netting to zero.
+	reversed := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 2500, Date: s.booking, MSN: sweepMSN})
 	if _, err := f.club.Pool.Exec(context.Background(),
-		`UPDATE vipps_import_rows SET dismissed_at = now() WHERE id = $1`, s.charges[1]); err != nil {
+		`UPDATE vipps_import_rows SET dismissed_at = now() WHERE id = $1`, reversed); err != nil {
 		t.Fatalf("dismiss: %v", err)
 	}
 	res, err := f.svc.ClearReadyVippsPayouts(context.Background(), f.club.ID, f.club.Treasurer.ID)

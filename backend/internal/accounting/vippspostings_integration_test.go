@@ -2,6 +2,7 @@ package accounting
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -374,21 +375,25 @@ func TestDismissVippsCharge(t *testing.T) {
 		t.Errorf("gate should count only charge A: ready %v unreconciled %d", res.Ready, res.UnreconciledCharges)
 	}
 
-	// Book A, then the payout clears despite B being dismissed. Clearing does
-	// NOT net to zero — B's money is in the payout but was never booked — which
-	// is the documented dismiss caveat.
+	// Book A. B is dismissed although its money is in the payout, so the
+	// clearing would leave 300 on the clearing account: it is refused, with
+	// nothing posted (the dismiss caveat, now enforced).
 	if _, err := svc.AssignVippsChargeToInvoice(ctx, f.clubID, f.chargeA, f.invoiceID, f.userID); err != nil {
 		t.Fatalf("assign A: %v", err)
 	}
-	res, err = svc.ClearVippsPayout(ctx, f.clubID, f.bankRowID, f.userID)
-	if err != nil {
-		t.Fatalf("clear after booking A: %v", err)
+	var entriesBefore int
+	if err := svc.db.QueryRow(ctx, `SELECT count(*) FROM journal_entries WHERE club_id = $1`, f.clubID).Scan(&entriesBefore); err != nil {
+		t.Fatalf("count entries: %v", err)
 	}
-	if !res.Ready {
-		t.Fatalf("expected ready clear, got %+v", res)
+	if _, err = svc.ClearVippsPayout(ctx, f.clubID, f.bankRowID, f.userID); !errors.Is(err, ErrVippsSettlementNotNetting) {
+		t.Fatalf("clear after booking A: err = %v, want ErrVippsSettlementNotNetting", err)
 	}
-	if floatNear(res.ClearingBalance, 0, 0.01) {
-		t.Errorf("clearing should be off by the dismissed 300, got %.2f", res.ClearingBalance)
+	var entriesAfter int
+	if err := svc.db.QueryRow(ctx, `SELECT count(*) FROM journal_entries WHERE club_id = $1`, f.clubID).Scan(&entriesAfter); err != nil {
+		t.Fatalf("count entries: %v", err)
+	}
+	if entriesAfter != entriesBefore {
+		t.Errorf("refused clearing left %d new entries", entriesAfter-entriesBefore)
 	}
 }
 

@@ -102,8 +102,14 @@ func (s *Service) refuseReferenceVippsCharge(ctx context.Context, clubID, rowID 
 // is dated in a reference year. Its charges are that year's drafts, which never
 // post, so the settlement's deposit would wait for them for ever.
 func (s *Service) vippsSettlementIsReference(ctx context.Context, clubID, msn, settlement string) (bool, error) {
+	return settlementIsReferenceIn(ctx, s.db, clubID, msn, settlement)
+}
+
+// settlementIsReferenceIn is vippsSettlementIsReference on the caller's
+// querier, so a clearing transaction asks inside itself.
+func settlementIsReferenceIn(ctx context.Context, q dbtx, clubID, msn, settlement string) (bool, error) {
 	var ref bool
-	err := s.db.QueryRow(ctx,
+	err := q.QueryRow(ctx,
 		`SELECT EXISTS (SELECT 1 FROM vipps_import_rows p
 		                 WHERE p.club_id = $1 AND p.msn = $2 AND p.row_type = 'payout' AND p.settlement_number = $3
 		                   AND `+referenceDateSQL("p.club_id", "p.booking_date")+`)`,

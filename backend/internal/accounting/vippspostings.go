@@ -136,11 +136,13 @@ func loadVippsBelastningIn(ctx context.Context, q dbtx, clubID, rowID string) (*
 // Only unbooked, non-dismissed charges can be dismissed; re-dismissing is a
 // no-op. Reasons reuse the bank-row dismissal vocabulary (IsValidDismissReason).
 //
-// Caveat: a dismissed charge is money that still flowed through the Vipps
-// payout, so its settlement's clearing account will not net to exactly zero.
-// Dismiss is for charges that are genuinely not the club's revenue (a reversed
-// or duplicate charge Vipps already excluded from the payout); real charges
-// should be booked with Lag bilag instead.
+// Caveat: dismiss only a charge Vipps left out of the payout (a reversed or
+// duplicate charge). A charge dismissed although Vipps paid it out leaves its
+// settlement's clearing account off zero, so ClearVippsPayout refuses the
+// settlement (ErrVippsSettlementNotNetting) and it stays skipped. No app path
+// undoes a Vipps dismissal yet (an operator clears dismissed_at in the
+// database; BRY-573 tracks an in-app undo), and CreateVippsChargeBilag
+// refuses a dismissed charge, so there is no in-app remedy.
 func (s *Service) DismissVippsCharge(ctx context.Context, clubID, userID, rowID, reason string) error {
 	if !IsValidDismissReason(reason) {
 		return fmt.Errorf("invalid dismiss reason %q", reason)
@@ -290,6 +292,13 @@ var ErrVippsSettlementAlreadyCleared = errors.New("settlement already cleared by
 // would leave the settlement's clearing balance off by the difference.
 var ErrVippsPayoutAmountMismatch = errors.New("deposit does not match the payout amount")
 
+// ErrVippsSettlementNotNetting is returned by ClearVippsPayout when posting
+// the settlement's fee and payout entries would leave a balance on the Vipps
+// clearing account: a charge that never reached the ledger (dismissed, or in a
+// foreign period) or a fee the report does not explain. Nothing is posted or
+// linked, so an unattended sweep cannot book a settlement that does not close.
+var ErrVippsSettlementNotNetting = errors.New("settlement would not net to zero on the clearing account")
+
 // ErrVippsSettlementAmbiguous is returned by ClearVippsPayout when more than
 // one payout shares the settlement's MSN and booking date. Charges and fees
 // carry no settlement number, only MSN + booking date, so they cannot be
@@ -410,11 +419,13 @@ func (s *Service) CreateVippsChargeBilag(ctx context.Context, clubID, vippsRowID
 }
 
 // ClearVippsPayout performs Stage 2 for the settlement named by a bank payout
-// row: it books the per-settlement fee (DR gebyr / CR clearing) and the bank
-// payout (DR bank / CR clearing), keyed on the settlement number parsed from
-// the bank row description. It refuses to clear until every belastning charge
-// in the settlement has been booked — so the clearing account nets to ~0 — and
-// is idempotent: an already-cleared bank row returns its existing entries.
+// row: it books the per-settlement fee (DR gebyr / CR clearing, or the reverse
+// for a net fee refund) and the bank payout (DR bank / CR clearing), keyed on
+// the settlement number parsed from the bank row description. It waits until
+// every belastning charge in the settlement has been booked, refuses with
+// ErrVippsSettlementNotNetting (nothing posted) when the clearing account would
+// not net to zero, and is idempotent: an already-cleared bank row returns its
+// existing entries.
 func (s *Service) ClearVippsPayout(ctx context.Context, clubID, bankRowID, createdBy string) (*VippsPayoutClearResult, error) { //nolint:gocognit,cyclop // validate, lock and post one payout clearing in a single transaction; split tracked in BRY-424
 	var (
 		bankDate    time.Time
@@ -541,24 +552,54 @@ func (s *Service) ClearVippsPayout(ctx context.Context, clubID, bankRowID, creat
 		return nil, err
 	}
 
-	feeRows, feeTotal, err := unbookedSettlementFees(ctx, tx, clubID, res.MSN, payoutBooking)
+	feeRows, feeExpense, err := unbookedSettlementFees(ctx, tx, clubID, res.MSN, payoutBooking)
 	if err != nil {
+		return nil, err
+	}
+	postFee := !floatNear(feeExpense, 0, 0.005)
+
+	// Refuse before anything is posted: the clearing balance the ledger holds
+	// now, less what the fee and bank entries credit to it, must be zero. It
+	// is read through the transaction (the posted entries the lock protects),
+	// not recomputed from the rows, so a charge that is not in the ledger
+	// counts against the settlement however it came to be unbooked.
+	if err := checkSettlementNets(ctx, tx, clubID, res, payoutBooking, bankRowID, feeExpense, bankAmount); err != nil {
+		// A reference year's charges never post, so such a settlement never
+		// nets; the opening balance carries it, and the sweep says so.
+		if errors.Is(err, ErrVippsSettlementNotNetting) {
+			if ref, rerr := settlementIsReferenceIn(ctx, tx, clubID, res.MSN, res.SettlementNumber); rerr == nil && ref {
+				return nil, fmt.Errorf("%w: Utb. %s Vippsnr %s", ErrReferencePeriod, res.SettlementNumber, res.MSN)
+			}
+		}
 		return nil, err
 	}
 
 	// Resolve both periods before posting either entry, so a period that is
 	// not open is reported as such instead of as a failed post.
-	feePeriod, bankPeriod, err := payoutPeriods(ctx, tx, clubID, payoutBooking, bankDate, feeTotal > 0.005)
+	feePeriod, bankPeriod, err := payoutPeriods(ctx, tx, clubID, payoutBooking, bankDate, postFee)
 	if err != nil {
 		return nil, err
 	}
 
-	// Fee entry (DR gebyr / CR clearing) for the settlement's still-unbooked
-	// fee rows. Dated at the settlement booking date.
-	if feeTotal > 0.005 {
+	// Fee entry for the settlement's still-unbooked fee rows, dated at the
+	// settlement booking date: an expense is DR gebyr / CR clearing, a net
+	// refund of earlier fees the reverse. Every fee row is linked to it, also
+	// the zero ones, so none is booked again.
+	if postFee {
 		feeSource := payoutRowID
 		feeTable := "vipps_import_rows"
 		feeDesc := fmt.Sprintf("Vipps gebyr oppgjør %s", res.SettlementNumber)
+		feeLines := []CreateJournalLineInput{
+			{AccountCode: feeAccount, Debit: feeExpense, Credit: 0, Description: feeDesc},
+			{AccountCode: clearing, Debit: 0, Credit: feeExpense, Description: feeDesc},
+		}
+		if feeExpense < 0 {
+			feeDesc = fmt.Sprintf("Vipps gebyrrefusjon oppgjør %s", res.SettlementNumber)
+			feeLines = []CreateJournalLineInput{
+				{AccountCode: clearing, Debit: -feeExpense, Credit: 0, Description: feeDesc},
+				{AccountCode: feeAccount, Debit: 0, Credit: -feeExpense, Description: feeDesc},
+			}
+		}
 		feeJE, cerr := createJournalEntryTx(ctx, tx, CreateJournalEntryInput{
 			FiscalPeriodID: feePeriod,
 			EntryDate:      payoutBooking.Format("2006-01-02"),
@@ -568,26 +609,13 @@ func (s *Service) ClearVippsPayout(ctx context.Context, clubID, bankRowID, creat
 			SourceTable:    &feeTable,
 			CreatedBy:      createdBy,
 			ClubID:         clubID,
-			Lines: []CreateJournalLineInput{
-				{AccountCode: feeAccount, Debit: feeTotal, Credit: 0, Description: feeDesc},
-				{AccountCode: clearing, Debit: 0, Credit: feeTotal, Description: feeDesc},
-			},
+			Lines:          feeLines,
 		})
 		if cerr != nil {
 			return nil, fmt.Errorf("creating fee entry: %w", cerr)
 		}
-		tag, err := tx.Exec(ctx,
-			`UPDATE vipps_import_rows SET journal_entry_id = $1
-			  WHERE club_id = $2 AND journal_entry_id IS NULL AND id = ANY($3::uuid[])`,
-			feeJE.ID, clubID, feeRows,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("linking fee rows: %w", err)
-		}
-		// Another path linked some of the fee rows meanwhile; posting this
-		// total would book the fee twice.
-		if tag.RowsAffected() != int64(len(feeRows)) {
-			return nil, fmt.Errorf("%w: fee for Utb. %s", ErrVippsPayoutRaced, res.SettlementNumber)
+		if err := linkFeeRowsTx(ctx, tx, clubID, feeJE.ID, feeRows, res.SettlementNumber); err != nil {
+			return nil, err
 		}
 		if err := postJournalEntryTx(ctx, tx, clubID, feeJE.ID, createdBy); err != nil {
 			return nil, fmt.Errorf("posting fee entry: %w", err)
@@ -635,6 +663,14 @@ func (s *Service) ClearVippsPayout(ctx context.Context, clubID, bankRowID, creat
 		return nil, fmt.Errorf("posting payout entry: %w", err)
 	}
 	res.BankEntryID = bankJE.ID
+	// Fee rows that net to nothing have no fee entry; they ride on the payout's
+	// bank entry (which a void refuses just as it refuses a fee entry) so the
+	// next clearing attempt does not count them again.
+	if !postFee && len(feeRows) > 0 {
+		if err := linkFeeRowsTx(ctx, tx, clubID, bankJE.ID, feeRows, res.SettlementNumber); err != nil {
+			return nil, err
+		}
+	}
 	// Mark the payout row reconciled against the bank entry.
 	if payoutEntry == nil {
 		if _, err := tx.Exec(ctx,
@@ -786,10 +822,14 @@ func settlementClearedElsewhere(ctx context.Context, q dbtx, clubID, settlement,
 	return false, rows.Err()
 }
 
-// unbookedSettlementFees returns the ids and summed absolute amount of the
-// settlement's fee rows that have not yet been journaled. Fee-row amounts are
-// stored negative (a deduction), so the total is negated to a positive expense.
-func unbookedSettlementFees(ctx context.Context, q dbtx, clubID, msn string, booking time.Time) (ids []string, total float64, err error) {
+// unbookedSettlementFees returns the ids of the settlement's fee rows that have
+// not yet been journaled and the fee expense they net to. Amounts are summed
+// signed: a deduction is stored negative and a refund of earlier fees positive,
+// so the expense is the negated sum and a net refund comes back negative. Only
+// the amount column counts: the Report API's per-settlement fee rows also
+// carry the same fee in the fee column (a +/- pair with a zero amount), which
+// would double count.
+func unbookedSettlementFees(ctx context.Context, q dbtx, clubID, msn string, booking time.Time) (ids []string, expense float64, err error) {
 	rows, err := q.Query(ctx,
 		`SELECT id, amount FROM vipps_import_rows
 		  WHERE club_id = $1 AND msn = $2 AND row_type = 'fee'
@@ -800,19 +840,60 @@ func unbookedSettlementFees(ctx context.Context, q dbtx, clubID, msn string, boo
 		return nil, 0, fmt.Errorf("loading fee rows: %w", err)
 	}
 	defer rows.Close()
+	var sum float64
 	for rows.Next() {
 		var id string
 		var amount float64
 		if err := rows.Scan(&id, &amount); err != nil {
 			return nil, 0, fmt.Errorf("scan fee row: %w", err)
 		}
-		if amount < 0 {
-			amount = -amount
-		}
 		ids = append(ids, id)
-		total += amount
+		sum += amount
 	}
-	return ids, total, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	// Whole øre, so a sum of float cents does not carry dust into the entry.
+	return ids, math.Round(-sum*100) / 100, nil
+}
+
+// linkFeeRowsTx points the fee rows at the entry that books them, guarded on
+// them still being unlinked: another path linking some of them meanwhile
+// means booking this total would book the fee twice.
+func linkFeeRowsTx(ctx context.Context, tx pgx.Tx, clubID, entryID string, feeRows []string, settlement string) error {
+	tag, err := tx.Exec(ctx,
+		`UPDATE vipps_import_rows SET journal_entry_id = $1
+		  WHERE club_id = $2 AND journal_entry_id IS NULL AND id = ANY($3::uuid[])`,
+		entryID, clubID, feeRows,
+	)
+	if err != nil {
+		return fmt.Errorf("linking fee rows: %w", err)
+	}
+	if tag.RowsAffected() != int64(len(feeRows)) {
+		return fmt.Errorf("%w: fee for Utb. %s", ErrVippsPayoutRaced, settlement)
+	}
+	return nil
+}
+
+// checkSettlementNets refuses a clearing that would leave the clearing account
+// off zero. It reads the posted balance of the settlement's entries inside the
+// clearing transaction (settlementClearingBalanceIn, the figure the post-commit
+// check reports, which only sees committed rows) and applies the fee entry
+// (credit feeExpense) and bank entry (credit bankAmount) about to be posted.
+func checkSettlementNets(ctx context.Context, q dbtx, clubID string, res *VippsPayoutClearResult, booking time.Time, bankRowID string, feeExpense, bankAmount float64) error {
+	balance, err := settlementClearingBalanceIn(ctx, q, clubID, res.SettlementNumber, res.MSN, booking, bankRowID)
+	if err != nil {
+		return err
+	}
+	if !floatNear(feeExpense, 0, 0.005) {
+		balance -= feeExpense
+	}
+	balance -= bankAmount
+	if !floatNear(balance, 0, 0.005) {
+		return fmt.Errorf("%w: Utb. %s Vippsnr %s would leave %.2f on the clearing account", ErrVippsSettlementNotNetting,
+			res.SettlementNumber, res.MSN, balance)
+	}
+	return nil
 }
 
 // chargePostedSQL holds when the Vipps row aliased alias is booked on a
@@ -827,12 +908,18 @@ func chargePostedSQL(alias string) string {
 // it nets to ~0. Drafts are not in the ledger, and a voided original is left
 // out with its reversal (which no row points at).
 func (s *Service) settlementClearingBalance(ctx context.Context, clubID, settlement, msn string, booking time.Time, bankRowID string) (float64, error) {
-	clearing, _, err := s.vippsAccounts(ctx, clubID)
+	return settlementClearingBalanceIn(ctx, s.db, clubID, settlement, msn, booking, bankRowID)
+}
+
+// settlementClearingBalanceIn is settlementClearingBalance on the caller's
+// querier, so a clearing transaction reads the ledger it holds locked.
+func settlementClearingBalanceIn(ctx context.Context, q dbtx, clubID, settlement, msn string, booking time.Time, bankRowID string) (float64, error) {
+	clearing, _, err := vippsAccountsIn(ctx, q, clubID)
 	if err != nil {
 		return 0, err
 	}
 	var balance float64
-	err = s.db.QueryRow(ctx,
+	err = q.QueryRow(ctx,
 		`SELECT COALESCE(SUM(jl.debit - jl.credit), 0)
 		   FROM journal_lines jl
 		   JOIN accounts a ON a.id = jl.account_id

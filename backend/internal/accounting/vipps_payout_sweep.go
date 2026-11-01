@@ -262,6 +262,8 @@ func payoutSweepReason(err error) (reason string, skip bool) {
 		return "oppgjøret er allerede avstemt via en annen innbetaling", true
 	case errors.Is(err, ErrVippsSettlementAmbiguous):
 		return "flere Vipps-oppgjør samme dag på samme Vippsnr – avstem manuelt", true
+	case errors.Is(err, ErrVippsSettlementNotNetting):
+		return "oppgjøret går ikke i null på Vipps-kontoen og kan ikke avstemmes i appen ennå: en betaling er avvist selv om Vipps utbetalte den (avvisningen kan ikke angres ennå), oppgjøret har en refusjon eller reversering fra Vipps-portalen, eller et gebyr stemmer ikke", true
 	case errors.Is(err, ErrVippsPayoutAmountMismatch):
 		return "beløpet på bankinnbetalingen stemmer ikke med Vipps-utbetalingen", false
 	case errors.Is(err, ErrVippsPeriodClosed):

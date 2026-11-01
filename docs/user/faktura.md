@@ -473,12 +473,13 @@ Everything else stays in **Tildel**. The upload and Synk Vipps results list what
 
 ### Vipps payouts clear by themselves
 
-You do not need to clear the daily Vipps payout (the **Utb. … Vippsnr …** deposit in the bank statement) by hand. As soon as every payment in that settlement is booked or dismissed, the next **Synkroniser**, **Synk Vipps**, Vipps upload or **Bokfør Vipps-utkast** books the Vipps fee and the deposit, and the result shows how many payouts were cleared. Payouts that stay open are listed with the reason:
+You do not need to clear the daily Vipps payout (the **Utb. … Vippsnr …** deposit in the bank statement) by hand. As soon as every payment in that settlement is booked or dismissed (dismiss only a payment Vipps left out of the payout), the next **Synkroniser**, **Synk Vipps**, Vipps upload or **Bokfør Vipps-utkast** books the Vipps fee and the deposit, and the result shows how many payouts were cleared. Payouts that stay open are listed with the reason:
 
 - **Venter på belastninger** — some payments in the settlement are not booked: still in **Tildel**, or only a draft bilag (post it with **Bokfør Vipps-utkast**). Book or dismiss them and sync again.
 - **Ingen bankinnbetaling** — the bank statement with that deposit is not uploaded yet, or the deposit text has no Utb./Vippsnr reference.
 - **Bare en foreløpig «Overførsel»** — the deposit is in the bank only as a provisional row (see below). Export that day again and upload it.
 - **Ikke importert** — the bank deposit names a settlement whose Vipps export is not uploaded yet.
+- **Oppgjøret går ikke i null på Vipps-kontoen** — the booked payments, the Vipps fee and the deposit do not add up, so nothing is booked and the deposit stays open. There is nothing to press in the app for it yet. Two causes: a payment was dismissed although Vipps paid it out (the dismissal cannot be undone in the app yet: an operator undismisses it in the database, and BRY-573 tracks an in-app undo), or the settlement holds a refund or reversal made in the Vipps portal (booking such rows is tracked in BRY-574). Dismiss a Vipps payment only when Vipps left it out of the payout.
 
 ### Angre on a payment in a settlement that is already cleared
 

@@ -206,10 +206,10 @@ func TestVippsPayoutSweepLeavesReferenceSettlements(t *testing.T) {
 
 	crossing := f.settlementOn(t, "9", time.Date(refYear, 12, 31, 0, 0, 0, 0, time.UTC), []int64{50000, 30000}, 1000, true)
 	inside := f.settlementOn(t, "8", time.Date(refYear, 12, 10, 0, 0, 0, 0, time.UTC), []int64{20000}, 500, true)
-	if _, err := f.club.Pool.Exec(ctx,
-		`UPDATE vipps_import_rows SET dismissed_at = now() WHERE club_id = $1 AND row_type = 'belastning'`, f.club.ID); err != nil {
-		t.Fatalf("dismiss charges: %v", err)
-	}
+	// Booked before the year was marked, so the settlements net to zero.
+	f.book(t, crossing.charges...)
+	f.book(t, inside.charges...)
+	bookedEntries := f.postedEntries(t)
 	if _, _, err := f.svc.SetPeriodReference(ctx, f.club.ID, period, true); err != nil {
 		t.Fatalf("mark: %v", err)
 	}
@@ -228,8 +228,8 @@ func TestVippsPayoutSweepLeavesReferenceSettlements(t *testing.T) {
 	// The same crossing settlement with charges that are reference drafts (they
 	// never post) is skipped with the reference reason, not left waiting.
 	if _, err := f.club.Pool.Exec(ctx,
-		`UPDATE vipps_import_rows SET dismissed_at = NULL WHERE club_id = $1 AND row_type = 'belastning'`, f.club.ID); err != nil {
-		t.Fatalf("undismiss charges: %v", err)
+		`UPDATE vipps_import_rows SET journal_entry_id = NULL WHERE club_id = $1 AND row_type = 'belastning'`, f.club.ID); err != nil {
+		t.Fatalf("unlink charges: %v", err)
 	}
 	res, err = f.svc.ClearReadyVippsPayouts(ctx, f.club.ID, f.club.Treasurer.ID)
 	if err != nil {
@@ -242,8 +242,8 @@ func TestVippsPayoutSweepLeavesReferenceSettlements(t *testing.T) {
 	if f.bankEntry(t, crossing.bankRow) != nil || f.bankEntry(t, inside.bankRow) != nil {
 		t.Errorf("a reference-year settlement's deposit was booked")
 	}
-	if n := f.postedEntries(t); n != 0 {
-		t.Errorf("the sweep left %d entries behind", n)
+	if n := f.postedEntries(t); n != bookedEntries {
+		t.Errorf("the sweep left %d entries behind", n-bookedEntries)
 	}
 }
 
