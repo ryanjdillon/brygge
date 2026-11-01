@@ -15,6 +15,10 @@ distinct states.
 | **Erase** (`DELETE /admin/users/{id}`, admin only) | Anonymises the row in place, deactivates it, removes the member's Stalwart mailbox and scrubs their identity from the audit log. The row is never deleted: other tables reference it and payments cascade from it (BRD-10). A `?erasure=true` from an older caller is ignored. Locks the member out first, see [Locking a member out](#locking-a-member-out). Refused for the club's last active admin, see [Who may change an admin](#who-may-change-an-admin). | No | Rare. Prefer Deactivate; the scheduled purge handles PII erasure automatically. |
 | **Purge** (automatic) | A daily background sweep (`accounting.PurgeExpiredMemberPII`) anonymizes the PII of *deactivated* members whose most recent invoice has cleared retention. Never deletes the row. | No | Nothing to do — it runs itself. |
 
+## The system actor is outside the lifecycle
+
+A club's automatic-booking actor (`users.kind = 'system'`, "Automatisk bokføring", ACC-13) is a `users` row only so that every "who did it" column stays a real reference. It is not a member: it holds no personal data, has no role, cannot log in, files no deletion request and is never deactivated. Every lifecycle action treats it as absent. The admin by-id endpoints (deactivate, reactivate, erase) answer 404 for it (`loadPersonUser`), `revokeMemberAccess` refuses it, the purge sweep selects only `kind = 'person'`, and `audit.ScrubMemberPII` leaves its audit rows alone: its id in `actor_id` is the intended record of "the automatic run", and an id is not personal data. See [invariants.md](../reference/invariants.md#the-system-actor-is-not-a-person).
+
 ## Anonymised address
 
 `users` has `UNIQUE (club_id, email)`, so an anonymised member cannot share an

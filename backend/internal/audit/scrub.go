@@ -32,6 +32,9 @@ type Execer interface {
 // identity, in the same transaction as the erasure. Idempotent. Returns the
 // number of rows changed.
 //
+// The club's system actor is never scrubbed: it holds no personal data, and its
+// id in actor_id and resource_id is the record of "the automatic run".
+//
 // audit_log is append-only by convention: no trigger, rule or privilege stops
 // an UPDATE, so nothing else may rewrite it.
 func ScrubMemberPII(ctx context.Context, db Execer, userID string) (int64, error) {
@@ -40,7 +43,8 @@ func ScrubMemberPII(ctx context.Context, db Execer, userID string) (int64, error
 		  WHERE jsonb_typeof(details) = 'object'
 		    AND details ?| $2::text[]
 		    AND ((resource = 'user' AND resource_id = $1::text)
-		         OR details->>'user_id' = $1::text)`,
+		         OR details->>'user_id' = $1::text)
+		    AND NOT EXISTS (SELECT 1 FROM users s WHERE s.id::text = $1::text AND s.kind = 'system')`,
 		userID, MemberPIIKeys,
 	)
 	if err != nil {

@@ -241,7 +241,7 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 	var totalCount int
 	err := h.db.QueryRow(ctx,
 		`SELECT COUNT(*) FROM users u
-		 WHERE u.club_id = $1 `+spotFilter+dockClause+notesClause+searchClause+statusClause,
+		 WHERE u.club_id = $1 AND u.kind = 'person' `+spotFilter+dockClause+notesClause+searchClause+statusClause,
 		args...,
 	).Scan(&totalCount)
 	if err != nil {
@@ -365,7 +365,7 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		       JOIN boats b ON b.id = sa.boat_id
 		      WHERE sa.user_id = u.id AND sa.club_id = u.club_id AND sa.released_at IS NULL
 		 ) boat_summary ON true
-		 WHERE u.club_id = $1 `+spotFilter+dockClause+notesClause+searchClause+statusClause+`
+		 WHERE u.club_id = $1 AND u.kind = 'person' `+spotFilter+dockClause+notesClause+searchClause+statusClause+`
 		 GROUP BY u.id, primary_sa.slip_id, primary_sa.assignment_type, primary_sa.number, primary_sa.section,
 		          all_slips.slips, membership_status.state, slip_status.state, boat_summary.boats
 		 ORDER BY `+sortCol+`
@@ -494,7 +494,7 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 		        ), '[]'::jsonb)
 		 FROM users u
 		 LEFT JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
-		 WHERE u.id = $1 AND u.club_id = $2
+		 WHERE u.id = $1 AND u.club_id = $2 AND u.kind = 'person'
 		 GROUP BY u.id`,
 		userID, claims.ClubID,
 	).Scan(&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.FullName,
@@ -664,13 +664,8 @@ func (h *AdminUsersHandler) HandleUpdateUserRoles(w http.ResponseWriter, r *http
 		return
 	}
 
-	var exists bool
-	err = tx.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 AND club_id = $2)`,
-		userID, clubID,
-	).Scan(&exists)
-	if err != nil || !exists {
-		Error(w, http.StatusNotFound, "user not found")
+	if err := loadPersonUser(ctx, tx, clubID, userID); err != nil {
+		writePersonUserError(w, h.log, err)
 		return
 	}
 
@@ -857,6 +852,11 @@ func (h *AdminUsersHandler) HandleDeleteUser(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	if err := loadPersonUser(ctx, tx, clubID, userID); err != nil {
+		writePersonUserError(w, h.log, err)
+		return
+	}
+
 	var lockedID string
 	err = tx.QueryRow(ctx,
 		`SELECT id FROM users WHERE id = $1 AND club_id = $2 FOR UPDATE`,
@@ -992,6 +992,10 @@ func (h *AdminUsersHandler) HandleDeactivateUser(w http.ResponseWriter, r *http.
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	if err := loadPersonUser(ctx, tx, claims.ClubID, userID); err != nil {
+		writePersonUserError(w, h.log, err)
+		return
+	}
 	if err := checkAdminTarget(ctx, tx, claims.Roles, claims.ClubID, userID, true); err != nil {
 		if !writeAdminGuard(w, err) {
 			h.log.Error().Err(err).Msg("failed to check admin target")
@@ -1079,6 +1083,10 @@ func (h *AdminUsersHandler) HandleReactivateUser(w http.ResponseWriter, r *http.
 	}
 	defer tx.Rollback(ctx)
 
+	if err := loadPersonUser(ctx, tx, claims.ClubID, userID); err != nil {
+		writePersonUserError(w, h.log, err)
+		return
+	}
 	// Bringing an admin back is the admin's call, like taking them away.
 	if err := checkAdminTarget(ctx, tx, claims.Roles, claims.ClubID, userID, false); err != nil {
 		if !writeAdminGuard(w, err) {
@@ -1204,6 +1212,25 @@ func (h *AdminUsersHandler) HandleCreateUser(w http.ResponseWriter, r *http.Requ
 	})
 }
 
+// isReservedEmailDomain reports whether the address is in the .invalid TLD
+// (RFC 2606): it can never be delivered, and the club's system actor lives
+// there (accounting.SystemActorEmail). A person holding such an address could
+// make the system actor's first insert collide, so no path that sets
+// users.email accepts one.
+func isReservedEmailDomain(email string) bool {
+	// "Name <x@y.invalid>" is accepted by the parser and stored as typed, so
+	// judge the address inside the brackets.
+	if addr, err := mail.ParseAddress(email); err == nil {
+		email = addr.Address
+	}
+	at := strings.LastIndexByte(email, '@')
+	if at < 0 {
+		return false
+	}
+	domain := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(email[at+1:])), ".")
+	return domain == "invalid" || strings.HasSuffix(domain, ".invalid")
+}
+
 type validationError struct{ msg string }
 
 func (e *validationError) Error() string { return e.msg }
@@ -1231,6 +1258,9 @@ func (h *AdminUsersHandler) createUser(ctx context.Context, clubID, actorID stri
 		return "", &validationError{"email is required"}
 	}
 	if _, err := mail.ParseAddress(email); err != nil {
+		return "", &validationError{fmt.Sprintf("invalid email %q", email)}
+	}
+	if isReservedEmailDomain(email) {
 		return "", &validationError{fmt.Sprintf("invalid email %q", email)}
 	}
 	if firstName == "" && lastName == "" {
@@ -1465,6 +1495,7 @@ func (h *AdminUsersHandler) HandleExportUsersCSV(w http.ResponseWriter, r *http.
 		       ) AS roles
 		  FROM users u
 		 WHERE u.club_id = $1
+		   AND u.kind = 'person'
 		   AND u.deactivated_at IS NULL
 		 ORDER BY u.last_name, u.first_name, u.email`,
 		claims.ClubID,
@@ -1566,6 +1597,10 @@ func (h *AdminUsersHandler) HandleUpdateUser(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	if err := loadPersonUser(ctx, h.db, claims.ClubID, userID); err != nil {
+		writePersonUserError(w, h.log, err)
+		return
+	}
 	// An admin's profile, email above all (it is their login), is the admin's to edit.
 	if err := requireAdminForAdminTarget(ctx, h.db, claims.Roles, claims.ClubID, userID); err != nil {
 		if !writeAdminGuard(w, err) {
@@ -1583,7 +1618,7 @@ func (h *AdminUsersHandler) HandleUpdateUser(w http.ResponseWriter, r *http.Requ
 	}
 	if req.Email != nil {
 		v := strings.ToLower(strings.TrimSpace(*req.Email))
-		if _, err := mail.ParseAddress(v); err != nil {
+		if _, err := mail.ParseAddress(v); err != nil || isReservedEmailDomain(v) {
 			Error(w, http.StatusBadRequest, "invalid email")
 			return
 		}
@@ -1713,6 +1748,11 @@ func (h *AdminUsersHandler) HandleSetUserBoatSlip(w http.ResponseWriter, r *http
 		return
 	}
 	defer tx.Rollback(ctx)
+
+	if err := loadPersonUser(ctx, tx, claims.ClubID, userID); err != nil {
+		writePersonUserError(w, h.log, err)
+		return
+	}
 
 	var ownerCheck bool
 	if err := tx.QueryRow(ctx,
@@ -1920,12 +1960,8 @@ func (h *AdminUsersHandler) HandleSetUserSlips(w http.ResponseWriter, r *http.Re
 	}
 	defer tx.Rollback(ctx)
 
-	var exists bool
-	if err := tx.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 AND club_id = $2)`,
-		userID, claims.ClubID,
-	).Scan(&exists); err != nil || !exists {
-		Error(w, http.StatusNotFound, "user not found")
+	if err := loadPersonUser(ctx, tx, claims.ClubID, userID); err != nil {
+		writePersonUserError(w, h.log, err)
 		return
 	}
 	if err := checkAdminTarget(ctx, tx, claims.Roles, claims.ClubID, userID, false); err != nil {
@@ -2167,6 +2203,10 @@ func (h *AdminUsersHandler) HandleListUserBoats(w http.ResponseWriter, r *http.R
 		Error(w, http.StatusBadRequest, "user ID is required")
 		return
 	}
+	if err := loadPersonUser(ctx, h.db, claims.ClubID, userID); err != nil {
+		writePersonUserError(w, h.log, err)
+		return
+	}
 
 	rows, err := h.db.Query(ctx,
 		`SELECT b.id, b.user_id, b.club_id, b.name, b.type, b.manufacturer, b.model,
@@ -2240,12 +2280,8 @@ func (h *AdminUsersHandler) HandleCreateUserBoat(w http.ResponseWriter, r *http.
 		return
 	}
 
-	var exists bool
-	if err := h.db.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 AND club_id = $2)`,
-		userID, claims.ClubID,
-	).Scan(&exists); err != nil || !exists {
-		Error(w, http.StatusNotFound, "user not found")
+	if err := loadPersonUser(ctx, h.db, claims.ClubID, userID); err != nil {
+		writePersonUserError(w, h.log, err)
 		return
 	}
 
@@ -2289,6 +2325,10 @@ func (h *AdminUsersHandler) HandleUpdateUserBoat(w http.ResponseWriter, r *http.
 		Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	if err := loadPersonUser(ctx, h.db, claims.ClubID, userID); err != nil {
+		writePersonUserError(w, h.log, err)
+		return
+	}
 
 	b, err := updateBoatForUser(ctx, h.db, h.log,
 		boatID, userID, claims.ClubID, claims.UserID, req.updateBoatRequest, req.Approve)
@@ -2326,6 +2366,11 @@ func (h *AdminUsersHandler) HandleDeleteUserBoat(w http.ResponseWriter, r *http.
 	boatID := chi.URLParam(r, "boatID")
 	if userID == "" || boatID == "" {
 		Error(w, http.StatusBadRequest, "user and boat IDs are required")
+		return
+	}
+
+	if err := loadPersonUser(ctx, h.db, claims.ClubID, userID); err != nil {
+		writePersonUserError(w, h.log, err)
 		return
 	}
 

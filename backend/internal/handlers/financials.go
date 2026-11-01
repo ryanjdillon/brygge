@@ -796,7 +796,7 @@ func (h *FinancialsHandler) HandleGenerateInvoice(w http.ResponseWriter, r *http
 
 	var userExists bool
 	err = h.db.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 AND club_id = $2)`,
+		`SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 AND club_id = $2 AND kind = 'person')`,
 		req.UserID, claims.ClubID,
 	).Scan(&userExists)
 	if err != nil {

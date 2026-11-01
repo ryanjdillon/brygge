@@ -599,13 +599,17 @@ func (h *MembersHandler) HandleReportIssue(w http.ResponseWriter, r *http.Reques
 // their name and email in the list and only the phone follows the setting.
 // Chair, vice chair, secretary and deputy are listed on the strength of their
 // board role even without the plain member role. admin is not a board role and
-// stays hidden when it asks to be. Deactivated and erased rows never appear.
+// stays hidden when it asks to be. Deactivated and erased rows never appear,
+// and neither does the system actor (it holds no role, so the join already
+// drops it; the kind filter keeps that true if a role were ever required less
+// strictly).
 const directoryQuery = `SELECT u.first_name, u.last_name, u.full_name,
 	        CASE WHEN u.hide_in_directory THEN '' ELSE u.phone END,
 	        u.email
 	 FROM users u
 	 JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
 	 WHERE u.club_id = $1
+	 AND u.kind = 'person'
 	 AND u.deactivated_at IS NULL
 	 AND u.email NOT LIKE '%' || $5
 	 AND (ur.role::text IN ('member', 'slip_holder', 'admin') OR ur.role::text = ANY($4::text[]))

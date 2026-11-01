@@ -501,6 +501,13 @@ func (h *AdminSlipsHandler) HandleAssignSlip(w http.ResponseWriter, r *http.Requ
 	}
 	defer tx.Rollback(ctx)
 
+	// The assignee is a person of this club: not the system actor, not a
+	// user of another club.
+	if err := loadPersonUser(ctx, tx, clubID, req.UserID); err != nil {
+		writePersonUserError(w, h.log, err)
+		return
+	}
+
 	var currentStatus string
 	err = tx.QueryRow(ctx,
 		`SELECT status FROM slips WHERE id = $1 AND club_id = $2 FOR UPDATE`,

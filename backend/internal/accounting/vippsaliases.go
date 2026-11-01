@@ -50,12 +50,13 @@ func (s *Service) ListCustomerAliases(ctx context.Context, clubID string) ([]Vip
 }
 
 // UpsertCustomerAlias creates or replaces the alias for customerName. The
-// user must be in the club: an alias pointing elsewhere would route the
-// payer's payments to a stranger's fakturas.
+// user must be a person in the club: an alias pointing elsewhere would route
+// the payer's payments to a stranger's fakturas, and one pointing at the
+// system actor would route them to nobody.
 func (s *Service) UpsertCustomerAlias(ctx context.Context, clubID, customerName, userID string) (*VippsCustomerAlias, error) {
 	var inClub bool
 	if err := s.db.QueryRow(ctx,
-		`SELECT EXISTS (SELECT 1 FROM users WHERE id::text = $1 AND club_id = $2)`,
+		`SELECT EXISTS (SELECT 1 FROM users WHERE id::text = $1 AND club_id = $2 AND kind = 'person')`,
 		userID, clubID,
 	).Scan(&inClub); err != nil {
 		return nil, err

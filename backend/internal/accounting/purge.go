@@ -31,7 +31,8 @@ const ErasedEmailSuffix = "@deleted.local"
 func (s *Service) PurgeExpiredMemberPII(ctx context.Context) (int64, error) {
 	rows, err := s.db.Query(ctx,
 		`SELECT id, club_id FROM users u
-		  WHERE u.deactivated_at IS NOT NULL
+		  WHERE u.kind = 'person'
+		    AND u.deactivated_at IS NOT NULL
 		    AND u.email <> $1
 		    AND u.email NOT LIKE '%' || $3
 		    AND NOT EXISTS (
@@ -176,6 +177,7 @@ func (s *Service) purgeOneMember(ctx context.Context, userID, clubID string) (bo
 		        phone = '', address_line = '', postal_code = '', city = '',
 		        updated_at = now()
 		  WHERE id = $2
+		    AND kind = 'person'
 		    AND deactivated_at IS NOT NULL
 		    AND email <> $3
 		    AND email NOT LIKE '%' || $1`,

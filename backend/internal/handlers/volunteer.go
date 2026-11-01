@@ -236,6 +236,26 @@ func (h *VolunteerHandler) HandleAssignTask(w http.ResponseWriter, r *http.Reque
 		req.Role = "collaborator"
 	}
 
+	if err := loadPersonUser(ctx, h.db, claims.ClubID, req.UserID); err != nil {
+		writePersonUserError(w, h.log, err)
+		return
+	}
+	// The task must be the club's own: the participant insert below names it
+	// by id alone.
+	var taskInClub bool
+	if err := h.db.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM tasks WHERE id::text = $1 AND club_id = $2)`,
+		taskID, claims.ClubID,
+	).Scan(&taskInClub); err != nil {
+		h.log.Error().Err(err).Msg("failed to look up task for assign")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if !taskInClub {
+		Error(w, http.StatusNotFound, "task not found")
+		return
+	}
+
 	_, err := h.db.Exec(ctx,
 		`INSERT INTO task_participants (task_id, user_id, role)
 		 VALUES ($1, $2, $3)
@@ -250,8 +270,8 @@ func (h *VolunteerHandler) HandleAssignTask(w http.ResponseWriter, r *http.Reque
 
 	if req.Role == "responsible" {
 		_, _ = h.db.Exec(ctx,
-			`UPDATE tasks SET responsible_id = $1 WHERE id = $2`,
-			req.UserID, taskID,
+			`UPDATE tasks SET responsible_id = $1 WHERE id = $2 AND club_id = $3`,
+			req.UserID, taskID, claims.ClubID,
 		)
 	}
 
@@ -386,7 +406,7 @@ func (h *VolunteerHandler) HandleListAllVolunteerHours(w http.ResponseWriter, r 
 			COALESCE(c.required_volunteer_hours, 0) AS required_hours
 		 FROM users u
 		 JOIN clubs c ON c.id = u.club_id
-		 WHERE u.club_id = $1
+		 WHERE u.club_id = $1 AND u.kind = 'person'
 		 ORDER BY name`,
 		claims.ClubID,
 	)

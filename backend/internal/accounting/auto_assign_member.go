@@ -72,12 +72,13 @@ type memberCand struct {
 	id, fullN, firstLastN, lastN, emailLocal string
 }
 
-// loadMemberCands loads every user of the club once, so a run that resolves
-// many payers does not reload the member list per payer.
+// loadMemberCands loads every person of the club once, so a run that resolves
+// many payers does not reload the member list per payer. The system actor is
+// not a member: its name must never resolve a payer.
 func loadMemberCands(ctx context.Context, q pgxQuerier, clubID string) ([]memberCand, error) {
 	rows, err := q.Query(ctx,
 		`SELECT id, COALESCE(full_name, ''), COALESCE(first_name, ''), COALESCE(last_name, ''), COALESCE(email, '')
-		   FROM users WHERE club_id = $1`,
+		   FROM users WHERE club_id = $1 AND kind = 'person'`,
 		clubID,
 	)
 	if err != nil {

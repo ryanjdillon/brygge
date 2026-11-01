@@ -556,7 +556,7 @@ func (h *TOTPHandler) HandleAdminDisableTOTP(w http.ResponseWriter, r *http.Requ
 	// tenant can't reset users in another.
 	var targetClubID string
 	err := h.db.QueryRow(ctx,
-		`SELECT club_id FROM users WHERE id = $1`, targetID,
+		`SELECT club_id FROM users WHERE id = $1 AND kind = 'person'`, targetID,
 	).Scan(&targetClubID)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "user not found")

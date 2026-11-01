@@ -130,7 +130,7 @@ func (h *WaitingListHandler) HandleAdminEnrollMember(w http.ResponseWriter, r *h
 
 	var isLocal bool
 	err = tx.QueryRow(ctx,
-		`SELECT is_local FROM users WHERE id = $1 AND club_id = $2`,
+		`SELECT is_local FROM users WHERE id = $1 AND club_id = $2 AND kind = 'person'`,
 		req.UserID, claims.ClubID,
 	).Scan(&isLocal)
 	if err == pgx.ErrNoRows {

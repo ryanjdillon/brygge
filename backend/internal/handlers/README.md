@@ -128,6 +128,10 @@ WHERE i.id = $1 AND i.club_id = $2
 
 Even if `claims.ClubID` is the only club the user can access (typical for single-tenant deploys), the scope clause is non-negotiable. It's defense in depth against the day we support multi-club admin.
 
+## By-id admin handlers and the system actor
+
+A club's automatic-booking actor (ACC-13) is a `users` row with `kind = 'system'`. A handler that acts on a user by id from the URL or the body (`/admin/users/{userID}` and everything under it, the waiting-list enroll, a manual payment or invoice for a `user_id`, a slip assignment, a volunteer task assignment, a project task's `assignee_id`) starts with `loadPersonUser(ctx, q, clubID, userID)` in `admin_guard.go`, or filters `kind = 'person'` in the query that loads the user, and answers 404 for it as for a missing row. A filter inside `checkAdminTarget` or `ensureNotLastActiveAdmin` is not enough: they read only `user_roles` and never answer 404. A new list, count or export of members filters `kind = 'person'` too. `system_actor_exclusion_test.go` lists every site; a new one joins it. A new path that sets `users.email` refuses a `.invalid` address (`isReservedEmailDomain`).
+
 ## Lists of members seen by other members
 
 A handler that shows a member's contact details to other members honours `users.hide_in_directory`, with one exception: members who hold a board role (`roles.Board`) keep their name and email in the directory (BRD-12), and only their phone follows the setting. Reuse `roles.Board`; do not write a second list. Keep deactivated members and `accounting.ErasedEmailSuffix` addresses out. The harbour map occupant is not part of the exception. The response must not carry the hide flag. `directoryQuery` in `members.go` is the model.

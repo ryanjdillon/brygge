@@ -218,7 +218,7 @@ func (h *InvoiceHandler) HandleCreateInvoice(w http.ResponseWriter, r *http.Requ
 	if req.UserID != "" {
 		err = h.db.QueryRow(ctx,
 			`SELECT full_name, email, COALESCE(address_line || ', ' || postal_code || ' ' || city, '')
-			 FROM users WHERE id = $1 AND club_id = $2`,
+			 FROM users WHERE id = $1 AND club_id = $2 AND kind = 'person'`,
 			req.UserID, claims.ClubID,
 		).Scan(&memberName, &memberEmail, &memberAddress)
 		if err == pgx.ErrNoRows {

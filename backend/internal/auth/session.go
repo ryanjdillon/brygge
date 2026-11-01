@@ -38,6 +38,10 @@ const (
 
 var ErrSessionNotFound = errors.New("session not found or expired")
 
+// ErrNotAPerson means a session was requested for a user that is not a person
+// (the club's system actor). The system actor never logs in.
+var ErrNotAPerson = errors.New("sessions are only for persons")
+
 // SessionService manages server-side sessions stored in PostgreSQL.
 type SessionService struct {
 	db *pgxpool.Pool
@@ -47,7 +51,8 @@ func NewSessionService(db *pgxpool.Pool) *SessionService {
 	return &SessionService{db: db}
 }
 
-// CreateSession generates a new session and returns its ID.
+// CreateSession generates a new session and returns its ID. It refuses a user
+// that is not a person (ErrNotAPerson), whichever login path asked.
 func (s *SessionService) CreateSession(ctx context.Context, userID, clubID, ip, userAgent string) (string, error) {
 	id, err := generateSessionID()
 	if err != nil {
@@ -62,13 +67,19 @@ func (s *SessionService) CreateSession(ctx context.Context, userID, clubID, ip, 
 
 	idleWindow := s.clubIdleWindow(ctx, clubID)
 	expiresAt := time.Now().Add(idleWindow)
-	_, err = s.db.Exec(ctx,
+	tag, err := s.db.Exec(ctx,
 		`INSERT INTO sessions (id, user_id, club_id, expires_at, ip_address, user_agent)
-		 VALUES ($1, $2, $3, $4, $5::inet, $6)`,
+		 SELECT $1::text, $2::uuid, $3::uuid, $4::timestamptz, $5::inet, $6::text
+		  WHERE EXISTS (SELECT 1 FROM users WHERE id = $2 AND kind = 'person')`,
 		id, userID, clubID, expiresAt, host, userAgent,
 	)
 	if err != nil {
 		return "", fmt.Errorf("inserting session: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		// Either the user is not a person or it does not exist; the FK would
+		// have refused the second case anyway.
+		return "", ErrNotAPerson
 	}
 
 	return id, nil
@@ -121,7 +132,7 @@ func (s *SessionService) ValidateSession(ctx context.Context, sessionID string) 
 		 JOIN users u ON u.id = s.user_id
 		 LEFT JOIN club_settings cs ON cs.club_id = s.club_id
 		     AND cs.key IN ('session_idle_minutes', 'session_absolute_cap_minutes', 'admin_totp_minutes')
-		 WHERE s.id = $1 AND u.deactivated_at IS NULL
+		 WHERE s.id = $1 AND u.kind = 'person' AND u.deactivated_at IS NULL
 		 GROUP BY s.user_id, s.club_id, s.totp_verified_at, u.totp_enabled, s.mfa_method, s.created_at, s.expires_at`,
 		sessionID,
 	).Scan(&userID, &clubID, &info.TOTPVerifiedAt, &info.TOTPEnabled,

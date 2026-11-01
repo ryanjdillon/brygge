@@ -141,6 +141,22 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 		Error(w, http.StatusBadRequest, "cannot create invoices for deactivated members")
 		return
 	}
+	// The system actor is not a member: a hand-crafted selection naming it is
+	// answered like an unknown user.
+	var notPersonCount int
+	if err := h.db.QueryRow(ctx,
+		`SELECT COUNT(*) FROM users
+		  WHERE club_id = $1 AND id = ANY($2) AND kind <> 'person'`,
+		claims.ClubID, req.UserIDs,
+	).Scan(&notPersonCount); err != nil {
+		h.log.Error().Err(err).Msg("failed to check member kinds for bulk invoice")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if notPersonCount > 0 {
+		Error(w, http.StatusNotFound, "user not found")
+		return
+	}
 	if req.FiscalPeriodID == "" {
 		Error(w, http.StatusBadRequest, "fiscal_period_id is required")
 		return
@@ -595,7 +611,7 @@ func (h *InvoiceHandler) createBulkInvoice(
 	var memberName, memberEmail, memberAddress string
 	if err := h.db.QueryRow(ctx,
 		`SELECT full_name, email, COALESCE(address_line || ', ' || postal_code || ' ' || city, '')
-		   FROM users WHERE id = $1 AND club_id = $2`,
+		   FROM users WHERE id = $1 AND club_id = $2 AND kind = 'person'`,
 		userID, clubID,
 	).Scan(&memberName, &memberEmail, &memberAddress); err != nil {
 		return "", 0, 0, err

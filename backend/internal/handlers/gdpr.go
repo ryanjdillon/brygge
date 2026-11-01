@@ -476,11 +476,12 @@ func (h *GDPRHandler) HandleListDeletionRequests(w http.ResponseWriter, r *http.
 // what makes the revocation atomic with the deactivation. Must run before the
 // identity is anonymised: the magic-link rows are keyed by the old email.
 // Returns the number of session rows deleted, which includes expired sessions
-// the purge job has not yet removed.
+// the purge job has not yet removed. It refuses a user that is not a person:
+// the club's system actor holds no credentials and is never deactivated.
 func revokeMemberAccess(ctx context.Context, tx pgx.Tx, clubID, userID, actorID string) (int64, error) {
 	var email string
 	if err := tx.QueryRow(ctx,
-		`SELECT email FROM users WHERE id = $1 AND club_id = $2`,
+		`SELECT email FROM users WHERE id = $1 AND club_id = $2 AND kind = 'person'`,
 		userID, clubID,
 	).Scan(&email); err != nil {
 		return 0, fmt.Errorf("read member email: %w", err)

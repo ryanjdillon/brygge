@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/rs/zerolog"
 )
 
 // Typed refusals of the admin-lifecycle guards. The SPA matches on the codes.
@@ -25,6 +27,44 @@ var (
 // rowQuerier is the read side shared by pgx.Tx and the pool.
 type rowQuerier interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+// errUserNotFound means the user does not exist in the club, or is not a
+// person. The club's system actor is answered exactly like a missing row, so
+// no by-id admin endpoint can read, change, deactivate or erase it.
+var errUserNotFound = errors.New("user not found")
+
+// loadPersonUser is the first step of every by-id admin handler: it returns
+// errUserNotFound unless the user is a person in the club. A kind filter inside
+// checkAdminTarget or ensureNotLastActiveAdmin would not do this, because they
+// only read user_roles and never answer 404. Call it inside the handler's
+// transaction (after lockClubAdmins where the handler takes that lock).
+func loadPersonUser(ctx context.Context, q rowQuerier, clubID, userID string) error {
+	if _, err := uuid.Parse(userID); err != nil {
+		return errUserNotFound
+	}
+	var found bool
+	if err := q.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM users WHERE id = $1 AND club_id = $2 AND kind = 'person')`,
+		userID, clubID,
+	).Scan(&found); err != nil {
+		return fmt.Errorf("load person user: %w", err)
+	}
+	if !found {
+		return errUserNotFound
+	}
+	return nil
+}
+
+// writePersonUserError answers the error from loadPersonUser: 404 for
+// errUserNotFound, 500 for anything else.
+func writePersonUserError(w http.ResponseWriter, log zerolog.Logger, err error) {
+	if errors.Is(err, errUserNotFound) {
+		Error(w, http.StatusNotFound, "user not found")
+		return
+	}
+	log.Error().Err(err).Msg("failed to load user")
+	Error(w, http.StatusInternalServerError, "internal error")
 }
 
 // lockClubAdmins serialises every change that can remove an active admin from

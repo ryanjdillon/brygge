@@ -174,6 +174,7 @@ func (h *InvoiceHandler) HandleImportUni24Invoices(w http.ResponseWriter, r *htt
 			err := h.db.QueryRow(ctx,
 				`SELECT id FROM users
 				  WHERE club_id = $1
+				    AND kind = 'person'
 				    AND LOWER(full_name) = LOWER($2)
 				  LIMIT 1`,
 				claims.ClubID, custName,

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -304,6 +305,24 @@ func (h *ProjectsHandler) HandleListTasks(w http.ResponseWriter, r *http.Request
 	JSON(w, http.StatusOK, result)
 }
 
+// nextAssignee resolves a task's assignee_id from the request: absent keeps
+// current, empty clears it, anything else must be a person of the club (not the
+// system actor, not a user of another club). On refusal the 404 or 500 is
+// already written and ok is false.
+func (h *ProjectsHandler) nextAssignee(ctx context.Context, w http.ResponseWriter, clubID string, current, requested *string) (assignee *string, ok bool) {
+	if requested == nil {
+		return current, true
+	}
+	if *requested == "" {
+		return nil, true
+	}
+	if err := loadPersonUser(ctx, h.db, clubID, *requested); err != nil {
+		writePersonUserError(w, h.log, err)
+		return nil, false
+	}
+	return requested, true
+}
+
 func (h *ProjectsHandler) HandleCreateTask(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -354,6 +373,11 @@ func (h *ProjectsHandler) HandleCreateTask(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	assigneeID, ok := h.nextAssignee(ctx, w, claims.ClubID, nil, req.AssigneeID)
+	if !ok {
+		return
+	}
+
 	maxCollab := 5
 	if req.MaxCollaborators != nil {
 		maxCollab = *req.MaxCollaborators
@@ -371,7 +395,7 @@ func (h *ProjectsHandler) HandleCreateTask(w http.ResponseWriter, r *http.Reques
 		 RETURNING id, project_id, club_id, title, description, assignee_id, status, priority, due_date, created_by, created_at, updated_at,
 		           estimated_hours, actual_hours, responsible_id, max_collaborators, materials`,
 		projectID, claims.ClubID, req.Title, req.Description,
-		req.AssigneeID, priority, dueDate, claims.UserID,
+		assigneeID, priority, dueDate, claims.UserID,
 		req.EstimatedHours, maxCollab, materials,
 	).Scan(
 		&t.ID, &t.ProjectID, &t.ClubID, &t.Title, &t.Description,
@@ -448,13 +472,11 @@ func (h *ProjectsHandler) HandleUpdateTask(w http.ResponseWriter, r *http.Reques
 	if req.Description != nil {
 		existing.description = *req.Description
 	}
-	if req.AssigneeID != nil {
-		if *req.AssigneeID == "" {
-			existing.assigneeID = nil
-		} else {
-			existing.assigneeID = req.AssigneeID
-		}
+	assigneeID, ok := h.nextAssignee(ctx, w, claims.ClubID, existing.assigneeID, req.AssigneeID)
+	if !ok {
+		return
 	}
+	existing.assigneeID = assigneeID
 	if req.Status != nil {
 		existing.status = *req.Status
 	}
