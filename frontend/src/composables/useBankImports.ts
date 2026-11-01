@@ -67,6 +67,11 @@ export interface BankImportResult {
   stripe_booking?: StripeBookResult | null
   // The Stripe payout sweep after that booking; absent when there was nothing to look at.
   stripe_payouts?: StripePayoutSweepResult | null
+  // The Vipps payout sweep after the import, so a deposit uploaded after its
+  // charges clears on upload; absent on the legacy model or when deferred.
+  vipps_payouts?: VippsPayoutSweepResult | null
+  // The Vipps booking slot stayed busy: the import stands, the sweep waits.
+  booking_deferred?: boolean
 }
 
 export interface ReferenceMismatch {
@@ -172,6 +177,8 @@ export interface VippsImportResult {
   skipped_dup: number
   auto_assign?: AutoAssignResult | null
   payouts?: VippsPayoutSweepResult | null
+  // The Vipps booking slot stayed busy: the rows are imported, the booking waits.
+  booking_deferred?: boolean
 }
 
 export interface VippsReconcileLine {
@@ -389,6 +396,8 @@ export interface BankSyncResult {
   stripe_booking?: StripeBookResult | null
   // The Stripe payout sweep after that pass; absent when there was nothing to look at.
   stripe_payouts?: StripePayoutSweepResult | null
+  // Pass 5 could not take the Vipps booking slot; the other passes stand.
+  booking_deferred?: boolean
 }
 
 export async function runBankSync(): Promise<BankSyncResult> {

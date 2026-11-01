@@ -454,6 +454,8 @@ export interface VippsBacklogResult {
   // Sent ids that were no reclassification at apply time; skipped.
   stale_ids: string[]
   payouts?: VippsPayoutSweepResult | null
+  // The Vipps booking slot stayed busy, so the payout sweep did not run.
+  booking_deferred?: boolean
 }
 
 export interface VippsBacklogReclass {

@@ -1975,6 +1975,8 @@
       "stripeBookReview": "{count} Stripe-transaksjon(ar) ventar på gjennomgang",
       "stripeBookDeferred": "{count} er ikkje bokførte fordi rekneskapsperioden er lukka eller ikkje oppretta; dei blir bokførte når perioden er open.",
       "stripeBookBusy": "Ein Stripe-synk var i gang, så ingenting vart bokført no. Prøv att om litt.",
+      "bookingDeferred": "Bokføringa ventar: ei anna Vipps-bokføring pågår. Det som vart lasta opp eller henta er lagra, og blir bokført ved neste synkronisering.",
+      "vippsBookingBusy": "Ei Vipps-bokføring pågår allereie. Prøv att om eit minutt.",
       "stripeBookErrors": "{count} kunne ikkje bokførast – sjå loggen",
       "stripeReviewReasons": {
         "no_attempt": "Finn ikkje betalinga i Brygge",

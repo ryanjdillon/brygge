@@ -52,6 +52,8 @@ import StripePayoutSweepSummary from '@/components/admin/StripePayoutSweepSummar
 import StripeBookSummary from '@/components/admin/StripeBookSummary.vue'
 import StripeReviewList from '@/components/admin/StripeReviewList.vue'
 import BankImportProvisionalNotices from '@/components/admin/BankImportProvisionalNotices.vue'
+import BookingDeferredNotice from '@/components/admin/BookingDeferredNotice.vue'
+import { ApiError } from '@/lib/errors'
 import { useConfirm } from '@/stores/confirm'
 import { useCan } from '@/composables/useCan'
 
@@ -261,7 +263,11 @@ async function runVippsResyncAction() {
   try {
     vippsResyncResult.value = await runVippsResync()
   } catch (e: any) {
-    vippsResyncError.value = e?.message ?? 'Failed'
+    // Another Vipps booking holds the club's slot: nothing was done.
+    vippsResyncError.value =
+      e instanceof ApiError && e.code === 'vipps_booking_busy'
+        ? t('admin.bankImports.vippsBookingBusy')
+        : (e?.message ?? 'Failed')
   } finally {
     vippsResyncBusy.value = false
   }
@@ -613,6 +619,7 @@ const filterMonthValue = computed<number>({
       </p>
       <AutoAssignSummary v-if="syncResult.auto_assign" source="bank" :result="syncResult.auto_assign" />
       <VippsPayoutSweepSummary v-if="syncResult.vipps_payouts" :result="syncResult.vipps_payouts" />
+      <BookingDeferredNotice v-if="syncResult.booking_deferred" />
       <StripeBookSummary v-if="syncResult.stripe_booking" :result="syncResult.stripe_booking" />
       <StripePayoutSweepSummary v-if="syncResult.stripe_payouts" :result="syncResult.stripe_payouts" />
     </div>
@@ -809,6 +816,8 @@ const filterMonthValue = computed<number>({
             · {{ t('admin.bankImports.refreshed') }}: {{ bankResult.refreshed }}
           </template>
           <BankImportProvisionalNotices :result="bankResult" />
+          <VippsPayoutSweepSummary v-if="bankResult.vipps_payouts" :result="bankResult.vipps_payouts" />
+          <BookingDeferredNotice v-if="bankResult.booking_deferred" />
           <StripeBookSummary v-if="bankResult.stripe_booking" :result="bankResult.stripe_booking" />
           <StripePayoutSweepSummary v-if="bankResult.stripe_payouts" :result="bankResult.stripe_payouts" />
           <p v-if="bankResult.auto_matched" class="mt-2 rounded bg-brand-50 px-2 py-1 text-brand-800">
@@ -860,6 +869,7 @@ const filterMonthValue = computed<number>({
           · {{ t('admin.bankImports.skipped') }}: {{ vippsResult.skipped_dup }}
           <AutoAssignSummary v-if="vippsResult.auto_assign" source="vipps" :result="vippsResult.auto_assign" />
           <VippsPayoutSweepSummary v-if="vippsResult.payouts" :result="vippsResult.payouts" />
+          <BookingDeferredNotice v-if="vippsResult.booking_deferred" />
         </div>
       </section>
 

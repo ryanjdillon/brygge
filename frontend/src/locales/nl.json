@@ -1226,6 +1226,8 @@
       "stripeBookReview": "{count} Stripe-transactie(s) te controleren",
       "stripeBookDeferred": "{count} niet geboekt omdat de boekingsperiode gesloten of nog niet aangemaakt is; ze worden geboekt zodra die open is.",
       "stripeBookBusy": "Er liep een Stripe-synchronisatie, dus er is niets geboekt. Probeer het zo opnieuw.",
+      "bookingDeferred": "De boeking wacht omdat er al een andere Vipps-boeking loopt. Wat je hebt geüpload of opgehaald is opgeslagen en wordt bij de volgende synchronisatie geboekt.",
+      "vippsBookingBusy": "Er loopt al een Vipps-boeking. Probeer het over een minuut opnieuw.",
       "stripeBookErrors": "{count} konden niet worden geboekt – zie het logboek",
       "stripeReviewReasons": {
         "no_attempt": "Betaling niet gevonden in Brygge",

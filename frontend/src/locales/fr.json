@@ -1225,6 +1225,8 @@
       "stripeBookReview": "{count} transaction(s) Stripe à vérifier",
       "stripeBookDeferred": "{count} non comptabilisée(s) car l'exercice est clôturé ou pas encore créé ; elles le seront dès qu'il sera ouvert.",
       "stripeBookBusy": "Une synchronisation Stripe était en cours, rien n'a été comptabilisé. Réessayez dans un instant.",
+      "bookingDeferred": "La comptabilisation est en attente, car une autre comptabilisation Vipps est en cours. Ce qui a été importé ou récupéré est enregistré et sera comptabilisé à la prochaine synchronisation.",
+      "vippsBookingBusy": "Une comptabilisation Vipps est déjà en cours. Réessayez dans une minute.",
       "stripeBookErrors": "{count} n'ont pas pu être comptabilisées – voir le journal",
       "stripeReviewReasons": {
         "no_attempt": "Paiement introuvable dans Brygge",

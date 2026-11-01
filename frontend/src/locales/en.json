@@ -2096,6 +2096,8 @@
       "stripeBookReview": "{count} Stripe transaction(s) need review",
       "stripeBookDeferred": "{count} left unbooked because their fiscal period is closed or not created yet; they are booked once it is open.",
       "stripeBookBusy": "A Stripe sync was running, so nothing was booked. Try again shortly.",
+      "bookingDeferred": "Booking is waiting because another Vipps booking is running. What you uploaded or fetched is saved, and it is booked at the next sync.",
+      "vippsBookingBusy": "A Vipps booking is already running. Try again in a minute.",
       "stripeBookErrors": "{count} could not be booked – see the log",
       "stripeReviewReasons": {
         "no_attempt": "Payment not found in Brygge",

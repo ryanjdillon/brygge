@@ -1200,6 +1200,8 @@
       "stripeBookReview": "Transakcje Stripe do sprawdzenia: {count}",
       "stripeBookDeferred": "Niezaksięgowane, bo okres rozliczeniowy jest zamknięty lub jeszcze nie utworzony: {count}; zostaną zaksięgowane, gdy będzie otwarty.",
       "stripeBookBusy": "Trwała synchronizacja Stripe, więc nic nie zaksięgowano. Spróbuj ponownie za chwilę.",
+      "bookingDeferred": "Księgowanie czeka, bo trwa inne księgowanie Vipps. To, co przesłano lub pobrano, jest zapisane i zostanie zaksięgowane przy następnej synchronizacji.",
+      "vippsBookingBusy": "Księgowanie Vipps już trwa. Spróbuj ponownie za minutę.",
       "stripeBookErrors": "Nie udało się zaksięgować: {count} – zobacz dziennik",
       "stripeReviewReasons": {
         "no_attempt": "Nie znaleziono płatności w Brygge",

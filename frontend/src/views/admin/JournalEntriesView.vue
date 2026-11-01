@@ -436,6 +436,7 @@ async function handlePostVippsDrafts() {
             failed: payouts.failed.length,
           })
         : '',
+      result.booking_deferred ? t('admin.bankImports.bookingDeferred') : '',
     ]
       .filter(Boolean)
       .join(' ')

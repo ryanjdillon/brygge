@@ -1226,6 +1226,8 @@
       "stripeBookReview": "{count} transazione/i Stripe da verificare",
       "stripeBookDeferred": "{count} non registrata/e perché il periodo contabile è chiuso o non ancora creato; verranno registrate quando sarà aperto.",
       "stripeBookBusy": "Era in corso una sincronizzazione Stripe, quindi non è stato registrato nulla. Riprova tra poco.",
+      "bookingDeferred": "La registrazione è in attesa perché è in corso un'altra registrazione Vipps. Ciò che hai caricato o recuperato è salvato e verrà registrato alla prossima sincronizzazione.",
+      "vippsBookingBusy": "È già in corso una registrazione Vipps. Riprova tra un minuto.",
       "stripeBookErrors": "{count} non registrabile/i – vedi il log",
       "stripeReviewReasons": {
         "no_attempt": "Pagamento non trovato in Brygge",

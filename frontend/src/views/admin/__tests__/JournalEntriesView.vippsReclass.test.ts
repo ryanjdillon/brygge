@@ -125,6 +125,20 @@ describe('JournalEntriesView backlog per-row choice', () => {
     ])
   })
 
+  it('says the payout sweep waited when the Vipps booking slot was busy', async () => {
+    fetchApi.mockImplementation((url: string) =>
+      String(url).endsWith('/sync/vipps-drafts')
+        ? Promise.resolve(backlog({ applied: true, posted: 2, reclassified: [], booking_deferred: true }))
+        : respond(url),
+    )
+    confirm.mockResolvedValue(true)
+    const wrapper = mountWithPlugins(JournalEntriesView)
+    await flushPromises()
+    await wrapper.get('[data-testid="post-vipps-drafts"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('admin.bankImports.bookingDeferred')
+  })
+
   it('cancelling posts nothing', async () => {
     confirm.mockResolvedValue(false)
     const wrapper = mountWithPlugins(JournalEntriesView)
