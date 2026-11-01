@@ -9,7 +9,7 @@
 ALTER TABLE users ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'person';
 
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_kind_check') THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_kind_check' AND conrelid = 'users'::regclass) THEN
     ALTER TABLE users ADD CONSTRAINT users_kind_check CHECK (kind IN ('person', 'system'));
   END IF;
 END $$;
