@@ -297,6 +297,11 @@ type clubFinancialSettings struct {
 	FeatureCommerce   bool `json:"feature_commerce"`
 	FeatureAccounting bool `json:"feature_accounting"`
 	HasAnthropicKey   bool `json:"has_anthropic_key"`
+
+	// AutomaticBooking is the master switch for unattended booking and
+	// clearing as the club's system actor (ACC-13); off until the treasurer
+	// or an admin turns it on.
+	AutomaticBooking bool `json:"automatic_booking"`
 }
 
 // HandleGetFinancialSettings returns the club's invoice-relevant
@@ -323,7 +328,7 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		        COALESCE(vipps_portal_url, ''),
 		        online_max_amount,
 		        vipps_auto_assign, COALESCE(vipps_auto_assign_tie_category, ''),
-		        bank_auto_assign,
+		        bank_auto_assign, automatic_booking,
 		        COALESCE(website_url, ''),
 		        COALESCE(chairman_email, ''), COALESCE(vice_chairman_email, ''),
 		        COALESCE(treasurer_email, ''),
@@ -352,7 +357,7 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		&s.VippsPortalURL,
 		&s.OnlineMaxAmount,
 		&s.VippsAutoAssign, &s.VippsAutoAssignTieCategory,
-		&s.BankAutoAssign,
+		&s.BankAutoAssign, &s.AutomaticBooking,
 		&s.WebsiteURL,
 		&s.ChairmanEmail, &s.ViceChairmanEmail,
 		&s.TreasurerEmail,
@@ -405,6 +410,7 @@ type updateFinancialSettingsRequest struct {
 	VippsAutoAssign            *bool   `json:"vipps_auto_assign,omitempty"`
 	VippsAutoAssignTieCategory *string `json:"vipps_auto_assign_tie_category,omitempty"`
 	BankAutoAssign             *bool   `json:"bank_auto_assign,omitempty"`
+	AutomaticBooking           *bool   `json:"automatic_booking,omitempty"`
 	WebsiteURL                 *string `json:"website_url,omitempty"`
 	ChairmanEmail              *string `json:"chairman_email,omitempty"`
 	ViceChairmanEmail          *string `json:"vice_chairman_email,omitempty"`
@@ -540,7 +546,8 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		   stripe_payout_descriptor  = COALESCE($41, stripe_payout_descriptor),
 		   vipps_portal_url          = CASE
 		                                 WHEN $42::text IS NULL THEN vipps_portal_url
-		                                 ELSE NULLIF($42::text, '') END
+		                                 ELSE NULLIF($42::text, '') END,
+		   automatic_booking         = COALESCE($43, automatic_booking)
 		 WHERE id = $1`,
 		claims.ClubID, req.OrgNumber, req.Address, req.Phone, req.VHFChannel,
 		req.Latitude, req.Longitude,
@@ -563,6 +570,7 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		req.BankAutoAssign,
 		req.StripeClearingAccount, req.StripePayoutDescriptor,
 		req.VippsPortalURL,
+		req.AutomaticBooking,
 	); err != nil {
 		h.log.Error().Err(err).Msg("update financial settings")
 		Error(w, http.StatusInternalServerError, "internal error")
