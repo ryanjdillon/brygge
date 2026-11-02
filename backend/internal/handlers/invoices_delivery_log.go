@@ -1,15 +1,9 @@
 package handlers
 
 import (
-	"bufio"
-	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
-	"os/exec"
-	"regexp"
-	"strconv"
-	"strings"
+	"sort"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -19,23 +13,61 @@ import (
 	"github.com/brygge-klubb/brygge/internal/middleware"
 )
 
-type deliveryLogEntry struct {
-	Timestamp   time.Time `json:"timestamp"`
-	Destination string    `json:"destination,omitempty"`
-	SMTPCode    int       `json:"smtp_code,omitempty"`
-	Raw         string    `json:"raw"`
+// Delivery-log statuses for a send that has no matched submission.
+const (
+	// deliveryNoRecord: the send is old enough that the mail server must have
+	// logged it, and it did not. Earlier mail faults looked exactly like this
+	// (shown as sent in Brygge, never left the host).
+	deliveryNoRecord = "no_record"
+	// deliveryPending: too recent to call missing.
+	deliveryPending = "pending"
+	// deliveryBeyondRetention: older than the journal keeps.
+	deliveryBeyondRetention = "beyond_retention"
+	// deliveryUnavailable: this host has no mail-log helper, or it failed.
+	deliveryUnavailable = "unavailable"
+)
+
+const (
+	// sendMatchWindow is how far a send's recorded time may lie from the
+	// mail server's submission time. sent_at is stamped just before or just
+	// after the SMTP hand-off and audit rows just after, so seconds apart in
+	// practice; a minute-scale window absorbs a slow SMTP session.
+	sendMatchWindow = 3 * time.Minute
+	// sendNoRecordAfter is when a send without a submission becomes
+	// "no record" instead of "pending".
+	sendNoRecordAfter = 10 * time.Minute
+	// mailJournalRetention mirrors journald's MaxRetentionSec on the host.
+	mailJournalRetention = 30 * 24 * time.Hour
+)
+
+type deliveryLogEvent struct {
+	Timestamp time.Time `json:"timestamp"`
+	Message   string    `json:"message"`
+	Hostname  string    `json:"hostname,omitempty"`
+	SMTPCode  int       `json:"smtp_code,omitempty"`
+	Details   string    `json:"details,omitempty"`
 }
 
-// HandleGetDeliveryLog reads stalwart-mail's systemd journal and returns the
-// most recent delivery attempts whose log line mentions the invoice's
-// recipient email. Brygge and Stalwart are colocated, so this is a local read
-// — no SSH, no Stalwart admin API.
-//
-// The destination MX's SMTP response code is the smoking gun:
-//   - 2xx: the destination accepted the message (inbox vs spam is then the
-//     destination's choice and not visible to the sender)
-//   - 4xx: transient, Stalwart will retry
-//   - 5xx: permanent failure
+// deliveryLogSend is one time Brygge mailed the faktura (first send, resend
+// or reminder) and what the mail server did with it.
+type deliveryLogSend struct {
+	Kind        string             `json:"kind"` // sent | resent | reminder
+	At          time.Time          `json:"at"`
+	Status      string             `json:"status"`
+	QueueID     string             `json:"queue_id,omitempty"`
+	SMTPCode    int                `json:"smtp_code,omitempty"`
+	RemoteHost  string             `json:"remote_host,omitempty"`
+	Details     string             `json:"details,omitempty"`
+	OutcomeAt   *time.Time         `json:"outcome_at,omitempty"`
+	NextRetryAt *time.Time         `json:"next_retry_at,omitempty"`
+	Events      []deliveryLogEvent `json:"events"`
+}
+
+// HandleGetDeliveryLog lists each time the faktura was mailed and what the
+// recipient's mail server answered, read from the mail server's journal
+// through the host's mail-log helper. A send with no matching submission in
+// the journal is reported as no_record, so a mail that never left the host
+// is visible instead of looking like an empty log.
 func (h *InvoiceHandler) HandleGetDeliveryLog(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -49,14 +81,17 @@ func (h *InvoiceHandler) HandleGetDeliveryLog(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Same address precedence as the send paths (deliverTo).
 	var recipient string
+	var sentAt *time.Time
 	if err := h.db.QueryRow(ctx,
-		`SELECT COALESCE(NULLIF(i.recipient_email, ''), u.email, '')
+		`SELECT COALESCE(NULLIF(i.recipient_email, ''), NULLIF(i.member_email, ''), u.email, ''),
+		        i.sent_at
 		   FROM invoices i
 		   LEFT JOIN users u ON u.id = i.user_id
 		  WHERE i.id = $1 AND i.club_id = $2`,
 		invoiceID, claims.ClubID,
-	).Scan(&recipient); err != nil {
+	).Scan(&recipient, &sentAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			Error(w, http.StatusNotFound, "invoice not found")
 			return
@@ -67,17 +102,34 @@ func (h *InvoiceHandler) HandleGetDeliveryLog(w http.ResponseWriter, r *http.Req
 	}
 	if recipient == "" {
 		JSON(w, http.StatusOK, map[string]any{
-			"items":  []deliveryLogEntry{},
+			"sends":  []deliveryLogSend{},
 			"reason": "no_recipient",
 		})
 		return
 	}
 
-	entries, err := readStalwartDeliveryLog(ctx, recipient, 50)
+	sends, err := h.invoiceSends(r, invoiceID, claims.ClubID, sentAt)
 	if err != nil {
-		h.log.Error().Err(err).Str("recipient", recipient).Msg("read stalwart delivery log")
-		Error(w, http.StatusInternalServerError, "could not read delivery log")
+		h.log.Error().Err(err).Msg("load invoice sends")
+		Error(w, http.StatusInternalServerError, "internal error")
 		return
+	}
+
+	available := h.mailJournal != nil
+	var events []mailEvent
+	if available {
+		events, err = h.mailJournal.Events(ctx, recipient)
+		if err != nil {
+			h.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("read mail delivery events")
+			available = false
+		}
+	}
+	if available {
+		matchSends(sends, groupSubmissions(events), time.Now())
+	} else {
+		for i := range sends {
+			sends[i].Status = deliveryUnavailable
+		}
 	}
 
 	if h.audit != nil {
@@ -85,88 +137,114 @@ func (h *InvoiceHandler) HandleGetDeliveryLog(w http.ResponseWriter, r *http.Req
 			audit.ActionInvoiceDeliveryLogViewed, "invoice", invoiceID,
 			map[string]any{
 				"recipient_email":  recipient,
-				"matches_returned": len(entries),
+				"matches_returned": len(events),
 			})
 	}
 
+	sort.SliceStable(sends, func(i, j int) bool { return sends[i].At.After(sends[j].At) })
 	JSON(w, http.StatusOK, map[string]any{
-		"items":           entries,
+		"sends":           sends,
 		"recipient_email": recipient,
+		"available":       available,
 	})
 }
 
-// smtpCodeRE matches a 3-digit SMTP reply code (2xx, 4xx, 5xx). Anchored to a
-// word boundary so we don't pick up port numbers or random digit runs.
-var smtpCodeRE = regexp.MustCompile(`\b([245]\d{2})\b`)
-
-// destinationRE matches the destination MX hostname in shapes Stalwart logs
-// it as: "via mx.host.tld", "destination=mx.host.tld", or "to mx.host.tld:25".
-var destinationRE = regexp.MustCompile(`(?:via|destination[=:]|to)\s+([A-Za-z0-9][A-Za-z0-9.-]+\.[A-Za-z]{2,})`)
-
-// readStalwartDeliveryLog shells out to journalctl (no shell, arg-vector
-// form), reads JSON-per-line newest-first via --reverse, filters by recipient,
-// and returns up to limit entries. Times out after 8s so a slow journal can't
-// hang the request.
-func readStalwartDeliveryLog(ctx context.Context, recipient string, limit int) ([]deliveryLogEntry, error) {
-	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx,
-		"journalctl",
-		"-u", "stalwart-mail.service",
-		"--since=60 days ago",
-		"--reverse",
-		"-o", "json",
-		"--no-pager",
-		"--output-fields=__REALTIME_TIMESTAMP,MESSAGE",
-	)
-	stdout, err := cmd.StdoutPipe()
+// invoiceSends lists the moments Brygge mailed the faktura: the first send
+// (sent_at) and each resend and reminder (audit rows). Imported fakturas sent
+// by the previous system have no sends.
+func (h *InvoiceHandler) invoiceSends(r *http.Request, invoiceID, clubID string, sentAt *time.Time) ([]deliveryLogSend, error) {
+	sends := []deliveryLogSend{}
+	if sentAt != nil {
+		sends = append(sends, deliveryLogSend{Kind: "sent", At: sentAt.UTC()})
+	}
+	rows, err := h.db.Query(r.Context(),
+		`SELECT CASE WHEN action = 'invoice.reminded' THEN 'reminder' ELSE 'resent' END,
+		        created_at
+		   FROM audit_log
+		  WHERE club_id = $1 AND resource = 'invoice' AND resource_id = $2
+		    AND (action = 'invoice.reminded'
+		         OR (action = 'invoice.emailed' AND details->>'resend' = 'true'))`,
+		clubID, invoiceID)
 	if err != nil {
 		return nil, err
 	}
-	if err := cmd.Start(); err != nil {
-		return nil, err
+	defer rows.Close()
+	for rows.Next() {
+		var s deliveryLogSend
+		if err := rows.Scan(&s.Kind, &s.At); err != nil {
+			return nil, err
+		}
+		s.At = s.At.UTC()
+		sends = append(sends, s)
 	}
-	defer func() {
-		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
-	}()
+	return sends, rows.Err()
+}
 
-	type journalRow struct {
-		Timestamp string `json:"__REALTIME_TIMESTAMP"`
-		Message   string `json:"MESSAGE"`
+// matchSends pairs each send with the closest unclaimed submission within
+// sendMatchWindow, closest pairs first, and fills in its outcome. Other mail
+// to the same address (a login link, a board reply) falls outside every
+// window and is not shown.
+func matchSends(sends []deliveryLogSend, subs []*mailSubmission, now time.Time) {
+	type pair struct {
+		send, sub int
+		gap       time.Duration
 	}
-
-	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 1<<16), 1<<20)
-	entries := make([]deliveryLogEntry, 0, limit)
-	for scanner.Scan() {
-		var row journalRow
-		if err := json.Unmarshal(scanner.Bytes(), &row); err != nil {
-			continue
-		}
-		if !strings.Contains(row.Message, recipient) {
-			continue
-		}
-		entry := deliveryLogEntry{Raw: strings.TrimSpace(row.Message)}
-		if usec, perr := strconv.ParseInt(row.Timestamp, 10, 64); perr == nil {
-			entry.Timestamp = time.Unix(0, usec*1000).UTC()
-		}
-		if m := smtpCodeRE.FindString(row.Message); m != "" {
-			if code, perr := strconv.Atoi(m); perr == nil {
-				entry.SMTPCode = code
+	var pairs []pair
+	for i := range sends {
+		for j, sub := range subs {
+			gap := sub.SubmittedAt.Sub(sends[i].At)
+			if gap < 0 {
+				gap = -gap
+			}
+			if gap <= sendMatchWindow {
+				pairs = append(pairs, pair{i, j, gap})
 			}
 		}
-		if m := destinationRE.FindStringSubmatch(row.Message); len(m) > 1 {
-			entry.Destination = m[1]
+	}
+	sort.SliceStable(pairs, func(a, b int) bool { return pairs[a].gap < pairs[b].gap })
+	sendUsed := make([]bool, len(sends))
+	subUsed := make([]bool, len(subs))
+	for _, p := range pairs {
+		if sendUsed[p.send] || subUsed[p.sub] {
+			continue
 		}
-		entries = append(entries, entry)
-		if len(entries) >= limit {
-			break
+		sendUsed[p.send], subUsed[p.sub] = true, true
+		fillSend(&sends[p.send], subs[p.sub])
+	}
+	for i := range sends {
+		if sendUsed[i] {
+			continue
+		}
+		sends[i].Events = []deliveryLogEvent{}
+		age := now.Sub(sends[i].At)
+		switch {
+		case age > mailJournalRetention:
+			sends[i].Status = deliveryBeyondRetention
+		case age < sendNoRecordAfter:
+			sends[i].Status = deliveryPending
+		default:
+			sends[i].Status = deliveryNoRecord
 		}
 	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
+}
+
+func fillSend(s *deliveryLogSend, sub *mailSubmission) {
+	out := sub.outcome()
+	s.Status = out.Status
+	s.QueueID = sub.QueueID
+	s.SMTPCode = out.SMTPCode
+	s.RemoteHost = out.RemoteHost
+	s.Details = out.Detail
+	s.OutcomeAt = out.At
+	s.NextRetryAt = out.NextRetryAt
+	s.Events = make([]deliveryLogEvent, 0, len(sub.Events))
+	for _, e := range sub.Events {
+		s.Events = append(s.Events, deliveryLogEvent{
+			Timestamp: e.at(),
+			Message:   e.Message,
+			Hostname:  e.Hostname,
+			SMTPCode:  e.code(),
+			Details:   e.detail(),
+		})
 	}
-	return entries, nil
 }

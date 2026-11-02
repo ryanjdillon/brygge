@@ -1191,6 +1191,54 @@ in
     preDeployBackup.enable = true;
   };
 
+  # Faktura delivery log (BRY-581). The API runs without journal access;
+  # each request connects to this socket and a short-lived helper, a dynamic
+  # user in systemd-journal, answers with Stalwart's delivery events for the
+  # one recipient it is given (nix/mail-log-helper.sh). Only the brygge group
+  # can connect.
+  systemd.sockets.brygge-mail-log = {
+    description = "Brygge faktura delivery-log helper socket";
+    wantedBy = [ "sockets.target" ];
+    listenStreams = [ "/run/brygge-mail-log.sock" ];
+    socketConfig = {
+      Accept = true;
+      SocketUser = "root";
+      SocketGroup = "brygge";
+      SocketMode = "0660";
+      MaxConnections = 4;
+    };
+  };
+  systemd.services."brygge-mail-log@" = {
+    description = "Brygge faktura delivery-log helper";
+    serviceConfig = {
+      ExecStart = lib.getExe (pkgs.writeShellApplication {
+        name = "brygge-mail-log";
+        runtimeInputs = [ pkgs.systemd pkgs.jq ];
+        text = builtins.readFile ./mail-log-helper.sh;
+      });
+      StandardInput = "socket";
+      StandardOutput = "socket";
+      StandardError = "journal";
+      DynamicUser = true;
+      SupplementaryGroups = [ "systemd-journal" ];
+      RuntimeMaxSec = 30;
+      NoNewPrivileges = true;
+      ProtectSystem = "strict";
+      ProtectHome = true;
+      PrivateTmp = true;
+      PrivateDevices = true;
+      PrivateNetwork = true;
+      ProtectKernelTunables = true;
+      ProtectKernelModules = true;
+      ProtectControlGroups = true;
+      RestrictAddressFamilies = [ "AF_UNIX" ];
+      RestrictNamespaces = true;
+      LockPersonality = true;
+      MemoryDenyWriteExecute = true;
+      SystemCallArchitectures = "native";
+    };
+  };
+
   services.brygge.extraEnvironment = {
     OTEL_EXPORTER_OTLP_ENDPOINT = "http://127.0.0.1:4317";
     OTEL_EXPORTER_OTLP_PROTOCOL = "grpc";
@@ -1226,6 +1274,8 @@ in
     # by stalwart-mailbox-config.service. The brygge user must be
     # able to read this — see the systemd unit's tmpfiles rule.
     STALWART_MAILBOX_PASSWORDS_PATH = "/etc/stalwart/board-mailbox-passwords.json";
+    # Faktura delivery log: the helper socket defined above.
+    MAIL_LOG_SOCKET = "/run/brygge-mail-log.sock";
   };
 
   # Pre-create the password-map file so the systemd unit can write to

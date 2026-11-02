@@ -305,6 +305,22 @@ Side effects of enabling analysis:
 
 ---
 
+## Faktura delivery log
+
+The delivery log on a sent faktura (Leveringslogg) reads the same journal through `brygge-mail-log`, a socket-activated helper in `nix/host.nix`: the API writes one recipient address, and `nix/mail-log-helper.sh` (a dynamic user in `systemd-journal`) answers with that recipient's delivery events as JSON lines, then `{"__end":true}`. The API has no journal access ([invariants § The API never reads the system journal](../reference/invariants.md#the-api-never-reads-the-system-journal-the-faktura-delivery-log-asks-a-one-recipient-helper)).
+
+What the journal tracer gives, and what the log relies on:
+
+- `MESSAGE` is the event description only; every event key is its own upper-cased field (`TO`, `QUEUEID`, `SPANID`, `HOSTNAME`, `CODE`, `DETAILS`, `NEXTRETRY`, `CAUSEDBY`). Lists are written `[a, b]`; `NEXTRETRY` is unix seconds.
+- No span context is written. An attempt's outcome events (`Message delivered`, `SMTP RCPT TO rejected`, `Connection error`, `Message rescheduled for delivery`, …) carry only the attempt's `SPANID`, which leads to `QUEUEID` through `Delivery attempt started`. The `SPANID` on `Queued message submission for delivery` is the inbound session, so the submission is placed by `QUEUEID` alone.
+- Events with `TO` are kept when `TO` names the recipient; events without `TO` are kept when their `SPANID` is an attempt to the recipient.
+- `SMTP RCPT TO command` with only `TO` and `SPANID` is Brygge's own submission to Stalwart (inbound), not the remote server's answer; the helper does not ask for it.
+- `DSN success notification` is logged for every delivered recipient whatever `NOTIFY` says; it does not mean a DSN was sent.
+
+The API groups the events by queue id and pairs each submission with a send it knows of (`invoices.sent_at`, and `invoice.reminded` / resend `invoice.emailed` audit rows) within three minutes. Outcome: `Message delivered` → accepted; `DSN permanent failure notification` or `Delivery failed` → rejected; otherwise the latest attempt error decides, deferred for 4xx or no code and rejected for 5xx. The event strings live in `backend/internal/handlers/mail_journal.go` and in the helper's journal matches; keep them together.
+
+---
+
 ## Upgrading Stalwart
 
 When bumping Stalwart in nixpkgs / the flake input:
@@ -316,5 +332,6 @@ When bumping Stalwart in nixpkgs / the flake input:
 5. Verify principal-name validation hasn't changed (§ principal-name constraints) — if dashes become allowed, no code change needed but the next slug-encoder author should know.
 6. Diff the `MESSAGE` strings and field names in [§ journal events the collector counts](#journal-events-the-collector-counts) against the new `crates/trc/src/event/description.rs` and the event call sites. A changed string silently zeroes the matching `stalwart.journal.*` metric — update `filter/stalwart-signals`, `transform/stalwart-signals` and `count/stalwart` in `nix/host.nix` together. Also confirm the journal tracer is still the module default and `report.analysis.addresses` is still read.
 7. Re-run the [§ outbound queue listing](#outbound-queue-listing) request on a queue with at least two messages: `total` counts all of them, the single item is the oldest (compare `created` with the web admin's queue view), and the item still has `created`. If the order or the parameter handling changed, `brygge_mail_queue_oldest_age_seconds` is wrong and MailQueueStuck misfires — fix `AdminClient.QueueSummary` in `backend/internal/mail/queue_monitor.go`.
+8. Diff the event strings and fields in [§ faktura delivery log](#faktura-delivery-log) the same way, then open Leveringslogg on a faktura sent after the upgrade: it must show the send as accepted. A changed string turns every send into "no delivery record".
 
 The session-context comment on [DIL-275](https://linear.app/dillonteknisk/issue/DIL-275) captures the specific probes + their results at the time of writing. Use that as the regression baseline.

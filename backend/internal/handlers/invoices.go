@@ -36,7 +36,10 @@ type InvoiceHandler struct {
 	// providers are the online payment services this instance can charge
 	// through; nil or empty means faktura are bank transfer (KID) only.
 	providers *payments.Registry
-	log       zerolog.Logger
+	// mailJournal reads the mail server's delivery events for the
+	// delivery log; nil when the host has no mail-log helper.
+	mailJournal mailJournal
+	log         zerolog.Logger
 
 	// deliveries is the shared durable delivery queue (broadcasts +
 	// invoice reminders). Bulk-reminder sends enqueue 'invoice_reminder'
@@ -72,13 +75,14 @@ func NewInvoiceHandler(
 	log zerolog.Logger,
 ) *InvoiceHandler {
 	return &InvoiceHandler{
-		db:        db,
-		config:    cfg,
-		email:     emailClient,
-		audit:     auditService,
-		s3Legal:   s3Legal,
-		providers: providers,
-		log:       log.With().Str("handler", "invoices").Logger(),
+		db:          db,
+		config:      cfg,
+		email:       emailClient,
+		audit:       auditService,
+		s3Legal:     s3Legal,
+		providers:   providers,
+		mailJournal: mailJournalFromConfig(cfg),
+		log:         log.With().Str("handler", "invoices").Logger(),
 	}
 }
 

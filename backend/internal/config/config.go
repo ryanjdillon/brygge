@@ -97,6 +97,11 @@ type Config struct {
 	StalwartMailboxPasswordsPath string
 	ReconcilerDryRun             bool
 
+	// MailLogSocket is the Unix socket of the host's mail-log helper, which
+	// returns Stalwart's delivery events for one recipient. Empty means the
+	// faktura delivery log reports "unavailable".
+	MailLogSocket string
+
 	// Database pool
 	DBMaxConns         int32
 	DBMinConns         int32
@@ -178,6 +183,7 @@ func Load() Config {
 		BoardMailboxesPath:           envStr("BRYGGE_MAILBOXES_PATH", ""),
 		StalwartMailboxPasswordsPath: envStr("STALWART_MAILBOX_PASSWORDS_PATH", ""),
 		ReconcilerDryRun:             envBool("BRYGGE_RECONCILER_DRY_RUN", false),
+		MailLogSocket:                envStr("MAIL_LOG_SOCKET", ""),
 
 		Features: Features{
 			Bookings:   envBool("FEATURE_BOOKINGS", true),

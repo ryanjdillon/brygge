@@ -827,6 +827,12 @@ A new group is created just before the faktura built-in and the positions are re
 
 **Failure mode:** a visitor-controlled From spoofs the club's domain and fails DMARC for the whole domain; an unstripped CR/LF in the subject injects headers (extra Bcc recipients, so the club's mailbox relays spam); a "received" answer for a message that was only logged loses every enquiry without anyone knowing.
 
+### The API never reads the system journal; the faktura delivery log asks a one-recipient helper
+
+**Rule (BRY-581):** `brygge.service` has no journal access. The faktura delivery log (`HandleGetDeliveryLog`, `handlers/invoices_delivery_log.go`) writes one address to the `brygge-mail-log` socket (`MAIL_LOG_SOCKET`, `nix/host.nix`). A per-connection helper (`nix/mail-log-helper.sh`) runs as a dynamic user in `systemd-journal` and answers with only that recipient's Stalwart delivery events, co-recipients removed. It ends a complete answer with `{"__end":true}`; anything else is an error and the log shows "unavailable", never an empty list. A send (first send, resend or reminder) with no submission in the journal within `sendMatchWindow` is shown as `no_record` once it is 10 minutes old.
+
+**Failure mode:** giving the API `systemd-journal` lets a compromised API read every host log (logins, IPs, every mailbox's mail metadata). Treating a failed read as "no attempts" is how the log once showed nothing at all: it read a unit that does not exist, without permission, and reported the empty result as "no attempts".
+
 ---
 
 ## Developer DB query (DIL-365)
