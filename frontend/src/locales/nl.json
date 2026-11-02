@@ -1144,9 +1144,33 @@
         "subtitle": "Facturen die al naar de ontvangers zijn gemaild. Verzonden facturen kunnen alleen worden geannuleerd — niet verwijderd.",
         "deliveryLog": {
           "title": "Bezorglogboek",
-          "empty": "Geen bezorgpogingen gevonden in het Stalwart-logboek van de afgelopen 60 dagen.",
           "noRecipient": "Deze factuur heeft geen ontvanger-e-mail vastgelegd.",
-          "helpText": "Toont wat Stalwart probeerde te bezorgen en wat de mailserver van de ontvanger antwoordde. 2xx = geaccepteerd (kan alsnog in spam belanden); 4xx = tijdelijk; 5xx = geweigerd."
+          "helpText": "Eén regel per keer dat Brygge deze factuur mailde: wat de mailserver van de club ermee deed en wat de mailserver van de ontvanger antwoordde. \"Geaccepteerd\" betekent dat de server van de ontvanger de mail heeft aangenomen; of hij in de inbox of in spam belandde, is hier niet te zien. Het mailserverlogboek beslaat ongeveer de laatste maand.",
+          "noSends": "Brygge heeft deze factuur niet per e-mail verzonden. Mogelijk is hij door het vorige systeem verzonden.",
+          "kind": {
+            "sent": "Eerste verzending",
+            "resent": "Opnieuw verzonden",
+            "reminder": "Herinnering"
+          },
+          "status": {
+            "accepted": "Geaccepteerd door server ontvanger",
+            "deferred": "Vertraagd, wordt opnieuw geprobeerd",
+            "rejected": "Geweigerd",
+            "queued": "In wachtrij, nog geen antwoord",
+            "no_record": "Geen afleverspoor",
+            "pending": "Net verzonden",
+            "beyond_retention": "Ouder dan het maillogboek",
+            "unavailable": "Logboek niet beschikbaar"
+          },
+          "statusHelp": {
+            "deferred": "De server van de ontvanger vroeg om het later opnieuw te proberen (bijvoorbeeld greylisting). De mailserver probeert het zelf opnieuw.",
+            "rejected": "De server van de ontvanger heeft de mail geweigerd. Controleer het adres en verzend opnieuw.",
+            "no_record": "De mailserver heeft geen spoor van deze verzending; de mail heeft hem waarschijnlijk nooit verlaten. Verzend de factuur opnieuw en meld het als het nog eens gebeurt.",
+            "pending": "Enkele minuten geleden verzonden; het logboek toont het mogelijk nog niet.",
+            "beyond_retention": "Het mailserverlogboek beslaat alleen ongeveer de laatste maand.",
+            "unavailable": "Het mailserverlogboek kan op deze server niet worden gelezen."
+          },
+          "nextRetry": "Volgende poging {time}"
         },
         "lastReminder": "Laatste herinnering",
         "reissueKidSelected": "Nieuwe KID",

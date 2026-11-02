@@ -1143,9 +1143,33 @@
         "subtitle": "Factures déjà envoyées par e-mail aux destinataires. Une facture envoyée peut seulement être annulée — pas supprimée.",
         "deliveryLog": {
           "title": "Journal de livraison",
-          "empty": "Aucune tentative de livraison trouvée dans le journal Stalwart pour les 60 derniers jours.",
           "noRecipient": "Cette facture n'a pas d'e-mail destinataire enregistré.",
-          "helpText": "Affiche ce que Stalwart a tenté de livrer et la réponse du serveur du destinataire. 2xx = accepté (peut tout de même atterrir dans le spam) ; 4xx = transitoire ; 5xx = rejeté."
+          "helpText": "Une entrée par envoi de cette facture par Brygge : ce que le serveur de messagerie du club en a fait et ce que le serveur du destinataire a répondu. « Acceptée » signifie que le serveur du destinataire a pris l'e-mail ; s'il est arrivé dans la boîte de réception ou dans les spams ne peut pas être vu d'ici. Le journal du serveur de messagerie couvre environ le dernier mois.",
+          "noSends": "Brygge n'a pas envoyé cette facture par e-mail. Elle a peut-être été envoyée par l'ancien système.",
+          "kind": {
+            "sent": "Premier envoi",
+            "resent": "Renvoyée",
+            "reminder": "Relance"
+          },
+          "status": {
+            "accepted": "Acceptée par le serveur du destinataire",
+            "deferred": "Retardée, nouvel essai prévu",
+            "rejected": "Refusée",
+            "queued": "En file, pas encore de réponse",
+            "no_record": "Aucune trace de livraison",
+            "pending": "Envoyée à l'instant",
+            "beyond_retention": "Plus ancienne que le journal",
+            "unavailable": "Journal indisponible"
+          },
+          "statusHelp": {
+            "deferred": "Le serveur du destinataire a demandé de réessayer plus tard (greylisting, par exemple). Le serveur de messagerie réessaie de lui-même.",
+            "rejected": "Le serveur du destinataire a refusé l'e-mail. Vérifiez l'adresse et renvoyez.",
+            "no_record": "Le serveur de messagerie n'a aucune trace de cet envoi ; l'e-mail ne l'a probablement jamais quitté. Renvoyez la facture et signalez-le si cela se reproduit.",
+            "pending": "Envoyée il y a quelques minutes ; le journal ne l'affiche peut-être pas encore.",
+            "beyond_retention": "Le journal du serveur de messagerie ne couvre qu'environ le dernier mois.",
+            "unavailable": "Le journal du serveur de messagerie ne peut pas être lu sur ce serveur."
+          },
+          "nextRetry": "Prochain essai {time}"
         },
         "lastReminder": "Dernier rappel",
         "reissueKidSelected": "Nouveau KID",

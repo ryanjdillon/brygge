@@ -793,9 +793,33 @@
         "reissueKidNoneEligible": "None of the selected invoices are eligible — all are already paid.",
         "deliveryLog": {
           "title": "Delivery log",
-          "empty": "No delivery attempts found in the Stalwart log for the past 60 days.",
           "noRecipient": "This invoice has no recipient email on file.",
-          "helpText": "Shows what Stalwart attempted to deliver and what the recipient's mail server returned. 2xx = accepted (may still land in spam at the recipient); 4xx = transient; 5xx = rejected."
+          "helpText": "One entry per time Brygge emailed this invoice: what the club's mail server did with it and what the recipient's mail server answered. \"Accepted\" means the recipient's server took the mail; whether it then landed in the inbox or in spam cannot be seen from here. The mail server log covers about the last month.",
+          "noSends": "Brygge has not emailed this invoice. It may have been sent by the previous system.",
+          "kind": {
+            "sent": "First send",
+            "resent": "Resent",
+            "reminder": "Reminder"
+          },
+          "status": {
+            "accepted": "Accepted by recipient's server",
+            "deferred": "Delayed, will retry",
+            "rejected": "Rejected",
+            "queued": "Queued, no answer yet",
+            "no_record": "No delivery record",
+            "pending": "Just sent",
+            "beyond_retention": "Older than the mail log",
+            "unavailable": "Log unavailable"
+          },
+          "statusHelp": {
+            "deferred": "The recipient's server asked to try again later (greylisting, for example). The mail server retries on its own.",
+            "rejected": "The recipient's server refused the mail. Check the address and resend.",
+            "no_record": "The mail server has no record of this send, so the mail probably never left it. Resend the invoice, and report it if it happens again.",
+            "pending": "Sent a few minutes ago; the mail server log may not show it yet.",
+            "beyond_retention": "The mail server log only covers about the last month.",
+            "unavailable": "The mail server log cannot be read on this server."
+          },
+          "nextRetry": "Next attempt {time}"
         },
         "lastReminder": "Last reminder"
       },

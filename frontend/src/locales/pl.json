@@ -1118,9 +1118,33 @@
         "subtitle": "Faktury już wysłane e-mailem do odbiorców. Wysłane faktury można tylko unieważnić — nie usunąć.",
         "deliveryLog": {
           "title": "Dziennik dostaw",
-          "empty": "Brak prób dostarczenia w dzienniku Stalwart z ostatnich 60 dni.",
           "noRecipient": "Ta faktura nie ma zapisanego adresu e-mail odbiorcy.",
-          "helpText": "Pokazuje, co Stalwart próbował dostarczyć i co odpowiedział serwer odbiorcy. 2xx = przyjęte (może i tak trafić do spamu); 4xx = tymczasowe; 5xx = odrzucone."
+          "helpText": "Jeden wpis na każdą wysyłkę tej faktury przez Brygge: co zrobił z nią serwer pocztowy klubu i co odpowiedział serwer odbiorcy. „Przyjęta” oznacza, że serwer odbiorcy przyjął wiadomość; czy trafiła do skrzynki odbiorczej, czy do spamu, nie jest stąd widoczne. Dziennik serwera pocztowego obejmuje mniej więcej ostatni miesiąc.",
+          "noSends": "Brygge nie wysłało tej faktury e-mailem. Mogła zostać wysłana przez poprzedni system.",
+          "kind": {
+            "sent": "Pierwsza wysyłka",
+            "resent": "Wysłana ponownie",
+            "reminder": "Monit"
+          },
+          "status": {
+            "accepted": "Przyjęta przez serwer odbiorcy",
+            "deferred": "Opóźniona, ponowna próba",
+            "rejected": "Odrzucona",
+            "queued": "W kolejce, brak odpowiedzi",
+            "no_record": "Brak śladu doręczenia",
+            "pending": "Właśnie wysłana",
+            "beyond_retention": "Starsza niż dziennik",
+            "unavailable": "Dziennik niedostępny"
+          },
+          "statusHelp": {
+            "deferred": "Serwer odbiorcy poprosił o ponowną próbę później (np. greylisting). Serwer pocztowy ponawia sam.",
+            "rejected": "Serwer odbiorcy odrzucił wiadomość. Sprawdź adres i wyślij ponownie.",
+            "no_record": "Serwer pocztowy nie ma śladu tej wysyłki; wiadomość prawdopodobnie nigdy go nie opuściła. Wyślij fakturę ponownie i zgłoś, jeśli to się powtórzy.",
+            "pending": "Wysłana kilka minut temu; dziennik może jej jeszcze nie pokazywać.",
+            "beyond_retention": "Dziennik serwera pocztowego obejmuje tylko mniej więcej ostatni miesiąc.",
+            "unavailable": "Na tym serwerze nie można odczytać dziennika serwera pocztowego."
+          },
+          "nextRetry": "Następna próba {time}"
         },
         "lastReminder": "Ostatnie przypomnienie",
         "reissueKidSelected": "Nowy KID",

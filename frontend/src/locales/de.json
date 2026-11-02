@@ -1144,9 +1144,33 @@
         "subtitle": "Bereits per E-Mail an die Empfänger versendete Rechnungen. Versendete Rechnungen können nur storniert — nicht gelöscht — werden.",
         "deliveryLog": {
           "title": "Zustellungsprotokoll",
-          "empty": "Keine Zustellversuche im Stalwart-Log der letzten 60 Tage.",
           "noRecipient": "Diese Rechnung hat keine hinterlegte Empfänger-E-Mail.",
-          "helpText": "Zeigt, was Stalwart zuzustellen versucht hat und was der Mailserver des Empfängers geantwortet hat. 2xx = akzeptiert (kann beim Empfänger trotzdem im Spam landen); 4xx = vorübergehend; 5xx = abgelehnt."
+          "helpText": "Ein Eintrag pro E-Mail-Versand dieser Rechnung durch Brygge: was der Mailserver des Vereins damit gemacht hat und was der Mailserver des Empfängers geantwortet hat. „Angenommen“ heißt, dass der Server des Empfängers die E-Mail übernommen hat; ob sie im Posteingang oder im Spam landete, ist von hier aus nicht sichtbar. Das Mailserver-Protokoll umfasst etwa den letzten Monat.",
+          "noSends": "Brygge hat diese Rechnung nicht per E-Mail versendet. Sie wurde möglicherweise vom vorherigen System versendet.",
+          "kind": {
+            "sent": "Erstversand",
+            "resent": "Erneut gesendet",
+            "reminder": "Mahnung"
+          },
+          "status": {
+            "accepted": "Vom Empfängerserver angenommen",
+            "deferred": "Verzögert, wird wiederholt",
+            "rejected": "Abgelehnt",
+            "queued": "In Warteschlange, noch keine Antwort",
+            "no_record": "Kein Zustellnachweis",
+            "pending": "Gerade gesendet",
+            "beyond_retention": "Älter als das Mailprotokoll",
+            "unavailable": "Protokoll nicht verfügbar"
+          },
+          "statusHelp": {
+            "deferred": "Der Server des Empfängers bat um einen späteren Versuch (z. B. Greylisting). Der Mailserver wiederholt selbstständig.",
+            "rejected": "Der Server des Empfängers hat die E-Mail abgelehnt. Prüfen Sie die Adresse und senden Sie erneut.",
+            "no_record": "Der Mailserver hat keinen Eintrag zu diesem Versand; die E-Mail hat ihn wahrscheinlich nie verlassen. Senden Sie die Rechnung erneut und melden Sie es, falls es wieder passiert.",
+            "pending": "Vor wenigen Minuten gesendet; das Protokoll zeigt es eventuell noch nicht.",
+            "beyond_retention": "Das Mailserver-Protokoll umfasst nur etwa den letzten Monat.",
+            "unavailable": "Das Mailserver-Protokoll kann auf diesem Server nicht gelesen werden."
+          },
+          "nextRetry": "Nächster Versuch {time}"
         },
         "lastReminder": "Letzte Mahnung",
         "reissueKidSelected": "Neue KID",

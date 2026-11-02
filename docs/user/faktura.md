@@ -307,6 +307,25 @@ Every regenerate inserts the prior PDF bytes into `invoice_pdf_archive` inside t
 
 The audit log records every regenerate with the `prior_pdf_bytes` field so the trail confirms what was preserved.
 
+## Did the faktura reach the member?
+
+Open **Leveringslogg** (the envelope-with-magnifier icon in the row's actions on the Sent tab; it asks for your authenticator code). It lists every time Brygge emailed the faktura — the first send, each resend and each reminder — with what happened to it:
+
+| Status | Meaning | What to do |
+|---|---|---|
+| Accepted by recipient's server | The member's mail server took the mail. Whether it then went to the inbox or to spam can't be seen from the club's side. | Nothing. If the member can't find it, ask them to check spam. |
+| Delayed, will retry | The member's server asked to try later (greylisting is common the first time a sender writes). The club's mail server retries on its own; the next attempt time is shown. | Wait and check again later. |
+| Rejected | The member's server refused it (a 5xx answer, e.g. no such mailbox). A bounce also arrives in the bounce mailbox. | Check the address, correct it, and resend. |
+| Queued, no answer yet | Handed to the club's mail server, no delivery attempt finished yet. | Check again in a few minutes. |
+| No delivery record | Brygge recorded the send, but the club's mail server has no trace of it ten minutes later. The mail probably never left. | Resend, and report it — this is how earlier mail faults looked. |
+| Just sent | Sent in the last ten minutes; the log may not show it yet. | Check again shortly. |
+| Older than the mail log | The mail server's log covers about the last month. | — |
+| Log unavailable | This server can't read the mail server's log (or the read failed). | Report it. |
+
+Each send also lists the mail server's events (attempt started, the remote server's answer with its SMTP code, rescheduling) so a technical reader can see exactly what happened.
+
+The mail server's log names the address and the time, not the faktura, so each send is matched to the mail handed over within three minutes of it, to the faktura's current address. Two fakturas mailed to the same member in the same minute can therefore show each other's record (their outcomes are almost always the same), and sends made before the address was changed show as **No delivery record**.
+
 ## What can go wrong — and how to spot it
 
 ### "Email server returned 502 during bulk send"
@@ -318,12 +337,14 @@ The mail server briefly rejected the message. The faktura **stays as draft** (no
 A rare race where the email went out but the post-send DB stamp failed. Reconciliation:
 
 ```bash
-# On the mail server, find the actual sent-mail log for the time window
-ssh root@mail.<domain> -- \
-  'journalctl -u stalwart-mail --since "today 10:00" --no-pager | grep -i "to=<"'
+# On the mail server, list submissions to the member in the time window
+ssh root@<domain> -- \
+  'journalctl -u stalwart.service --since "today 10:00" --no-pager -o json \
+     "MESSAGE=Queued message submission for delivery" \
+   | jq -r "select((.TO // \"\") | test(\"member@example.org\"; \"i\")) | [(.__REALTIME_TIMESTAMP|tonumber/1000000|floor|todate), .QUEUEID] | @tsv"'
 ```
 
-If you see the member's address in the log but the faktura is still in Drafts, manually stamp it:
+If a submission to the member's address shows up but the faktura is still in Drafts, manually stamp it:
 
 ```sql
 UPDATE invoices SET sent_at = now() WHERE id = '<invoice-id>';

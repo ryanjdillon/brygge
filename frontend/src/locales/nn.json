@@ -785,9 +785,33 @@
         "reissueKidNoneEligible": "Ingen valde fakturaer er aktuelle — alle er allereie betalte.",
         "deliveryLog": {
           "title": "Leveringslogg",
-          "empty": "Ingen leveringsforsøk funne i Stalwart-loggen dei siste 60 dagane.",
           "noRecipient": "Fakturaen har ingen registrert mottakar-e-post.",
-          "helpText": "Syner kva Stalwart prøvde å levere og kva svar mottakaren sin e-postserver gav. 2xx = godteke (men kan likevel hamne i spam hos mottakaren); 4xx = forbigåande; 5xx = avvist."
+          "helpText": "Éi oppføring for kvar gong Brygge sende fakturaen på e-post: kva e-postserveren til klubben gjorde med han, og kva e-postserveren til mottakaren svara. «Motteken» tyder at serveren til mottakaren tok imot e-posten; om han hamna i innboksen eller i søppelpost, kan ikkje sjåast herifrå. Loggen frå e-postserveren dekkjer om lag den siste månaden.",
+          "noSends": "Brygge har ikkje sendt denne fakturaen på e-post. Han kan ha vorte sendt frå det førre systemet.",
+          "kind": {
+            "sent": "Første utsending",
+            "resent": "Sendt på nytt",
+            "reminder": "Purring"
+          },
+          "status": {
+            "accepted": "Motteken av serveren til mottakaren",
+            "deferred": "Forseinka, prøver igjen",
+            "rejected": "Avvist",
+            "queued": "I kø, ikkje svar enno",
+            "no_record": "Ingen leveringslogg",
+            "pending": "Nett sendt",
+            "beyond_retention": "Eldre enn e-postloggen",
+            "unavailable": "Loggen er utilgjengeleg"
+          },
+          "statusHelp": {
+            "deferred": "Serveren til mottakaren bad om eit nytt forsøk seinare (til dømes grålisting). E-postserveren prøver igjen av seg sjølv.",
+            "rejected": "Serveren til mottakaren avviste e-posten. Sjekk adressa og send på nytt.",
+            "no_record": "E-postserveren har ingen spor av denne utsendinga, så e-posten forlét han truleg aldri. Send fakturaen på nytt, og meld frå om det skjer igjen.",
+            "pending": "Sendt for nokre minutt sidan; loggen viser han kanskje ikkje enno.",
+            "beyond_retention": "Loggen frå e-postserveren dekkjer berre om lag den siste månaden.",
+            "unavailable": "Loggen frå e-postserveren kan ikkje lesast på denne serveren."
+          },
+          "nextRetry": "Neste forsøk {time}"
         },
         "lastReminder": "Sist purring"
       },
