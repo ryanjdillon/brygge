@@ -31,7 +31,7 @@ func newInstruments(meter metric.Meter) *instruments {
 	in := &instruments{}
 	var err error
 	if in.delivery, err = meter.Int64Counter("brygge.email.delivery",
-		metric.WithDescription("Delivery outcomes SES reported for app email, by kind, mapped status and recipient domain class"),
+		metric.WithDescription("Delivery outcomes SES reported for app email, by kind, mapped status, recipient domain class and SMTP status class"),
 		metric.WithUnit("{event}"),
 	); err != nil {
 		otel.Handle(err)
@@ -56,7 +56,7 @@ func newInstruments(meter metric.Meter) *instruments {
 		for _, k := range Kinds {
 			for _, s := range EventStatuses {
 				for _, d := range DomainClasses {
-					in.delivery.Add(ctx, 0, metric.WithAttributes(deliveryAttrs(k, s, d)...))
+					in.delivery.Add(ctx, 0, metric.WithAttributes(deliveryAttrs(k, s, d, smtpStatusNone)...))
 				}
 			}
 		}
@@ -71,11 +71,28 @@ func newInstruments(meter metric.Meter) *instruments {
 
 func defaultInstruments() *instruments { return newInstruments(otel.Meter("brygge-api")) }
 
-func deliveryAttrs(kind, result, domainClass string) []attribute.KeyValue {
+const smtpStatusNone = "none"
+
+// smtpStatusClass reduces an RFC 3463 enhanced status such as "5.1.1" to its
+// class and subject ("5.1"). An alert can then tell an unknown mailbox (5.1)
+// from a policy refusal (5.7) without the label's values growing past the
+// few dozen the RFC defines; the full code and diagnostic stay in
+// mail_delivery_events.
+func smtpStatusClass(status string) string {
+	if len(status) >= 3 && (status[0] == '2' || status[0] == '4' || status[0] == '5') &&
+		status[1] == '.' && status[2] >= '0' && status[2] <= '7' &&
+		(len(status) == 3 || status[3] == '.') {
+		return status[:3]
+	}
+	return smtpStatusNone
+}
+
+func deliveryAttrs(kind, result, domainClass, statusClass string) []attribute.KeyValue {
 	return []attribute.KeyValue{
 		attribute.String("kind", kind),
 		attribute.String("result", result),
 		attribute.String("recipient_domain_class", domainClass),
+		attribute.String("smtp_status_class", statusClass),
 	}
 }
 
@@ -88,7 +105,7 @@ func (in *instruments) recordReceived(ctx context.Context, eventType string) {
 func (in *instruments) recordDelivery(ctx context.Context, r Record) {
 	if in.delivery != nil {
 		in.delivery.Add(ctx, 1, metric.WithAttributes(
-			deliveryAttrs(r.Kind, r.Status, DomainClass(RecipientDomain(r.Recipient)))...))
+			deliveryAttrs(r.Kind, r.Status, DomainClass(RecipientDomain(r.Recipient)), smtpStatusClass(r.SMTPStatus))...))
 	}
 }
 

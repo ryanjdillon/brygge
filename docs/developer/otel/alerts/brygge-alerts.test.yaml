@@ -804,3 +804,129 @@ tests:
       - eval_time: 20m
         alertname: PaymentAttemptStuckAuthorized
         exp_alerts: []
+
+  # One suppressed invoice to a Gmail recipient pages, per kind, result and
+  # domain class; accepted deliveries don't. It resolves once the event is
+  # out of the hour.
+  - interval: 1m
+    input_series:
+      - series: 'brygge_email_delivery_total{job="example.invalid/brygge-api", kind="invoice", result="suppressed", recipient_domain_class="gmail", smtp_status_class="5.1"}'
+        values: '0x10 1x100'
+      - series: 'brygge_email_delivery_total{job="example.invalid/brygge-api", kind="invoice", result="accepted", recipient_domain_class="gmail", smtp_status_class="2.6"}'
+        values: '0+3x110'
+      - series: 'brygge_email_delivery_total{job="example.invalid/brygge-api", kind="magic_link", result="rejected", recipient_domain_class="other", smtp_status_class="none"}'
+        values: '0x110'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: SesDeliveryFailed
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: SesDeliveryFailed
+        exp_alerts:
+          - exp_labels:
+              kind: invoice
+              result: suppressed
+              recipient_domain_class: gmail
+              smtp_status_class: "5.1"
+              service_namespace: example.invalid
+              club: example
+              severity: page
+            exp_annotations:
+              summary: "example.invalid: invoice mail suppressed by Amazon SES (gmail recipient, SMTP 5.1)"
+              description: "Amazon SES reported 1 invoice message(s) as suppressed in the last hour (recipient domain class gmail, SMTP status class 5.1). Exact recipient domain, SMTP status and diagnostic: just prod-query \"SELECT e.event_at, s.kind, e.event_type, e.bounce_type, e.bounce_subtype, e.recipient_domain, e.smtp_status, e.diagnostic, e.remote_mta, s.related_type, s.related_id, s.user_id FROM mail_delivery_events e LEFT JOIN email_sends s ON s.id = e.send_id WHERE e.event_type IN ('bounce', 'complaint', 'reject', 'rendering_failure') AND e.received_at > now() - interval '24 hours' ORDER BY e.event_at DESC LIMIT 20\""
+              runbook_url: "https://example.invalid/runbook#sesdeliveryfailed"
+      - eval_time: 80m
+        alertname: SesDeliveryFailed
+        exp_alerts: []
+
+  # A complaint pages too.
+  - interval: 1m
+    input_series:
+      - series: 'brygge_email_delivery_total{job="example.invalid/brygge-api", kind="invoice_reminder", result="complaint", recipient_domain_class="outlook", smtp_status_class="none"}'
+        values: '0x10 1x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: SesDeliveryFailed
+        exp_alerts:
+          - exp_labels:
+              kind: invoice_reminder
+              result: complaint
+              recipient_domain_class: outlook
+              smtp_status_class: none
+              service_namespace: example.invalid
+              club: example
+              severity: page
+            exp_annotations:
+              summary: "example.invalid: invoice_reminder mail complaint by Amazon SES (outlook recipient, SMTP none)"
+              description: "Amazon SES reported 1 invoice_reminder message(s) as complaint in the last hour (recipient domain class outlook, SMTP status class none). Exact recipient domain, SMTP status and diagnostic: just prod-query \"SELECT e.event_at, s.kind, e.event_type, e.bounce_type, e.bounce_subtype, e.recipient_domain, e.smtp_status, e.diagnostic, e.remote_mta, s.related_type, s.related_id, s.user_id FROM mail_delivery_events e LEFT JOIN email_sends s ON s.id = e.send_id WHERE e.event_type IN ('bounce', 'complaint', 'reject', 'rendering_failure') AND e.received_at > now() - interval '24 hours' ORDER BY e.event_at DESC LIMIT 20\""
+              runbook_url: "https://example.invalid/runbook#sesdeliveryfailed"
+
+  # Five SES sends at minute 11 and no event off the queue: quiet while the
+  # sends are inside the 15-minute grace, firing once they are past it.
+  # Stalwart sends never count.
+  - interval: 1m
+    input_series:
+      - series: 'brygge_email_send_total{job="example.invalid/brygge-api", kind="invoice", provider="ses", result="ok"}'
+        values: '0x10 5x60'
+      - series: 'brygge_email_send_total{job="example.invalid/brygge-api", kind="magic_link", provider="stalwart", result="ok"}'
+        values: '0+1x70'
+      - series: 'brygge_ses_events_received_total{job="example.invalid/brygge-api", event_type="send"}'
+        values: '0x70'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: SesEventsMissing
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: SesEventsMissing
+        exp_alerts:
+          - exp_labels:
+              service_namespace: example.invalid
+              club: example
+              severity: warn
+            exp_annotations:
+              summary: "example.invalid: SES sends but no delivery events"
+              description: "The API handed about 5 message(s) to Amazon SES in the two hours before the last 15 minutes, and the SES events worker took no event off its queue in that time. Bounces and complaints are not being recorded and SesDeliveryFailed can't fire."
+              runbook_url: "https://example.invalid/runbook#seseventsmissing"
+
+  # The same sends with their Send events arriving a minute later: quiet.
+  - interval: 1m
+    input_series:
+      - series: 'brygge_email_send_total{job="example.invalid/brygge-api", kind="invoice", provider="ses", result="ok"}'
+        values: '0x10 5x60'
+      - series: 'brygge_ses_events_received_total{job="example.invalid/brygge-api", event_type="send"}'
+        values: '0x11 5x60'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: SesEventsMissing
+        exp_alerts: []
+
+  # A club that only sends through Stalwart has no SES traffic: quiet.
+  - interval: 1m
+    input_series:
+      - series: 'brygge_email_send_total{job="example.invalid/brygge-api", kind="invoice", provider="stalwart", result="ok"}'
+        values: '0+1x70'
+    alert_rule_test:
+      - eval_time: 60m
+        alertname: SesEventsMissing
+        exp_alerts: []
+
+  # Two messages reach the DLQ at minute 6: firing after `for: 15m`.
+  - interval: 1m
+    input_series:
+      - series: 'brygge_ses_dlq_messages{job="example.invalid/brygge-api"}'
+        values: '0x5 2x40'
+    alert_rule_test:
+      - eval_time: 18m
+        alertname: SesDlqNotEmpty
+        exp_alerts: []
+      - eval_time: 25m
+        alertname: SesDlqNotEmpty
+        exp_alerts:
+          - exp_labels:
+              service_namespace: example.invalid
+              club: example
+              severity: warn
+            exp_annotations:
+              summary: "example.invalid: 2 SES event(s) in the dead-letter queue"
+              description: "The SES events dead-letter queue has held 2 message(s) for 15 minutes. Those delivery events failed five times and are not recorded; they are deleted 14 days after they were first sent."
+              runbook_url: "https://example.invalid/runbook#sesdlqnotempty"
