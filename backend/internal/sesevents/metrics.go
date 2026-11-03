@@ -49,8 +49,11 @@ func newInstruments(meter metric.Meter) *instruments {
 		otel.Handle(err)
 	}
 
-	// Pre-create every series at 0 so the first bounce or complaint is a
-	// visible increase rather than a series that appears from nothing.
+	// Pre-create series at 0 so the first bounce or complaint is a visible
+	// increase rather than a series that appears from nothing. Only the
+	// smtp_status_class "none" series are created: every class would multiply
+	// the set by 25, so a classed series starts at its first event and
+	// SesDeliveryFailed reads a series younger than its window by value.
 	ctx := context.Background()
 	if in.delivery != nil {
 		for _, k := range Kinds {
