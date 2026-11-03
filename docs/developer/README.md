@@ -60,6 +60,7 @@ Backend internals carry their own `README.md` next to the source — load when y
 - [`backend/internal/accounting/README.md`](../../backend/internal/accounting/README.md) — Vipps cascade, KID matching, GL constants
 - [`backend/internal/handlers/README.md`](../../backend/internal/handlers/README.md) — handler struct convention, response shapes, audit pattern, TOTP gating
 - [`backend/internal/email/README.md`](../../backend/internal/email/README.md) — template pattern, `formatNOK`, locale detection
+- [`backend/internal/sesevents/README.md`](../../backend/internal/sesevents/README.md) — SES delivery-event worker: SQS long poll, idempotent insert, status rank, DLQ, retention
 - [`backend/internal/middleware/README.md`](../../backend/internal/middleware/README.md) — middleware ordering, TOTP gating flavors, browser-navigation detection
 - [`backend/internal/finance/README.md`](../../backend/internal/finance/README.md) — invoice data contract, KID generation, Norwegian formatting
 

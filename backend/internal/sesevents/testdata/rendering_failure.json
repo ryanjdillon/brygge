@@ -1,0 +1,38 @@
+{
+  "eventType": "Rendering Failure",
+  "mail": {
+    "timestamp": "2026-11-03T10:00:00.123Z",
+    "source": "Example Club <post@example.com>",
+    "sourceArn": "arn:aws:ses:eu-north-1:123456789012:identity/example.com",
+    "sendingAccountId": "123456789012",
+    "messageId": "0100018b2f3c4d5e-6f7a8b9c-0d1e-2f3a-4b5c-6d7e8f9a0b1c-000000",
+    "destination": [
+      "member@example.net"
+    ],
+    "headersTruncated": false,
+    "tags": {
+      "ses:configuration-set": [
+        "brygge-example"
+      ],
+      "ses:source-ip": [
+        "192.0.2.0"
+      ],
+      "ses:from-domain": [
+        "example.com"
+      ],
+      "ses:caller-identity": [
+        "brygge-example-app"
+      ],
+      "kind": [
+        "invoice"
+      ],
+      "send_id": [
+        "3f1c2a9e-7b4d-4e2a-9c61-0d5b8e7f1a23"
+      ]
+    }
+  },
+  "failure": {
+    "errorMessage": "Attribute 'attributeName' is not present in the rendering data.",
+    "templateName": "MyTemplate"
+  }
+}

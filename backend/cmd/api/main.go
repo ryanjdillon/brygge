@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"time"
 
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -34,6 +36,7 @@ import (
 	oa "github.com/brygge-klubb/brygge/internal/openapi"
 	"github.com/brygge-klubb/brygge/internal/passkey"
 	"github.com/brygge-klubb/brygge/internal/payments"
+	"github.com/brygge-klubb/brygge/internal/sesevents"
 	"github.com/brygge-klubb/brygge/internal/storage"
 	"github.com/brygge-klubb/brygge/internal/stripe"
 	"github.com/brygge-klubb/brygge/internal/telemetry"
@@ -1536,6 +1539,27 @@ func main() {
 		go deliveryWorker.Run(ctx, time.Minute)
 	}
 
+	// Amazon SES delivery events (BRY-588): long-polls the configuration
+	// set's SQS queue and records each event against its email_sends row.
+	// AWS credentials come from the SDK's default chain (AWS_ACCESS_KEY_ID /
+	// AWS_SECRET_ACCESS_KEY in the environment).
+	sesStore := sesevents.NewStore(db)
+	switch {
+	case cfg.SESEventsQueueName == "":
+		log.Info().Msg("SES events worker disabled (SES_EVENTS_QUEUE_NAME not set)")
+	case cfg.SESRegion == "":
+		log.Error().Msg("SES events worker not started: SES_EVENTS_QUEUE_NAME is set but SES_REGION is empty")
+	default:
+		awsCfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(cfg.SESRegion))
+		if err != nil {
+			log.Error().Err(err).Msg("SES events worker not started: AWS config failed")
+		} else {
+			w := sesevents.NewWorker(sqs.NewFromConfig(awsCfg), sesStore,
+				cfg.SESEventsQueueName, cfg.SESEventsDLQName, log)
+			go w.Run(ctx)
+		}
+	}
+
 	// Hourly background sweep of expired sessions. Cookies expire on the
 	// client after 30 days; the row stays until something deletes it,
 	// which would otherwise grow unbounded.
@@ -1584,6 +1608,14 @@ func main() {
 				log.Warn().Err(err).Msg("recipient PII purge failed")
 			} else if n > 0 {
 				log.Info().Int64("recipients", n).Msg("purged PII of past-retention billing recipients")
+			}
+			// Outgoing-mail history holds recipient addresses; kept 13
+			// months whether or not the SES worker runs, since the sender
+			// records Stalwart sends in the same table.
+			if sends, events, err := sesStore.PurgeExpired(ctx); err != nil {
+				log.Warn().Err(err).Msg("email send history purge failed")
+			} else if sends > 0 || events > 0 {
+				log.Info().Int64("sends", sends).Int64("events", events).Msg("purged past-retention email send history")
 			}
 			select {
 			case <-ctx.Done():
