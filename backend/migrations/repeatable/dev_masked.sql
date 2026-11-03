@@ -178,6 +178,48 @@ SELECT
     received_at
 FROM public.payment_webhook_events;
 
+-- Outgoing email and its SES delivery events (BRY-588). Addresses are
+-- NULL; recipient_domain and remote_mta stay, since "which provider refuses
+-- us" is the diagnosis. SMTP diagnostics and send errors often quote the
+-- address ("550 5.1.1 <x@y>: user unknown"), so every address-like token in
+-- them is replaced. raw is NULL: the SES event repeats the address in
+-- mail.destination, the headers and every *Recipients list, and the subject
+-- can name a member; the parts worth reading come out as raw_* columns.
+CREATE VIEW dev_masked.email_sends AS
+SELECT
+    id, club_id, user_id, kind,
+    NULL::text AS recipient,
+    recipient_domain,                     -- domain only, for provider diagnosis
+    related_type, related_id, provider, status, ses_message_id,
+    regexp_replace(error, '[^][:space:]<>()",;:''@]+@[^][:space:]<>()",;:''@]+', '[email]', 'g') AS error,
+    created_at, updated_at, last_event_at
+FROM public.email_sends;
+
+CREATE VIEW dev_masked.mail_delivery_events AS
+SELECT
+    id, send_id, ses_message_id, event_type, event_at,
+    NULL::text AS recipient,
+    recipient_domain,
+    bounce_type, bounce_subtype, delay_type, smtp_status,
+    regexp_replace(diagnostic, '[^][:space:]<>()",;:''@]+@[^][:space:]<>()",;:''@]+', '[email]', 'g') AS diagnostic,
+    remote_mta,                           -- the receiving provider's MX host
+    NULL::jsonb AS raw,
+    received_at,
+    (recipient IS NOT NULL) AS has_recipient,
+    raw->'mail'->'tags' AS raw_tags,      -- SES's own tags plus send_id / kind
+    jsonb_array_length(CASE WHEN jsonb_typeof(raw->'mail'->'destination') = 'array'
+                            THEN raw->'mail'->'destination' END) AS raw_destination_count,
+    coalesce(raw->'bounce'->>'reportingMTA', raw->'delivery'->>'reportingMTA',
+             raw->'deliveryDelay'->>'reportingMTA') AS raw_reporting_mta,
+    coalesce(raw->'bounce'->>'feedbackId', raw->'complaint'->>'feedbackId') AS raw_feedback_id,
+    CASE WHEN jsonb_typeof(raw->'delivery'->'processingTimeMillis') = 'number'
+         THEN (raw->'delivery'->>'processingTimeMillis')::numeric END AS raw_processing_ms,
+    raw->'deliveryDelay'->>'expirationTime' AS raw_delay_expires,
+    raw->'complaint'->>'complaintFeedbackType' AS raw_complaint_type,
+    raw->'reject'->>'reason' AS raw_reject_reason,
+    regexp_replace(raw->'failure'->>'errorMessage', '[^][:space:]<>()",;:''@]+@[^][:space:]<>()",;:''@]+', '[email]', 'g') AS raw_failure_message
+FROM public.mail_delivery_events;
+
 CREATE VIEW dev_masked.payment_refunds AS
 SELECT
     id, club_id, attempt_id, provider, amount, currency, provider_refund_id,

@@ -20,6 +20,31 @@ const legacyAnonymizedEmail = "deleted@deleted"
 // it, which is what makes erasure idempotent.
 const ErasedEmailSuffix = "@deleted.local"
 
+// DeleteMemberMailLog deletes a member's outgoing-mail log: email_sends rows
+// that name the member or went to their current address in their club (their
+// delivery events cascade), and SES delivery events that matched no send but
+// carry that address. Recipient addresses are personal data and the log has no
+// retention obligation, so every path that erases a member's identity calls
+// this, in its transaction and before the address is overwritten.
+func DeleteMemberMailLog(ctx context.Context, db audit.Execer, userID string) error {
+	if _, err := db.Exec(ctx,
+		`DELETE FROM email_sends s USING users u
+		  WHERE u.id = $1 AND s.club_id = u.club_id
+		    AND (s.user_id = u.id OR lower(s.recipient) = lower(u.email))`,
+		userID,
+	); err != nil {
+		return fmt.Errorf("delete member email sends: %w", err)
+	}
+	if _, err := db.Exec(ctx,
+		`DELETE FROM mail_delivery_events e USING users u
+		  WHERE u.id = $1 AND e.send_id IS NULL AND lower(e.recipient) = lower(u.email)`,
+		userID,
+	); err != nil {
+		return fmt.Errorf("delete member mail events: %w", err)
+	}
+	return nil
+}
+
 // PurgeExpiredMemberPII anonymizes the PII of deactivated members whose
 // financial records have all cleared the retention window (BRY-207). It never
 // deletes the user row — invoices reference it (no ON DELETE cascade) and keep
@@ -170,6 +195,12 @@ func (s *Service) purgeOneMember(ctx context.Context, userID, clubID string) (bo
 		return false, err
 	}
 	defer tx.Rollback(ctx)
+
+	// Before the update overwrites the address it matches on. An ineligible
+	// member returns below without committing, so this rolls back with it.
+	if err := DeleteMemberMailLog(ctx, tx, userID); err != nil {
+		return false, err
+	}
 
 	tag, err := tx.Exec(ctx,
 		`UPDATE users SET email = gen_random_uuid()::text || $1,

@@ -286,6 +286,37 @@ credit   recollect   refail_invoice
 
 What a booked refund did to one faktura (or one order with no faktura, `invoice_id` NULL): `credit` issued the credit note in `credit_invoice_id`; `recollect` reopened the faktura and detached it from `detached_order_id`; `refail_invoice` (on a refund_failure row) issued the debit faktura in `credit_invoice_id` for the money that came back. `amount_ore` is the part of the refund (or failure) on that faktura.
 
+### `email_sends.status` (CHECK since migration 000130)
+
+```
+sending   submitted   failed   unknown
+queued   deferred   accepted   rejected_temporary   rejected   suppressed   complaint
+```
+
+The first row is set by the sender before SES has reported anything (`failed`: the submission itself failed, `unknown`: its outcome is unknown). The second is mapped from SES delivery events and only moves up in rank, so a late event never regresses it: `queued` (send, rank 1) → `deferred` (delivery_delay, 2) → `accepted` (delivery, 3) or `rejected_temporary` (transient bounce, 3) → `suppressed` (permanent bounce of subtype `OnAccountSuppressionList`, 4), `rejected` (other permanent bounce, reject, rendering failure, 4) → `complaint` (5). The pre-event values rank 0.
+
+### `email_sends.provider` (CHECK since migration 000130)
+
+```
+ses   stalwart
+```
+
+### `email_sends.kind` (migration 000130, no CHECK)
+
+```
+magic_link   invoice   invoice_reminder   credit_note   dispute   contact   other
+```
+
+The `email.Kind` the sender passes; the vocabulary grows with it. `related_type` (also no CHECK) names the row a send is about, e.g. `invoice`.
+
+### `mail_delivery_events.event_type` (CHECK since migration 000130)
+
+```
+send   delivery   delivery_delay   bounce   complaint   reject   rendering_failure
+```
+
+SES's `eventType` in snake case. `bounce_type` / `bounce_subtype` / `delay_type` keep SES's own values (`Permanent`, `Transient`, `Undetermined`; `General`, `NoEmail`, `Suppressed`, `OnAccountSuppressionList`, …; `MailboxFull`, `TransientCommunicationFailure`, …) and have no CHECK.
+
 ### `deliveries.kind`
 
 ```

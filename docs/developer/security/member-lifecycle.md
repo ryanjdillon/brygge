@@ -52,7 +52,8 @@ a token back. `devtoken.Authenticate` still refuses a token whose minter is
 deactivated or no longer holds the admin role; that is the backstop for paths
 that do not revoke (direct SQL, a future role writer).
 
-`HandleDeleteUser` runs the same lock-out step, then anonymises the row. Its
+`HandleDeleteUser` runs the same lock-out step, deletes the member's mail log
+(see [GDPR deletion requests](#gdpr-deletion-requests)), then anonymises the row. Its
 `delete_user` audit row records only `sessions_revoked`; the member is named by
 `resource_id`. The refusal to delete your own account and the admin guards
 happen before anything is revoked. `HandleDeleteUser`, `HandleDeactivateUser`
@@ -173,7 +174,9 @@ identity at issue"*.
 
 A member-initiated deletion request (My page → Privacy) still runs after its
 14-day cooling-off window, but reconciles with retention: data with no bookkeeping
-obligation (push subscriptions, notification preferences, consents) is wiped
+obligation (push subscriptions, notification preferences, consents, and the
+mail log: `email_sends` rows naming the member or sent to their address in the
+club, and SES events that matched no send but carry that address) is wiped
 immediately, while identity erasure is **deferred** when retention still
 applies, so the purge finishes the erasure once it clears. Either way the member
 is locked out in the same transaction (`revokeMemberAccess`): the account is
