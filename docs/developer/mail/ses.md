@@ -30,7 +30,7 @@ from `clubConfig.slug` without reading Terraform outputs.
 | `aws_sqs_queue` (DLQ) | `brygge-<slug>-ses-events-dlq` | Messages the worker fails to process five times. Kept 14 days (the SQS maximum) for inspection and redrive. |
 | `aws_sqs_queue_policy` | — | Lets only this SNS topic send to the queue. |
 | `aws_sns_topic_subscription` | — | SNS → SQS with raw message delivery, so the SQS body is the SES event JSON without the SNS envelope. ([SNS to SQS](https://docs.aws.amazon.com/sns/latest/dg/sns-sqs-as-subscriber.html)) |
-| `aws_iam_user` + inline policy | `brygge-<slug>-app` | Brygge's runtime principal: `ses:SendRawEmail` on the identity and configuration set (what the SMTP interface authorises against), receive/delete/visibility/attribute calls on the queue and DLQ, and get/delete on the account suppression list (no resource ARN exists for those, so `*`). |
+| `aws_iam_user` + inline policy | `brygge-<slug>-app` | Brygge's runtime principal: `ses:SendRawEmail` on the identity and configuration set (what the SMTP interface authorises against), `GetQueueUrl`/`ReceiveMessage`/`DeleteMessage` on the queue, only `GetQueueUrl`/`GetQueueAttributes` on the DLQ (the worker reads its depth; redrive is an operator task), and get/delete on the account suppression list (no resource ARN exists for those, so `*`). |
 
 The app user's **access key is not managed by Terraform.** An
 `aws_iam_access_key` resource would put the secret in plaintext in the remote
@@ -58,9 +58,17 @@ Published by [`terraform/dns.nix`](../../../terraform/dns.nix) when
 
 | Type | Name | Value |
 |------|------|-------|
-| CNAME ×3 | `<token>._domainkey` | `<token>.dkim.amazonses.com.` (tokens from the identity) |
+| CNAME ×3 | `<token>._domainkey` | `<token>.<dkim zone>.` (tokens from the identity; zone below) |
 | MX | `send` | `10 feedback-smtp.<aws_region>.amazonses.com.` |
 | TXT | `send` | `"v=spf1 include:amazonses.com ~all"` |
+
+The DKIM zone is the identity's `SigningHostedZone`, which the aws provider
+does not export. `ses.nix` derives it from AWS's
+[per-region DKIM domain table](https://docs.aws.amazon.com/general/latest/gr/ses.html#ses_dkim_domains):
+`dkim.amazonses.com` for eu-north-1 and most regions, `dkim.<region>.amazonses.com`
+for the listed newer ones. AWS notes the zone can differ per identity, so after
+the first apply compare the CNAME targets with the SES console (identity →
+Authentication → DNS records) or `aws sesv2 get-email-identity` (step 7 below).
 
 Untouched: the apex MX (inbound stays on Stalwart), the apex SPF
 (`v=spf1 mx -all`; SES mail authenticates SPF on `send.`, not the apex) and
@@ -116,7 +124,7 @@ Untouched: the apex MX (inbound stays on Stalwart), the apex SPF
 
    ```sh
    aws sesv2 get-email-identity --email-identity <domain> --region eu-north-1 \
-     --query '{dkim:DkimAttributes.Status,mailFrom:MailFromAttributes.MailFromDomainStatus}'
+     --query '{dkim:DkimAttributes.Status,dkimZone:DkimAttributes.SigningHostedZone,mailFrom:MailFromAttributes.MailFromDomainStatus}'
    ```
 8. **Request production access.** New accounts start in the sandbox: only
    verified recipients, 200 messages per 24 hours, 1 message per second

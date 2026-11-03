@@ -104,7 +104,7 @@
       name    = "\${element(aws_sesv2_email_identity.domain[0].dkim_signing_attributes[0].tokens, count.index)}._domainkey";
       type    = "CNAME";
       ttl     = 300;
-      records = [{ value = "\${element(aws_sesv2_email_identity.domain[0].dkim_signing_attributes[0].tokens, count.index)}.dkim.amazonses.com."; }];
+      records = [{ value = "\${element(aws_sesv2_email_identity.domain[0].dkim_signing_attributes[0].tokens, count.index)}.\${local.ses_dkim_zone}."; }];
     };
     ses_mail_from_mx = {
       count   = "\${var.ses_enabled ? 1 : 0}";
