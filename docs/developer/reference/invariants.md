@@ -849,6 +849,30 @@ A new group is created just before the faktura built-in and the positions are re
 
 **Failure mode:** an erased member's address stays queryable in the delivery log (and in the developer query role, if unmasked) long after GDPR erasure, or forever without the retention sweep.
 
+### An app send is logged before the relay sees it
+
+**Rule (BRY-589, [MAIL-3](../../adr/mail.md#mail-3-app-mail-goes-through-amazon-ses-stalwart-keeps-inbound-and-the-club-mailboxes)):** `email.Record` writes the `email_sends` row (status `sending`, a fresh `id` that becomes the `send_id` message tag) before the SMTP client dials, and sets `submitted`, `failed` or `unknown` after. Every app sender is wrapped in it. See [backend/internal/email/README.md](../../../backend/internal/email/README.md).
+
+**Failure mode:** a row written after DATA is lost when the process dies in between: SES has the message and publishes its events, but they can only be stored unlinked, and the Leveringslogg shows the faktura as never sent.
+
+### An ambiguous send is never retried automatically
+
+**Rule (BRY-589, MAIL-3):** an error while writing the message body or at the close of DATA wraps `email.ErrDeliveryAmbiguous` and is recorded `unknown`. No caller (reminder worker, delivery queue, magic-link fallback) retries an error that `errors.Is` it; only a person resends, after checking.
+
+**Failure mode:** SES's SMTP interface has no idempotency key, so the relay may already have accepted the message: an automatic retry sends the member the faktura or reminder twice.
+
+### A send's delivery status only moves forward
+
+**Rule (BRY-588):** the SES events worker moves `email_sends.status` to an event's status only when its rank is `>=` the current one (`sesevents.ShouldAdvance`), with the row locked `FOR UPDATE`; a redelivered event inserts nothing and changes nothing. See [sesevents README § Ordering and the rank rule](../../../backend/internal/sesevents/README.md#ordering-and-the-rank-rule).
+
+**Failure mode:** SNS → SQS has no ordering, so a late `Send` event would turn a bounced or delivered faktura back into `queued`, hiding the bounce from the board.
+
+### A delivery event the worker can't store goes to the DLQ, never away
+
+**Rule (BRY-588):** the worker deletes an SQS message only after its transaction commits. An unparseable body or a failed write is left on the queue, and after five receives SQS moves it to the dead-letter queue (14 days), which raises `SesDlqNotEmpty` and is redriven by a person. See [sesevents README § Failures and the DLQ](../../../backend/internal/sesevents/README.md#failures-and-the-dlq) and [alerts runbook § SesDlqNotEmpty](../otel/alerts-runbook.md#sesdlqnotempty).
+
+**Failure mode:** deleting on failure, or acknowledging before commit, silently drops a bounce or complaint: the faktura shows as delivered and the suppressed address keeps getting mail.
+
 ## Developer DB query (DIL-365)
 
 ### Query role is default-deny: masked views + a non-PII allowlist

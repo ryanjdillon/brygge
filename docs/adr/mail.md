@@ -17,3 +17,26 @@ See [README.md](README.md) for the format. How the mail stack is set up and oper
 - **Status:** accepted · 2026-10-30 · BRY-502
 - **Decision:** `DmarcDkimFailing` pages on a single DKIM failure in an aggregate report, with no count threshold and no lower severity for one failure.
 - **Why:** mail to members (invoices, login links, reminders) depends on DKIM passing, and a failure is rare enough that a page is worth the noise. A report covers a past day, so an alert can fire long after the cause is fixed. The runbook says how to tell (the report's date range).
+
+### MAIL-3: App mail goes through Amazon SES; Stalwart keeps inbound and the club mailboxes
+
+- **Status:** accepted · 2026-11-03 · BRY-583 (spec), BRY-587, BRY-588, BRY-589, BRY-590, BRY-591, BRY-592
+- **Decision:**
+  - The app's own mail (magic links, fakturas, reminders, credit notes, dispute and contact mail) is sent through Amazon SES in `eu-north-1`, in the owner's AWS account, over SES's SMTP interface with the existing SMTP client. Each send carries the club's configuration set and `send_id` / `kind` message tags. It is switched per club (`ses_sending`), separately from provisioning the AWS resources (`ses_enabled`), so DNS can verify before the cutover.
+  - Delivery events go SES configuration set → SNS → SQS (with a dead-letter queue) and are long-polled by a worker in the API. There is no public webhook.
+  - Stalwart keeps inbound mail and the club mailboxes. Reply-To stays a club address the board reads, so replies to app mail land where the board works.
+  - A magic link whose SES send fails unambiguously is sent again through Stalwart's SMTP relay, so members can still log in while SES is down.
+  - Lettermint is the named fallback provider if SES has to be replaced.
+  - A send whose outcome is ambiguous (the connection failed while the body was written or at the end of DATA) is recorded `unknown` and never retried automatically: SES's SMTP interface has no idempotency key, so a retry can send the message twice.
+- **Why:** sending from the club host's own IP left deliverability to the reputation of one small server: Yahoo refused app mail with a 554 (BRY-586), and the only delivery signal was scraping Stalwart's journal (BRY-581). SES carries a shared, managed sending reputation, reports every outcome as a structured event, and keeps the data in the EU. Turned down:
+  - **Resend:** the free tier's 100 mails a day is less than one faktura run, and data is processed in the US.
+  - **Brevo:** click tracking can't be turned off, so links in fakturas and login mail would be rewritten through its tracker.
+  - **Scaleway Transactional Email:** the 2 MB API message cap is too small for fakturas with PDF attachments.
+  - **Lettermint:** a good fit, but about €10 a month against SES's per-message price at a club's volume; kept as the fallback.
+  - **Staying on Stalwart direct:** the IP-reputation burden stays with the club host (the Yahoo 554, BRY-586), and monitoring needs journal scraping.
+- **Consequences:**
+  - Every send writes its `email_sends` row before the SMTP `DATA`, so a crash mid-send still leaves a record; event statuses only move forward by rank; undeliverable events go to the DLQ for a person. See [invariants § Mail](../developer/reference/invariants.md#mail) and [sesevents README](../../backend/internal/sesevents/README.md).
+  - Bounces, suppressions, complaints and rejects page with the query that names the recipient domain, SMTP status and diagnostic ([alerts runbook § SesDeliveryFailed](../developer/otel/alerts-runbook.md#sesdeliveryfailed)); the Stalwart bounce alert stays for mail that still goes through Stalwart.
+  - SES's account-level suppression list is authoritative: a suppressed address gets no mail until it is removed, which the board does from the app (BRY-590).
+  - Stalwart relaying through SES (BRY-591) and retiring Stalwart (BRY-592) are separate decisions.
+  - Setup and operation: [developer/mail/ses.md](../developer/mail/ses.md).
