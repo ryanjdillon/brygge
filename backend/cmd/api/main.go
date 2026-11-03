@@ -13,6 +13,7 @@ import (
 	"time"
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
@@ -1550,7 +1551,10 @@ func main() {
 	case cfg.SESRegion == "":
 		log.Error().Msg("SES events worker not started: SES_EVENTS_QUEUE_NAME is set but SES_REGION is empty")
 	default:
-		awsCfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(cfg.SESRegion))
+		// IMDS off: the host is not on EC2, and a missing key should fail
+		// fast rather than probe a link-local metadata endpoint.
+		awsCfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(cfg.SESRegion),
+			awsconfig.WithEC2IMDSClientEnableState(imds.ClientDisabled))
 		if err != nil {
 			log.Error().Err(err).Msg("SES events worker not started: AWS config failed")
 		} else {

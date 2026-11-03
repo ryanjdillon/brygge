@@ -23,9 +23,12 @@ type SQSAPI interface {
 
 // EventStore persists parsed records; *Store is the production
 // implementation. Apply returns the records that were new (not
-// redeliveries) and must be atomic: on error nothing is stored.
+// redeliveries) and must be atomic: on error nothing is stored. Ping
+// reports whether the store is reachable at all, which separates an outage
+// from a single event the store rejects.
 type EventStore interface {
 	Apply(ctx context.Context, recs []Record) ([]Record, error)
+	Ping(ctx context.Context) error
 }
 
 // Long-poll settings. 20 s is the SQS maximum wait and makes an idle queue
@@ -105,10 +108,35 @@ func (w *Worker) Run(ctx context.Context) {
 		}
 		backoff = w.MinBackoff
 		for _, m := range out.Messages {
-			w.handle(ctx, m)
+			if !w.handle(ctx, m) {
+				// The rest of the batch would fail the same way; leave it
+				// to reappear after the visibility timeout.
+				w.waitForStore(ctx)
+				break
+			}
 		}
 	}
 	w.log.Info().Msg("SES events worker stopped")
+}
+
+// waitForStore blocks until the store answers a ping. Every receive
+// counts towards the queue's maxReceiveCount, so polling on through a
+// database outage would move healthy events to the DLQ within a few
+// visibility timeouts; not receiving until the store is back keeps them on
+// the main queue (4-day retention) instead.
+func (w *Worker) waitForStore(ctx context.Context) {
+	backoff := w.MinBackoff
+	for ctx.Err() == nil {
+		if err := w.store.Ping(ctx); err == nil {
+			return
+		} else if ctx.Err() == nil {
+			w.log.Warn().Err(err).Dur("retry_in", backoff).Msg("SES events store unreachable; pausing receives")
+		}
+		if !sleep(ctx, backoff) {
+			return
+		}
+		backoff = nextBackoff(backoff, w.MaxBackoff)
+	}
 }
 
 // handle processes one message and deletes it only once its records are
@@ -116,7 +144,10 @@ func (w *Worker) Run(ctx context.Context) {
 // timeout; after maxReceiveCount receives SQS moves it to the DLQ, which
 // is how a poison message stops blocking without being lost.
 // https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html
-func (w *Worker) handle(ctx context.Context, m types.Message) {
+//
+// It returns false only when the store failed, so the caller can check
+// whether the store is down before receiving more.
+func (w *Worker) handle(ctx context.Context, m types.Message) bool {
 	log := w.log.With().Str("sqs_message_id", aws.ToString(m.MessageId)).
 		Str("receive_count", m.Attributes[string(types.MessageSystemAttributeNameApproximateReceiveCount)]).
 		Logger()
@@ -127,11 +158,11 @@ func (w *Worker) handle(ctx context.Context, m types.Message) {
 		w.metrics.recordReceived(ctx, eventTypeIgnored)
 		log.Debug().Err(err).Msg("SES event skipped")
 		w.delete(ctx, m, log)
-		return
+		return true
 	case err != nil:
 		w.metrics.recordReceived(ctx, eventTypeInvalid)
 		log.Warn().Err(err).Msg("SES event unparseable; leaving it for the dead-letter queue")
-		return
+		return true
 	}
 	w.metrics.recordReceived(ctx, recs[0].EventType)
 
@@ -141,12 +172,13 @@ func (w *Worker) handle(ctx context.Context, m types.Message) {
 			log.Warn().Err(err).Str("ses_message_id", recs[0].SESMessageID).
 				Msg("SES event not stored; it will be redelivered")
 		}
-		return
+		return false
 	}
 	for _, r := range inserted {
 		w.metrics.recordDelivery(ctx, r)
 	}
 	w.delete(ctx, m, log)
+	return true
 }
 
 // delete removes a handled message. A failed delete is harmless: the

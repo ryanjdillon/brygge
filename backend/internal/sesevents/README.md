@@ -9,7 +9,7 @@ Consumes the delivery events Amazon SES publishes for app mail and records them 
 | `event.go` | SES event-publishing JSON types and `Parse`, which turns one SQS body into per-recipient `Record`s (one per `mail_delivery_events` row). |
 | `status.go` | Event → `email_sends.status` mapping, the rank rule, and the recipient domain class used as a metric attribute. |
 | `store.go` | `Store.Apply` (one transaction per SES event) and `Store.PurgeExpired` (13-month retention). |
-| `worker.go` | `Worker.Run`: SQS long-poll loop, delete-after-commit, backoff, DLQ depth sampling. `SQSAPI` and `EventStore` are the small interfaces the tests fake. |
+| `worker.go` | `Worker.Run`: SQS long-poll loop, delete-after-commit, backoff, pause while the store is down, DLQ depth sampling. `SQSAPI` and `EventStore` are the small interfaces the tests fake. |
 | `metrics.go` | `brygge.email.delivery`, `brygge.ses.events.received`, `brygge.ses.dlq.messages`. |
 | `testdata/` | Event bodies modelled on the [documented SES examples](https://docs.aws.amazon.com/ses/latest/dg/event-publishing-retrieving-sns-examples.html), with synthetic addresses and the `send_id` / `kind` tags. |
 
@@ -48,16 +48,17 @@ SNS → SQS gives no ordering guarantee, so a `Send` event can arrive after the 
 | Bounce `Transient` | `rejected_temporary` | 3 |
 | Bounce `Permanent` / `OnAccountSuppressionList` or `OnTenantSuppressionList` | `suppressed` | 4 |
 | Bounce `Permanent` (other), Bounce `Undetermined`, Reject, Rendering Failure | `rejected` | 4 |
-| Complaint | `complaint` | 5 |
+| Complaint with `complaintSubType` `OnAccountSuppressionList` / `OnTenantSuppressionList` | `suppressed` | 4 |
+| Complaint (other) | `complaint` | 5 |
 
-Equal ranks advance, so a transient bounce followed by the eventual delivery ends `accepted`. `Undetermined` bounces map to `rejected`: SES could not classify them, but the message was not delivered and should surface for review. The `email_sends` row is locked `FOR UPDATE` before the comparison so two events for one send applied concurrently do not both read the old status.
+A complaint with a suppression-list subtype is SES reporting that it did not send the message because an earlier complaint suppressed the address, so it maps to `suppressed`, not to a fresh complaint. Equal ranks advance: `accepted` and `rejected_temporary` are both final per recipient (SES publishes a `Transient` bounce only after it stops retrying), so for a single-recipient send the tie never arises and the later event wins otherwise. `Undetermined` bounces map to `rejected`: SES could not classify them, but the message was not delivered and should surface for review. The `email_sends` row is locked `FOR UPDATE` before the comparison so two events for one send applied concurrently do not both read the old status.
 
 ## Failures and the DLQ
 
 | Failure | What the worker does |
 |---|---|
 | Body is not a parseable SES event | Logs a warning and leaves the message. It is received again after the visibility timeout (60 s); after `maxReceiveCount` (5) SQS moves it to the DLQ ([dead-letter queues](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html)). |
-| Database error | Same: no delete, so the event is retried and lands in the DLQ only if the DB stays down across five receives. |
+| Database error | No delete, and the rest of the batch is left too. The worker then stops receiving and pings the database with backoff (1 s → 1 min) until it answers. Every receive counts towards `maxReceiveCount`, so polling on through an outage would move healthy events to the DLQ within five minutes; pausing keeps them on the main queue (4-day retention). An event the store rejects while the database is up (ping succeeds) is retried and reaches the DLQ after five receives like any poison message. |
 | `DeleteMessage` fails | Logs; the redelivery is dropped as a duplicate. |
 | AWS receive error | Exponential backoff, then retry. |
 
@@ -68,6 +69,8 @@ Every minute the worker reads the DLQ's `ApproximateNumberOfMessages` into `bryg
 `email_sends` (by `created_at`) and `mail_delivery_events` (by `received_at`) are kept 13 months: both hold recipient addresses. `Store.PurgeExpired` runs in the API's daily retention sweep in `cmd/api/main.go`, alongside the member-PII purge, whether or not the worker is enabled, because the sender also records Stalwart sends in `email_sends`. Deleting a send cascades its events. Erasure of a member's mail history on GDPR deletion is a separate path (`accounting.DeleteMemberMailLog`).
 
 ## Common misses
+
+- `remote_mta` is only the receiving server's IP from a `Delivery` event (`remoteMtaIp`). `reportingMTA` on `Bounce` and `DeliveryDelay` names the MTA that reported the outcome, which for the bounces SES generates is SES's own host, so it is not copied into `remote_mta`; the dev view exposes it as `raw_reporting_mta`. For "which provider refuses us", use `recipient_domain` and the diagnostic.
 
 - The `kind` and `recipient_domain_class` metric attributes are closed sets. A new `email.Kind` value must also be added to `Kinds` in `status.go`, or it counts as `other`.
 - `Raw` stores the whole SES event, including `mail.commonHeaders` (subject, To). It is personal data: dev-query views must mask it.

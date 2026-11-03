@@ -151,6 +151,9 @@ func (s *Store) PurgeExpired(ctx context.Context) (sends, events int64, err erro
 	return tag.RowsAffected(), events, nil
 }
 
+// Ping reports whether the database is reachable.
+func (s *Store) Ping(ctx context.Context) error { return s.db.Ping(ctx) }
+
 func nullable(s string) any {
 	if s == "" {
 		return nil
