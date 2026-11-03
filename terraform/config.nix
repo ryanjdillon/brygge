@@ -6,5 +6,6 @@
     ./outputs.nix
     ./server.nix
     ./dns.nix
+    ./ses.nix
   ];
 }

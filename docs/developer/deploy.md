@@ -67,6 +67,8 @@ Required values:
 | `server_type`, `location`, `timezone` | terraform, NixOS | Defaults: `cx23`, `nbg1`, `Europe/Oslo` |
 | `dkim_public_value`, `dmarc_policy` | terraform | Mail DNS records (see [mail/setup.md](mail/setup.md)) |
 | `stripe_email_verification`, `stripe_email_dkim_tokens` *(optional)* | terraform | Stripe custom email domain DNS records (see [mail/setup.md](mail/setup.md#stripe-custom-email-domain)). Empty publishes nothing |
+| `club_slug` | terraform, NixOS | Short club identifier (`CLUB_SLUG`); also names the SES/SQS/IAM resources. Lowercase letters, digits, hyphens |
+| `ses_enabled`, `aws_region`, `aws_access_key`, `aws_secret_key` *(optional)* | terraform, NixOS | Amazon SES app mail and its delivery-event queue. `ses_enabled` defaults to `false` (nothing created on AWS); the keys are a Terraform admin principal, never Brygge's runtime key. See [mail/ses.md](mail/ses.md) |
 | `tailnet_domain` *(optional)* | NixOS (unbound) | Tailnet MagicDNS suffix (e.g. `tail.example.net`). The host resolver forwards only this zone to `100.100.100.100` so the OTel collector's upstream endpoint resolves. Unset or empty → telemetry export can't resolve its endpoint. See [otel/local-collector.md](otel/local-collector.md#name-resolution) |
 
 **Protection against committing secrets**: a pre-commit hook at `.githooks/pre-commit` rejects any attempt to stage `terraform/terraform.tfvars.json`. The dev shell's `shellHook` auto-installs it by setting `core.hooksPath` the first time you `nix develop`. If you accept the hook, `git status` will still show the file as modified, but `git commit` (with or without `-a`) will fail:
@@ -412,6 +414,8 @@ All point to the brygge server's IPv4:
 | CNAME | `autoconfig`         | Thunderbird autoconfig                 |
 | SRV   | `_imaps._tcp`        | IMAPS service record                   |
 | SRV   | `_submission._tcp`   | SMTP submission service record         |
+| CNAME ×3 | `<token>._domainkey` | Amazon SES Easy DKIM (only with `ses_enabled`) |
+| MX, TXT | `send`             | Amazon SES custom MAIL FROM (only with `ses_enabled`); see [mail/ses.md](mail/ses.md#dns-records) |
 
 The server also has a PTR (rDNS) record pointing at `mail.<domain>`, managed via `hcloud_rdns` in `terraform/server.nix`.
 

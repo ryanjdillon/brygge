@@ -81,6 +81,11 @@
       # endpoint resolves; null (unset or empty) forwards nothing.
       tailnetDomain    = let d = tfvars.tailnet_domain or null; in
         if d == "" then null else d;
+      # Amazon SES app mail. Terraform reads the same two keys, and both
+      # sides derive resource names from slug, so host.nix needs no
+      # Terraform outputs.
+      sesEnabled       = tfvars.ses_enabled or false;
+      awsRegion        = tfvars.aws_region or "eu-north-1";
     };
 
     overlay = final: prev: {

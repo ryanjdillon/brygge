@@ -119,6 +119,46 @@
       };
     };
 
+    # Identity that names per-club cloud resources (e.g. the SES
+    # configuration set `brygge-<slug>`). The flake reads the same key
+    # for CLUB_SLUG, so both sides derive identical names without
+    # copying Terraform outputs into nix.
+    club_slug = {
+      type        = "string";
+      default     = "brygge";
+      description = "Short club identifier; matches the flake's clubConfig.slug fallback.";
+      validation = {
+        condition     = "\${can(regex(\"^[a-z0-9-]*$\", var.club_slug))}";
+        error_message = "club_slug may hold only lowercase letters, digits and hyphens (it is embedded in AWS resource names).";
+      };
+    };
+
+    # Amazon SES app mail (BRY-588). Kept separate from the Hetzner S3
+    # keys: the tf wrappers export those as AWS_* for the state backend,
+    # and the aws provider must never pick them up.
+    ses_enabled = {
+      type        = "bool";
+      default     = false;
+      description = "Create the SES identity, configuration set, SNS/SQS delivery-event pipeline, app IAM user and the matching DNS records. False creates nothing on AWS.";
+    };
+    aws_access_key = {
+      type        = "string";
+      sensitive   = true;
+      default     = "";
+      description = "Access key of the AWS principal Terraform uses to manage SES/SNS/SQS/IAM (an admin/bootstrap key, not Brygge's runtime key).";
+    };
+    aws_secret_key = {
+      type        = "string";
+      sensitive   = true;
+      default     = "";
+      description = "Secret for aws_access_key.";
+    };
+    aws_region = {
+      type        = "string";
+      default     = "eu-north-1";
+      description = "AWS region for SES and the delivery-event pipeline. Also selects the MAIL FROM feedback MX host.";
+    };
+
     # Shared role-mapped board mailboxes (DIL-275/276). Reader ACLs are
     # reconciled from `user_roles` by the Brygge backend; this variable
     # only declares the principals and role mapping.
