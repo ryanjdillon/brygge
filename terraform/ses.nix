@@ -2,6 +2,11 @@
 let
   # Every resource here exists only when var.ses_enabled is true.
   enabled = "\${var.ses_enabled ? 1 : 0}";
+  regionalDkimRegions = builtins.concatStringsSep ", " (map (r: "\"${r}\"") [
+    "af-south-1" "ap-south-2" "ap-southeast-3" "ap-southeast-5" "ca-west-1"
+    "ap-northeast-3" "eu-south-1" "eu-central-2" "il-central-1"
+    "me-central-1" "us-gov-east-1"
+  ]);
 in
 {
   # Names are derived from club_slug alone so nix/host.nix can build the
@@ -9,6 +14,13 @@ in
   locals = {
     ses_name        = "brygge-\${var.club_slug}";
     ses_events_name = "brygge-\${var.club_slug}-ses-events";
+    # Easy DKIM CNAME target. The provider does not export the identity's
+    # SigningHostedZone, so it comes from the per-region table in
+    # https://docs.aws.amazon.com/general/latest/gr/ses.html#ses_dkim_domains
+    # The listed regions use dkim.<region>.amazonses.com; every other one
+    # (eu-north-1 included) uses dkim.amazonses.com. Check the SES
+    # console's DNS records after apply when changing aws_region.
+    ses_dkim_zone = "\${contains([${regionalDkimRegions}], var.aws_region) ? \"dkim.\${var.aws_region}.amazonses.com\" : \"dkim.amazonses.com\"}";
   };
 
   data.aws_caller_identity.current = {
@@ -62,6 +74,9 @@ in
   # https://docs.aws.amazon.com/ses/latest/dg/event-publishing-add-event-destination-sns.html
   resource.aws_sesv2_configuration_set_event_destination.sns = {
     count                  = enabled;
+    # Publishing is allowed by the topic policy; create it first so the
+    # first events after apply are not refused.
+    depends_on             = [ "aws_sns_topic_policy.ses_events" ];
     configuration_set_name = "\${aws_sesv2_configuration_set.main[0].configuration_set_name}";
     event_destination_name = "sns";
     event_destination = {
@@ -194,14 +209,16 @@ in
         actions = [
           "sqs:ReceiveMessage"
           "sqs:DeleteMessage"
-          "sqs:ChangeMessageVisibility"
           "sqs:GetQueueUrl"
-          "sqs:GetQueueAttributes"
         ];
-        resources = [
-          "\${aws_sqs_queue.ses_events[0].arn}"
-          "\${aws_sqs_queue.ses_events_dlq[0].arn}"
-        ];
+        resources = [ "\${aws_sqs_queue.ses_events[0].arn}" ];
+      }
+      {
+        # The worker only reads the DLQ's depth; inspecting and
+        # redriving its messages is an operator task.
+        sid       = "WatchDeadLetterQueue";
+        actions   = [ "sqs:GetQueueUrl" "sqs:GetQueueAttributes" ];
+        resources = [ "\${aws_sqs_queue.ses_events_dlq[0].arn}" ];
       }
       {
         # The account-level suppression list has no resource ARN, so
