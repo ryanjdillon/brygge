@@ -108,6 +108,11 @@ type Complaint struct {
 	ComplainedRecipients  []ComplainedRecipient `json:"complainedRecipients"`
 	Timestamp             string                `json:"timestamp"`
 	ComplaintFeedbackType string                `json:"complaintFeedbackType"`
+	// ComplaintSubType is null, or OnAccountSuppressionList /
+	// OnTenantSuppressionList when SES accepted the message but did not
+	// send it because a past complaint put the address on a suppression
+	// list. Such an event is a suppression, not a new complaint.
+	ComplaintSubType string `json:"complaintSubType"`
 }
 
 // ComplainedRecipient is one address in a complaint.
@@ -163,8 +168,15 @@ type Record struct {
 	DelayType     string
 	SMTPStatus    string
 	Diagnostic    string
-	RemoteMTA     string
-	Raw           []byte
+	// RemoteMTA is the IP of the receiving server SES handed the message
+	// to; only Delivery events carry it. The reportingMTA of Bounce and
+	// DeliveryDelay events names the MTA that reported the outcome, which
+	// is SES's own for the bounces it generates, so it stays in raw only.
+	RemoteMTA string
+	Raw       []byte
+	// ComplaintSubType steers StatusFor for Complaint records; it is not
+	// a column (raw keeps it).
+	ComplaintSubType string
 
 	// SendIDTag is the raw send_id tag; the store validates it.
 	SendIDTag string
@@ -323,7 +335,6 @@ func delayRecords(ev *Event, base Record) ([]Record, error) {
 		r.DelayType = d.DelayType
 		r.SMTPStatus = dr.Status
 		r.Diagnostic = dr.DiagnosticCode
-		r.RemoteMTA = d.ReportingMTA
 		recs = append(recs, r)
 	}
 	return recs, nil
@@ -353,7 +364,6 @@ func bounceRecords(ev *Event, base Record) ([]Record, error) {
 		r.BounceSubType = b.BounceSubType
 		r.SMTPStatus = br.Status
 		r.Diagnostic = br.DiagnosticCode
-		r.RemoteMTA = stripDSNPrefix(b.ReportingMTA)
 		recs = append(recs, r)
 	}
 	return recs, nil
@@ -380,6 +390,7 @@ func complaintRecords(ev *Event, base Record) ([]Record, error) {
 		r.EventAt = at
 		r.Recipient = cr.EmailAddress
 		r.Diagnostic = c.ComplaintFeedbackType
+		r.ComplaintSubType = c.ComplaintSubType
 		recs = append(recs, r)
 	}
 	return recs, nil
@@ -435,12 +446,4 @@ var enhancedStatusRE = regexp.MustCompile(`\b[245]\.\d{1,3}\.\d{1,3}\b`)
 // of a free-text SMTP response.
 func enhancedStatus(resp string) string {
 	return enhancedStatusRE.FindString(resp)
-}
-
-// stripDSNPrefix drops the "dsn; " type prefix of a Reporting-MTA value.
-func stripDSNPrefix(s string) string {
-	if i := strings.IndexByte(s, ';'); i >= 0 {
-		return strings.TrimSpace(s[i+1:])
-	}
-	return s
 }

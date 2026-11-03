@@ -106,7 +106,7 @@ Unqualified names (`users`) resolve to the view through the role's search_path;
 | `vipps_webhook_events` | payload (raw JSONB) | `payload_psp_ref`, `payload_state`, `payload_amount` |
 | `payment_webhook_events` | payload (raw JSONB; may carry payer name/email) | — |
 | `email_sends` | recipient; `error` has every address-like token replaced by `[email]` | — (`recipient_domain` passes through) |
-| `mail_delivery_events` | recipient, raw (the SES event repeats the address in `mail.destination`, the headers and every `*Recipients` list, and the subject can name a member); `diagnostic` has every address-like token replaced by `[email]` | `has_recipient`, `raw_tags`, `raw_destination_count`, `raw_reporting_mta`, `raw_feedback_id`, `raw_processing_ms`, `raw_delay_expires`, `raw_complaint_type`, `raw_reject_reason`, `raw_failure_message` (address-redacted) (`recipient_domain`, `remote_mta` pass through) |
+| `mail_delivery_events` | recipient, raw (the SES event repeats the address in `mail.destination`, the headers and every `*Recipients` list, and the subject can name a member); `diagnostic` has every address-like token replaced by `[email]` | `has_recipient`, `raw_tags`, `raw_destination_count`, `raw_reporting_mta`, `raw_feedback_id`, `raw_processing_ms`, `raw_delay_expires`, `raw_complaint_type`, `raw_complaint_subtype`, `raw_reject_reason`, `raw_failure_message` (address-redacted) (`recipient_domain`, `remote_mta` pass through) |
 | `payment_refunds` | reason (staff-typed) | `reason_length` |
 | `stripe_balance_transactions` | dismissed_reason (staff-typed) | `dismissed_reason_length` |
 | `slip_shares` | notes | — |

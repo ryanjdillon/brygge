@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -56,33 +57,33 @@ func TestParse(t *testing.T) {
 			EventType: EventDeliveryDelay, EventAt: ts("2026-11-03T10:10:00.095Z"),
 			Recipient: "member@example.net", DelayType: "TransientCommunicationFailure",
 			SMTPStatus: "4.4.1", Diagnostic: "smtp; 421 4.4.1 Unable to connect to remote host",
-			RemoteMTA: "198.51.100.9", Status: StatusDeferred,
+			Status: StatusDeferred,
 		}}},
 		{"bounce_permanent.json", []Record{{
 			EventType: EventBounce, EventAt: ts("2026-11-03T10:00:03.669Z"),
 			Recipient: "member@example.net", BounceType: "Permanent", BounceSubType: "General",
 			SMTPStatus: "5.1.1", Diagnostic: "smtp; 550 5.1.1 user unknown",
-			RemoteMTA: "mx.example.net", Status: StatusRejected,
+			Status: StatusRejected,
 		}}},
 		{"bounce_suppressed.json", []Record{{
 			EventType: EventBounce, EventAt: ts("2026-11-03T10:00:00.900Z"),
 			Recipient: "member@example.net", BounceType: "Permanent",
 			BounceSubType: "OnAccountSuppressionList", SMTPStatus: "5.1.1",
 			Diagnostic: "Amazon SES did not send the message to this address because it is on the suppression list for your account.",
-			RemoteMTA:  "amazonses.com", Status: StatusSuppressed,
+			Status:     StatusSuppressed,
 		}}},
 		{"bounce_multi.json", []Record{
 			{
 				EventType: EventBounce, EventAt: ts("2026-11-03T10:00:04Z"),
 				Recipient: "first@example.net", BounceType: "Transient", BounceSubType: "MailboxFull",
 				SMTPStatus: "4.2.2", Diagnostic: "smtp; 452 4.2.2 mailbox full",
-				RemoteMTA: "mx.example.net", Status: StatusRejectedTemporary,
+				Status: StatusRejectedTemporary,
 			},
 			{
 				EventType: EventBounce, EventAt: ts("2026-11-03T10:00:04Z"),
 				Recipient: "Second@Example.ORG", BounceType: "Transient", BounceSubType: "MailboxFull",
 				SMTPStatus: "4.2.2", Diagnostic: "smtp; 452 4.2.2 over quota",
-				RemoteMTA: "mx.example.net", Status: StatusRejectedTemporary,
+				Status: StatusRejectedTemporary,
 			},
 		}},
 		{"complaint.json", []Record{{
@@ -176,6 +177,39 @@ func TestParseMissingSendIDTag(t *testing.T) {
 	}
 	if got[0].Status != StatusAccepted {
 		t.Errorf("Status = %q", got[0].Status)
+	}
+}
+
+// A complaint with complaintSubType OnAccountSuppressionList means SES did
+// not send the message because the address was already suppressed; it is
+// not a fresh complaint and must not page as one.
+func TestParseComplaintOnSuppressionList(t *testing.T) {
+	body := strings.Replace(string(loadFixture(t, "complaint.json")),
+		`"complaintFeedbackType": "abuse",`,
+		`"complaintFeedbackType": "abuse", "complaintSubType": "OnAccountSuppressionList",`, 1)
+	if !strings.Contains(body, "complaintSubType") {
+		t.Fatal("fixture shape changed; subtype not injected")
+	}
+	got, err := Parse([]byte(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[0].Status != StatusSuppressed {
+		t.Errorf("Status = %q, want %q", got[0].Status, StatusSuppressed)
+	}
+}
+
+// Bounce and DeliveryDelay reportingMTA name the reporting (SES) MTA, not
+// the receiving server, so they must not land in remote_mta.
+func TestParseRemoteMTAOnlyFromDelivery(t *testing.T) {
+	for _, f := range []string{"bounce_permanent.json", "delivery_delay.json", "bounce_suppressed.json"} {
+		got, err := Parse(loadFixture(t, f))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got[0].RemoteMTA != "" {
+			t.Errorf("%s: RemoteMTA = %q, want empty", f, got[0].RemoteMTA)
+		}
 	}
 }
 

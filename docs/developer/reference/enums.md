@@ -293,7 +293,7 @@ sending   submitted   failed   unknown
 queued   deferred   accepted   rejected_temporary   rejected   suppressed   complaint
 ```
 
-The first row is set by the sender before SES has reported anything (`failed`: the submission itself failed, `unknown`: its outcome is unknown). The second is mapped from SES delivery events and only moves up in rank, so a late event never regresses it: `queued` (send, rank 1) → `deferred` (delivery_delay, 2) → `accepted` (delivery, 3) or `rejected_temporary` (transient bounce, 3) → `suppressed` (permanent bounce of subtype `OnAccountSuppressionList`, 4), `rejected` (other permanent bounce, reject, rendering failure, 4) → `complaint` (5). The pre-event values rank 0.
+The first row is set by the sender before SES has reported anything (`failed`: the submission itself failed, `unknown`: its outcome is unknown). The second is mapped from SES delivery events and only moves up in rank, so a late event never regresses it: `queued` (send, rank 1) → `deferred` (delivery_delay, 2) → `accepted` (delivery, 3) or `rejected_temporary` (transient bounce, 3) → `suppressed` (permanent bounce or complaint of subtype `OnAccountSuppressionList` / `OnTenantSuppressionList`, 4), `rejected` (other permanent bounce, reject, rendering failure, 4) → `complaint` (5). The pre-event values rank 0.
 
 ### `email_sends.provider` (CHECK since migration 000130)
 

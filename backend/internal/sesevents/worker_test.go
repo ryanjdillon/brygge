@@ -89,6 +89,20 @@ type fakeStore struct {
 	failFor map[string]bool // SES message ids whose Apply fails
 	seen    map[string]bool // dedup key → stored
 	applied [][]Record
+	// pingFailures is how many Ping calls fail before the store is back.
+	pingFailures int
+	pings        int
+}
+
+func (s *fakeStore) Ping(context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.pings++
+	if s.pingFailures > 0 {
+		s.pingFailures--
+		return errors.New("db down")
+	}
+	return nil
 }
 
 func (s *fakeStore) Apply(_ context.Context, recs []Record) ([]Record, error) {
@@ -167,9 +181,9 @@ func TestWorkerDeletesOnlyCommittedMessages(t *testing.T) {
 			msg("ignored-open", string(loadFixture(t, "open.json"))),
 		},
 		{
-			msg("db-fails", `{"eventType":"Send","mail":{"messageId":"broken-db","timestamp":"2026-11-03T10:00:00Z","destination":["member@example.net"]},"send":{}}`),
 			msg("redelivered", delivery),
 			msg("ok-bounce", bounce),
+			msg("db-fails", `{"eventType":"Send","mail":{"messageId":"broken-db","timestamp":"2026-11-03T10:00:00Z","destination":["member@example.net"]},"send":{}}`),
 		},
 	}
 	st := &fakeStore{failFor: map[string]bool{"broken-db": true}}
@@ -203,6 +217,32 @@ func TestWorkerDeletesOnlyCommittedMessages(t *testing.T) {
 	assertSum(t, rm, "brygge.ses.events.received", 1, attribute.String("event_type", eventTypeIgnored))
 	assertSum(t, rm, "brygge.ses.events.received", 1, attribute.String("event_type", EventSend))
 	assertSum(t, rm, "brygge.ses.events.received", 0, attribute.String("event_type", EventComplaint))
+}
+
+// A store failure abandons the rest of the batch and holds off the next
+// receive until the store answers a ping, so an outage does not burn
+// through maxReceiveCount and push healthy events into the DLQ.
+func TestWorkerPausesReceivesWhileStoreIsDown(t *testing.T) {
+	f := newFake()
+	send := `{"eventType":"Send","mail":{"messageId":"broken-db","timestamp":"2026-11-03T10:00:00Z","destination":["member@example.net"]},"send":{}}`
+	f.batches = [][]types.Message{
+		{msg("db-fails", send), msg("skipped", string(loadFixture(t, "delivery.json")))},
+		{msg("after-recovery", string(loadFixture(t, "bounce_permanent.json")))},
+	}
+	st := &fakeStore{failFor: map[string]bool{"broken-db": true}, pingFailures: 3}
+	w, _ := newTestWorker(t, f, st)
+
+	runUntilDrained(t, w, f)
+
+	if len(f.deleted) != 1 || f.deleted[0] != "after-recovery" {
+		t.Fatalf("deleted %v, want only after-recovery", f.deleted)
+	}
+	if len(st.applied) != 1 || st.applied[0][0].SESMessageID != fixtureMessageID {
+		t.Fatalf("applied %d batches; the message after the failure must not be applied", len(st.applied))
+	}
+	if st.pings != 4 {
+		t.Fatalf("pings = %d, want 4 (3 failures, then success)", st.pings)
+	}
 }
 
 func TestWorkerSamplesDLQDepth(t *testing.T) {

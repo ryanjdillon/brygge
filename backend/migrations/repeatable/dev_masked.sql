@@ -179,7 +179,7 @@ SELECT
 FROM public.payment_webhook_events;
 
 -- Outgoing email and its SES delivery events (BRY-588). Addresses are
--- NULL; recipient_domain and remote_mta stay, since "which provider refuses
+-- NULL; recipient_domain and remote_mta (the receiving server's IP) stay, since "which provider refuses
 -- us" is the diagnosis. SMTP diagnostics and send errors often quote the
 -- address ("550 5.1.1 <x@y>: user unknown"), so every address-like token in
 -- them is replaced. raw is NULL: the SES event repeats the address in
@@ -202,7 +202,7 @@ SELECT
     recipient_domain,
     bounce_type, bounce_subtype, delay_type, smtp_status,
     regexp_replace(diagnostic, '[^][:space:]<>()",;:''@]+@[^][:space:]<>()",;:''@]+', '[email]', 'g') AS diagnostic,
-    remote_mta,                           -- the receiving provider's MX host
+    remote_mta,                           -- receiving server IP (Delivery events only)
     NULL::jsonb AS raw,
     received_at,
     (recipient IS NOT NULL) AS has_recipient,
@@ -216,6 +216,7 @@ SELECT
          THEN (raw->'delivery'->>'processingTimeMillis')::numeric END AS raw_processing_ms,
     raw->'deliveryDelay'->>'expirationTime' AS raw_delay_expires,
     raw->'complaint'->>'complaintFeedbackType' AS raw_complaint_type,
+    raw->'complaint'->>'complaintSubType' AS raw_complaint_subtype,
     raw->'reject'->>'reason' AS raw_reject_reason,
     regexp_replace(raw->'failure'->>'errorMessage', '[^][:space:]<>()",;:''@]+@[^][:space:]<>()",;:''@]+', '[email]', 'g') AS raw_failure_message
 FROM public.mail_delivery_events;

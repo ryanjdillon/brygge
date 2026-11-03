@@ -74,6 +74,10 @@ func StatusFor(r Record) string {
 	case EventReject, EventRenderingFailure:
 		return StatusRejected
 	case EventComplaint:
+		switch r.ComplaintSubType {
+		case "OnAccountSuppressionList", "OnTenantSuppressionList":
+			return StatusSuppressed
+		}
 		return StatusComplaint
 	}
 	return ""
