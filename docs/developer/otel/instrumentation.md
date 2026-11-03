@@ -34,6 +34,16 @@ Counted by the `email.Instrument` decorator around the SMTP sender, once per han
 
 What is **not** counted: broadcast mail (inbox compose and bulk send) goes out through JMAP as the sending mailbox, not through `email.Sender`. A `result="ok"` only means the relay accepted the message; remote deferrals and bounces show up in Stalwart's queue and journal, not here.
 
+## SES delivery events
+
+| Metric | Prometheus name | Type | Attributes |
+|--------|-----------------|------|------------|
+| `brygge.email.delivery` (`{event}`) | `brygge_email_delivery_total` | Counter (cumulative) | `kind` = `magic_link` \| `invoice` \| `invoice_reminder` \| `credit_note` \| `dispute` \| `contact` \| `other`; `result` = `queued` \| `deferred` \| `accepted` \| `rejected_temporary` \| `rejected` \| `suppressed` \| `complaint`; `recipient_domain_class` = `gmail` \| `outlook` \| `yahoo` \| `icloud` \| `other` |
+| `brygge.ses.events.received` (`{message}`) | `brygge_ses_events_received_total` | Counter (cumulative) | `event_type` = `send` \| `delivery` \| `delivery_delay` \| `bounce` \| `complaint` \| `reject` \| `rendering_failure` \| `invalid` \| `ignored` |
+| `brygge.ses.dlq.messages` (`{message}`) | `brygge_ses_dlq_messages` | Gauge | Approximate messages in the SES events dead-letter queue, sampled every 60 s |
+
+Registered only when `SES_EVENTS_QUEUE_NAME` is set ([configuration.md](../configuration.md#amazon-ses-delivery-events)). `brygge.email.delivery` counts each per-recipient event once, when it is first stored: an SQS redelivery is dropped by the event table's unique key and not counted again. `kind` comes from the message's `kind` tag (unknown values count as `other`); `result` is the `email_sends` status the event maps to. Raw domains and addresses are never attributes; the domain class buckets common providers and their aliases. `brygge.ses.events.received` counts every message taken off the queue, including redeliveries, so it doubles as the worker's liveness signal; `invalid` is a body that failed to parse (left for the DLQ), `ignored` a well-formed event type the worker does not record. All series are created at 0 on start. Details: [backend/internal/sesevents/README.md](../../../backend/internal/sesevents/README.md).
+
 ## Mail queue (Stalwart)
 
 | Metric | Prometheus name | Type | Meaning |

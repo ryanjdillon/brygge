@@ -82,6 +82,19 @@ The API's handle on the mail server's management REST API (`/api/…`). What it 
 
 The fallback admin has every permission. Any other principal used here needs at least `message-queue-list` for the queue gauges, plus the principal-management permissions provisioning uses.
 
+## Amazon SES delivery events
+
+The API long-polls an SQS queue that the SES configuration set publishes delivery events to (configuration set → SNS → SQS, raw message delivery) and records them in `mail_delivery_events` / `email_sends` (BRY-588). The worker is off unless `SES_EVENTS_QUEUE_NAME` is set; it logs once at info when disabled. Worker internals: [backend/internal/sesevents/README.md](../../backend/internal/sesevents/README.md); setup and runbook: [mail/ses.md](mail/ses.md).
+
+| Variable                | Required       | Default | Description |
+|-------------------------|----------------|---------|-------------|
+| `SES_REGION`            | For SES events | —       | AWS region of the SES identity and the queues (e.g. `eu-north-1`). Non-secret: `nix/host.nix` `extraEnvironment`, from `clubConfig`. With the queue name set but no region, the worker logs an error and does not start |
+| `SES_CONFIGURATION_SET` | For SES        | —       | Configuration set name, `brygge-<slug>`. Non-secret: `nix/host.nix` |
+| `SES_EVENTS_QUEUE_NAME` | For SES events | —       | SQS queue name, `brygge-<slug>-ses-events`; the URL is resolved at start with `GetQueueUrl`. Unset disables the worker. Non-secret: `nix/host.nix` |
+| `SES_EVENTS_DLQ_NAME`   | No             | —       | Dead-letter queue name, `brygge-<slug>-ses-events-dlq`. Its depth is sampled each minute into `brygge.ses.dlq.messages`; unset skips sampling. Non-secret: `nix/host.nix` |
+| `AWS_ACCESS_KEY_ID`     | For SES events | —       | Access key of the `brygge-<slug>-app` IAM user, read by the AWS SDK's default credential chain. Secret: `/etc/brygge/env`. Created by hand in the AWS console, never in Terraform state |
+| `AWS_SECRET_ACCESS_KEY` | For SES events | —       | Secret of that access key. Secret: `/etc/brygge/env` |
+
 ## Vipps MobilePay
 
 | Variable                 | Required     | Default | Description                    |
