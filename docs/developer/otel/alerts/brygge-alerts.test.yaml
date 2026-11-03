@@ -807,11 +807,14 @@ tests:
 
   # One suppressed invoice to a Gmail recipient pages, per kind, result and
   # domain class; accepted deliveries don't. It resolves once the event is
-  # out of the hour.
+  # out of the hour. Only smtp_status_class="none" is pre-created, so the
+  # 5.1 series first appears at 1, as the worker exports it.
   - interval: 1m
     input_series:
+      - series: 'brygge_email_delivery_total{job="example.invalid/brygge-api", kind="invoice", result="suppressed", recipient_domain_class="gmail", smtp_status_class="none"}'
+        values: '0x110'
       - series: 'brygge_email_delivery_total{job="example.invalid/brygge-api", kind="invoice", result="suppressed", recipient_domain_class="gmail", smtp_status_class="5.1"}'
-        values: '0x10 1x100'
+        values: '_x10 1x100'
       - series: 'brygge_email_delivery_total{job="example.invalid/brygge-api", kind="invoice", result="accepted", recipient_domain_class="gmail", smtp_status_class="2.6"}'
         values: '0+3x110'
       - series: 'brygge_email_delivery_total{job="example.invalid/brygge-api", kind="magic_link", result="rejected", recipient_domain_class="other", smtp_status_class="none"}'
@@ -930,3 +933,51 @@ tests:
               summary: "example.invalid: 2 SES event(s) in the dead-letter queue"
               description: "The SES events dead-letter queue has held 2 message(s) for 15 minutes. Those delivery events failed five times and are not recorded; they are deleted 14 days after they were first sent."
               runbook_url: "https://example.invalid/runbook#sesdlqnotempty"
+
+  # A new status-class series that counts twice inside its first hour
+  # reports both.
+  - interval: 1m
+    input_series:
+      - series: 'brygge_email_delivery_total{job="example.invalid/brygge-api", kind="invoice", result="rejected", recipient_domain_class="yahoo", smtp_status_class="5.7"}'
+        values: '_x10 1x5 2x30'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: SesDeliveryFailed
+        exp_alerts:
+          - exp_labels:
+              kind: invoice
+              result: rejected
+              recipient_domain_class: yahoo
+              smtp_status_class: "5.7"
+              service_namespace: example.invalid
+              club: example
+              severity: page
+            exp_annotations:
+              summary: "example.invalid: invoice mail rejected by Amazon SES (yahoo recipient, SMTP 5.7)"
+              description: "Amazon SES reported 2 invoice message(s) as rejected in the last hour (recipient domain class yahoo, SMTP status class 5.7). Exact recipient domain, SMTP status and diagnostic: just prod-query \"SELECT e.event_at, s.kind, e.event_type, e.bounce_type, e.bounce_subtype, e.recipient_domain, e.smtp_status, e.diagnostic, e.remote_mta, s.related_type, s.related_id, s.user_id FROM mail_delivery_events e LEFT JOIN email_sends s ON s.id = e.send_id WHERE e.event_type IN ('bounce', 'complaint', 'reject', 'rendering_failure') AND e.received_at > now() - interval '24 hours' ORDER BY e.event_at DESC LIMIT 20\""
+              runbook_url: "https://example.invalid/runbook#sesdeliveryfailed"
+
+  # A series older than the hour that resets on an API restart and then
+  # counts again still pages; one that only went on existing doesn't.
+  - interval: 1m
+    input_series:
+      - series: 'brygge_email_delivery_total{job="example.invalid/brygge-api", kind="magic_link", result="rejected", recipient_domain_class="other", smtp_status_class="5.1"}'
+        values: '3x70 0x5 1x30'
+      - series: 'brygge_email_delivery_total{job="example.invalid/brygge-api", kind="invoice", result="rejected", recipient_domain_class="other", smtp_status_class="5.1"}'
+        values: '2x110'
+    alert_rule_test:
+      - eval_time: 80m
+        alertname: SesDeliveryFailed
+        exp_alerts:
+          - exp_labels:
+              kind: magic_link
+              result: rejected
+              recipient_domain_class: other
+              smtp_status_class: "5.1"
+              service_namespace: example.invalid
+              club: example
+              severity: page
+            exp_annotations:
+              summary: "example.invalid: magic_link mail rejected by Amazon SES (other recipient, SMTP 5.1)"
+              description: "Amazon SES reported 1 magic_link message(s) as rejected in the last hour (recipient domain class other, SMTP status class 5.1). Exact recipient domain, SMTP status and diagnostic: just prod-query \"SELECT e.event_at, s.kind, e.event_type, e.bounce_type, e.bounce_subtype, e.recipient_domain, e.smtp_status, e.diagnostic, e.remote_mta, s.related_type, s.related_id, s.user_id FROM mail_delivery_events e LEFT JOIN email_sends s ON s.id = e.send_id WHERE e.event_type IN ('bounce', 'complaint', 'reject', 'rendering_failure') AND e.received_at > now() - interval '24 hours' ORDER BY e.event_at DESC LIMIT 20\""
+              runbook_url: "https://example.invalid/runbook#sesdeliveryfailed"

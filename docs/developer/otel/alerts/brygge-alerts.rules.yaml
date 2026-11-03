@@ -237,16 +237,22 @@ groups:
           runbook_url: "__RUNBOOK_BASE__#mailbounced"
 
       # Amazon SES delivery outcomes, counted by the SES events worker once
-      # per stored event (redeliveries are not counted). Every series is
-      # pre-created at 0, so increase() sees the first one; > 0.5 is "at
-      # least one" despite extrapolation. Labels are closed sets: the alert
+      # per stored event (redeliveries are not counted). Only the
+      # smtp_status_class="none" series are pre-created at 0: a bounce with a
+      # status (5.1, 5.7, ...) starts a new series at 1, which increase()
+      # reads as no change. So a series that existed an hour ago is measured
+      # with increase(), and one that did not is measured by its current
+      # value, which is everything it counted. > 0.5 is "at least one"
+      # despite extrapolation. Labels are closed sets: the alert
       # carries the domain class and the SMTP status class (5.1 = bad
       # mailbox, 5.7 = policy refusal), and the description carries the query
       # that returns the exact domain, full status and diagnostic.
       - alert: SesDeliveryFailed
         expr: |
           sum by (kind, result, recipient_domain_class, smtp_status_class) (
-            increase(brygge_email_delivery_total{job="__SERVICE_NAMESPACE__/brygge-api", result=~"rejected|rejected_temporary|suppressed|complaint"}[1h])
+            (increase(brygge_email_delivery_total{job="__SERVICE_NAMESPACE__/brygge-api", result=~"rejected|rejected_temporary|suppressed|complaint"}[1h]) and brygge_email_delivery_total{job="__SERVICE_NAMESPACE__/brygge-api", result=~"rejected|rejected_temporary|suppressed|complaint"} offset 1h)
+            or
+            (brygge_email_delivery_total{job="__SERVICE_NAMESPACE__/brygge-api", result=~"rejected|rejected_temporary|suppressed|complaint"} unless brygge_email_delivery_total{job="__SERVICE_NAMESPACE__/brygge-api", result=~"rejected|rejected_temporary|suppressed|complaint"} offset 1h)
           ) > 0.5
         labels:
           service_namespace: __SERVICE_NAMESPACE__
