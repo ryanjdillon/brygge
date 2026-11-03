@@ -153,13 +153,29 @@ func (c *SMTPClient) send(ctx context.Context, to, subject, htmlBody, filename s
 	return nil
 }
 
+// encodeAddressHeader renders a configured "Name <addr>" value for a header.
+// Header bytes must be 7-bit ASCII (RFC 5322): a raw non-ASCII display name
+// such as a club's own name is refused outright by strict receivers (Yahoo
+// answers 554 "From header is invalid"), so the name is RFC 2047-encoded. A
+// bare address stays bare, and a value that does not parse is left as is.
+func encodeAddressHeader(v string) string {
+	addr, err := mail.ParseAddress(v)
+	if err != nil {
+		return v
+	}
+	if addr.Name == "" {
+		return addr.Address
+	}
+	return addr.String()
+}
+
 func (c *SMTPClient) buildMessage(to, subject, htmlBody, filename string, attachment []byte, extraHeaders map[string]string) ([]byte, error) {
 	var buf bytes.Buffer
 	header := textproto.MIMEHeader{}
-	header.Set("From", c.fromAddress)
+	header.Set("From", encodeAddressHeader(c.fromAddress))
 	header.Set("To", to)
 	if c.replyTo != "" {
-		header.Set("Reply-To", c.replyTo)
+		header.Set("Reply-To", encodeAddressHeader(c.replyTo))
 	}
 	header.Set("Subject", mime.QEncoding.Encode("utf-8", subject))
 	header.Set("MIME-Version", "1.0")

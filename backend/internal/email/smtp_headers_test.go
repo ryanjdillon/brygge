@@ -49,6 +49,36 @@ func TestBuildMessageExtraReplyToOverridesConfigured(t *testing.T) {
 	}
 }
 
+// A club name with non-ASCII letters must reach the wire RFC 2047-encoded:
+// strict receivers reject 8-bit From headers outright.
+func TestBuildMessageEncodesNonASCIIDisplayNames(t *testing.T) {
+	c := NewSMTPClient("localhost", 587, "", "", "Eksempel Båtlag <relay@club.example>", "Styret i Båtlaget <post@club.example>")
+
+	msg, err := c.buildMessage("to@example.com", "Hi", "<p>x</p>", "", nil, nil)
+	if err != nil {
+		t.Fatalf("buildMessage: %v", err)
+	}
+	head, _, _ := strings.Cut(string(msg), "\r\n\r\n")
+	for i := 0; i < len(head); i++ {
+		if head[i] > 0x7e {
+			t.Fatalf("header carries a non-ASCII byte at %d: %q", i, head)
+		}
+	}
+	m, err := mail.ReadMessage(bytes.NewReader(msg))
+	if err != nil {
+		t.Fatalf("ReadMessage: %v", err)
+	}
+	for field, want := range map[string]mail.Address{
+		"From":     {Name: "Eksempel Båtlag", Address: "relay@club.example"},
+		"Reply-To": {Name: "Styret i Båtlaget", Address: "post@club.example"},
+	} {
+		got, err := m.Header.AddressList(field)
+		if err != nil || len(got) != 1 || *got[0] != want {
+			t.Errorf("%s = %v (%v), want %v", field, got, err, want)
+		}
+	}
+}
+
 // fakeSMTP is a one-connection SMTP server whose behaviour after the greeting
 // is chosen by the test.
 func fakeSMTP(t *testing.T, serve func(c net.Conn, r *bufio.Reader)) (host string, port int) {

@@ -76,3 +76,4 @@ Every send through the production sender increments `brygge.email.send` with `ki
 
 - Sender lifecycle: stamp DB first (e.g. `sent_at`), then send. If send fails, roll back. The reverse order leaves the recipient with an email and the DB thinking it never went out.
 - Reminder vs invoice subject: the "[Faktura N]" bracket in the subject is what email clients use to thread reminders with the original delivery. Don't drop the bracket; don't change the format.
+- Header bytes are 7-bit ASCII. Subjects are Q-encoded and configured `From`/`Reply-To` display names RFC 2047-encoded (`encodeAddressHeader`); a raw non-ASCII club name gets a 554 "From header is invalid" from strict receivers such as Yahoo (BRY-586).
