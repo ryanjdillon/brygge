@@ -628,7 +628,7 @@ func (h *GDPRHandler) HandleProcessDeletion(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Always wipe data carrying no retention obligation.
-	recordsWiped := []string{"push_subscriptions", "notification_preferences", "user_consents"}
+	recordsWiped := []string{"push_subscriptions", "notification_preferences", "user_consents", "email_sends", "mail_delivery_events"}
 	for _, stmt := range []string{
 		`DELETE FROM push_subscriptions WHERE user_id = $1`,
 		`DELETE FROM notification_preferences WHERE user_id = $1`,
@@ -639,6 +639,11 @@ func (h *GDPRHandler) HandleProcessDeletion(w http.ResponseWriter, r *http.Reque
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
+	}
+	if err = accounting.DeleteMemberMailLog(ctx, tx, userID); err != nil {
+		h.log.Error().Err(err).Msg("failed to delete mail log")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
 	}
 
 	// Both outcomes lock the member out; only the identity differs. A deferred

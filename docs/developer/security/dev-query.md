@@ -105,6 +105,8 @@ Unqualified names (`users`) resolve to the view through the role's search_path;
 | `bank_import_rows` | description, counterpart, from_account, to_account | `description_kid`, `description_length` |
 | `vipps_webhook_events` | payload (raw JSONB) | `payload_psp_ref`, `payload_state`, `payload_amount` |
 | `payment_webhook_events` | payload (raw JSONB; may carry payer name/email) | — |
+| `email_sends` | recipient; `error` has every address-like token replaced by `[email]` | — (`recipient_domain` passes through) |
+| `mail_delivery_events` | recipient, raw (the SES event repeats the address in `mail.destination`, the headers and every `*Recipients` list, and the subject can name a member); `diagnostic` has every address-like token replaced by `[email]` | `has_recipient`, `raw_tags`, `raw_destination_count`, `raw_reporting_mta`, `raw_feedback_id`, `raw_processing_ms`, `raw_delay_expires`, `raw_complaint_type`, `raw_reject_reason`, `raw_failure_message` (address-redacted) (`recipient_domain`, `remote_mta` pass through) |
 | `payment_refunds` | reason (staff-typed) | `reason_length` |
 | `stripe_balance_transactions` | dismissed_reason (staff-typed) | `dismissed_reason_length` |
 | `slip_shares` | notes | — |
@@ -118,6 +120,8 @@ Unqualified names (`users`) resolve to the view through the role's search_path;
 | `slips`, `dock_fingers` | notes | — |
 
 Org fields (`*_org_name/number/address`), the club's own `bank_account`/`org_number`/`address` (printed on fakturas), and `customer_phone_masked` (masked at import) pass through.
+
+The mail log of migration 000130 (BRY-588) keeps `recipient_domain` and `remote_mta`: which provider refuses the club's mail is the diagnosis, and for the large providers the domain names nobody. For a member on their own domain it is an indirect identifier, which is accepted because the role already sees `user_id` and cannot see the address. SMTP diagnostics quote the address (`550 5.1.1 <…>: user unknown`), so the views replace any `local@domain` token rather than NULLing the text.
 
 Four columns of migration 000129 (BRY-554) pass through raw, none is PII, so the automatic-booking checks can be queried read-only: `users.kind` (`person` or `system`, which tells the system actor's bilags apart), `clubs.automatic_booking` (the club switch) and `auto_declined_at` on `vipps_import_rows` and `bank_import_rows` (when a person's undo took the row out of the automatic passes; the column exists before anything sets it). `dev_masked_test.go`'s column-parity test fails until each is classified.
 

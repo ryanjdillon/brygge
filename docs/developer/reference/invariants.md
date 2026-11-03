@@ -843,6 +843,12 @@ A new group is created just before the faktura built-in and the positions are re
 
 ---
 
+### The mail log names people and lives 13 months
+
+**Rule (BRY-588):** `email_sends` and `mail_delivery_events` hold recipient addresses, which are personal data with no bookkeeping obligation (the faktura is the record; the log only shows whether it arrived). Rows are deleted 13 months after `email_sends.created_at` / `mail_delivery_events.received_at`. Every path that erases a member's identity (`HandleDeleteUser`, `HandleProcessDeletion` in both outcomes, the purge sweep's `purgeOneMember`) calls `accounting.DeleteMemberMailLog` in its transaction **before** the address is overwritten, because it matches sends by `user_id` or by the member's address in their club, and unmatched events (`send_id IS NULL`) by address. The dev-query role sees only masked views: addresses NULL, address-like tokens in `error` / `diagnostic` replaced, `raw` withheld.
+
+**Failure mode:** an erased member's address stays queryable in the delivery log (and in the developer query role, if unmasked) long after GDPR erasure, or forever without the retention sweep.
+
 ## Developer DB query (DIL-365)
 
 ### Query role is default-deny: masked views + a non-PII allowlist

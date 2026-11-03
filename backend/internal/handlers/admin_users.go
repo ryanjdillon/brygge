@@ -903,6 +903,13 @@ func (h *AdminUsersHandler) HandleDeleteUser(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Before the anonymising update: the mail log is matched on the address.
+	if err = accounting.DeleteMemberMailLog(ctx, tx, userID); err != nil {
+		h.log.Error().Err(err).Msg("failed to delete mail log")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
 	// The row is anonymised in place and never deleted. Other tables reference
 	// it without a cascade (audit actors, deletion requests, orders, journal
 	// authors), so a delete would answer 500, and payments
