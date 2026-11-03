@@ -44,15 +44,16 @@ const (
 	headerSESMessageTags      = "X-SES-MESSAGE-TAGS"
 )
 
-// sesTagValue keeps only the characters SES allows in a message tag value
-// (ASCII letters, digits, '_', '-', '.', '@'). SES rejects a send whose tag
-// breaks the rule, so an unexpected character becomes '_' rather than
-// failing the mail.
+// sesTagValue keeps only the characters SES allows in a tag carried by the
+// X-SES-MESSAGE-TAGS header: ASCII letters, digits, '_' and '-'. The SES API's
+// MessageTag also takes '.' and '@', but the header documentation does not,
+// so neither is passed through. An unexpected character becomes '_' rather
+// than failing the mail.
 func sesTagValue(v string) string {
 	return strings.Map(func(r rune) rune {
 		switch {
 		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9',
-			r == '_', r == '-', r == '.', r == '@':
+			r == '_', r == '-':
 			return r
 		}
 		return '_'

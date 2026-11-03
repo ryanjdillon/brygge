@@ -38,7 +38,7 @@ func TestSESTagValueKeepsOnlyAllowedCharacters(t *testing.T) {
 	for in, want := range map[string]string{
 		"magic_link":                           "magic_link",
 		"3f1c2a9e-7b4d-4e2a-9c61-0d5b8e7f1a23": "3f1c2a9e-7b4d-4e2a-9c61-0d5b8e7f1a23",
-		"a.b@c":                                "a.b@c",
+		"a.b@c":                                "a_b_c",
 		"bad kind,=":                           "bad_kind__",
 		"båt":                                  "b_t",
 	} {
