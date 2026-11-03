@@ -90,6 +90,38 @@
       ttl     = 300;
       records = [{ value = "custom-email-domain.stripe.com."; }];
     };
+    # Amazon SES (ses.nix). Easy DKIM's three selectors, then the custom
+    # MAIL FROM subdomain: its MX receives SES's bounce feedback and its
+    # SPF authorises SES, so SPF aligns relaxed with the From domain. The
+    # apex MX, SPF and DMARC stay as they are.
+    # https://docs.aws.amazon.com/ses/latest/dg/send-email-authentication-dkim-easy.html
+    # https://docs.aws.amazon.com/ses/latest/dg/mail-from.html
+    # Count, not for_each: the tokens are unknown until the identity is
+    # created, and for_each keys must be known at plan time.
+    ses_dkim = {
+      count   = "\${var.ses_enabled ? 3 : 0}";
+      zone    = "\${var.domain}";
+      name    = "\${element(aws_sesv2_email_identity.domain[0].dkim_signing_attributes[0].tokens, count.index)}._domainkey";
+      type    = "CNAME";
+      ttl     = 300;
+      records = [{ value = "\${element(aws_sesv2_email_identity.domain[0].dkim_signing_attributes[0].tokens, count.index)}.dkim.amazonses.com."; }];
+    };
+    ses_mail_from_mx = {
+      count   = "\${var.ses_enabled ? 1 : 0}";
+      zone    = "\${var.domain}";
+      name    = "send";
+      type    = "MX";
+      ttl     = 300;
+      records = [{ value = "10 feedback-smtp.\${var.aws_region}.amazonses.com."; }];
+    };
+    ses_mail_from_spf = {
+      count   = "\${var.ses_enabled ? 1 : 0}";
+      zone    = "\${var.domain}";
+      name    = "send";
+      type    = "TXT";
+      ttl     = 300;
+      records = [{ value = "\"v=spf1 include:amazonses.com ~all\""; }];
+    };
     mail_dkim = {
       count   = "\${var.dkim_public_value != \"\" ? 1 : 0}";
       zone    = "\${var.domain}";

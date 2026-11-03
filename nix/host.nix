@@ -1276,6 +1276,14 @@ in
     STALWART_MAILBOX_PASSWORDS_PATH = "/etc/stalwart/board-mailbox-passwords.json";
     # Faktura delivery log: the helper socket defined above.
     MAIL_LOG_SOCKET = "/run/brygge-mail-log.sock";
+  } // lib.optionalAttrs clubConfig.sesEnabled {
+    # Amazon SES (terraform/ses.nix builds the same names from the slug).
+    # The worker resolves the queue URLs itself; its AWS_ACCESS_KEY_ID /
+    # AWS_SECRET_ACCESS_KEY are secrets and live in /etc/brygge/env.
+    SES_REGION            = clubConfig.awsRegion;
+    SES_CONFIGURATION_SET = "brygge-${clubConfig.slug}";
+    SES_EVENTS_QUEUE_NAME = "brygge-${clubConfig.slug}-ses-events";
+    SES_EVENTS_DLQ_NAME   = "brygge-${clubConfig.slug}-ses-events-dlq";
   };
 
   # Pre-create the password-map file so the systemd unit can write to

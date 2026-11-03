@@ -8,6 +8,7 @@ Cross-audience navigation: see [`../../index.md`](../../index.md).
 | [inbox.md](inbox.md) | Operators + Developers | Role-gated shared inbox at `/admin/inbox`: spec format, reconciler, per-user provisioning, send path, verification recipes |
 | [stalwart-internals.md](stalwart-internals.md) | Developers | Stalwart 0.15 protocol quirks (admin REST, JMAP, password hashing). Reference for when something at the protocol layer breaks. |
 | [bimi.md](bimi.md) | Operators | BIMI: publishing the club logo so it renders next to outbound mail |
+| [ses.md](ses.md) | Operators + Developers | Amazon SES for app mail: Terraform resources, DNS records, owner setup runbook, delivery-event pipeline |
 
 Related:
 
