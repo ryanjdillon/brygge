@@ -236,6 +236,63 @@ groups:
           description: "Stalwart gave up on {{ $value }} message(s) in the last 24 hours (kind {{ $labels.kind }}: dsn_permfail = permanent failure notice sent to the sender, double_bounce = the notice itself bounced)."
           runbook_url: "__RUNBOOK_BASE__#mailbounced"
 
+      # Amazon SES delivery outcomes, counted by the SES events worker once
+      # per stored event (redeliveries are not counted). Every series is
+      # pre-created at 0, so increase() sees the first one; > 0.5 is "at
+      # least one" despite extrapolation. Labels are closed sets: the alert
+      # carries the domain class and the SMTP status class (5.1 = bad
+      # mailbox, 5.7 = policy refusal), and the description carries the query
+      # that returns the exact domain, full status and diagnostic.
+      - alert: SesDeliveryFailed
+        expr: |
+          sum by (kind, result, recipient_domain_class, smtp_status_class) (
+            increase(brygge_email_delivery_total{job="__SERVICE_NAMESPACE__/brygge-api", result=~"rejected|rejected_temporary|suppressed|complaint"}[1h])
+          ) > 0.5
+        labels:
+          service_namespace: __SERVICE_NAMESPACE__
+          club: __CLUB_SLUG__
+          severity: page
+        annotations:
+          summary: "__SERVICE_NAMESPACE__: {{ $labels.kind }} mail {{ $labels.result }} by Amazon SES ({{ $labels.recipient_domain_class }} recipient, SMTP {{ $labels.smtp_status_class }})"
+          description: "Amazon SES reported {{ $value | printf \"%.0f\" }} {{ $labels.kind }} message(s) as {{ $labels.result }} in the last hour (recipient domain class {{ $labels.recipient_domain_class }}, SMTP status class {{ $labels.smtp_status_class }}). Exact recipient domain, SMTP status and diagnostic: just prod-query \"SELECT e.event_at, s.kind, e.event_type, e.bounce_type, e.bounce_subtype, e.recipient_domain, e.smtp_status, e.diagnostic, e.remote_mta, s.related_type, s.related_id, s.user_id FROM mail_delivery_events e LEFT JOIN email_sends s ON s.id = e.send_id WHERE e.event_type IN ('bounce', 'complaint', 'reject', 'rendering_failure') AND e.received_at > now() - interval '24 hours' ORDER BY e.event_at DESC LIMIT 20\""
+          runbook_url: "__RUNBOOK_BASE__#sesdeliveryfailed"
+
+      # Every message SES accepts produces at least a Send event, so sends
+      # with no event at all mean the configuration set → SNS → SQS → worker
+      # path is broken and SesDeliveryFailed is blind. The sends window ends
+      # 15 minutes ago so a send's events have time to arrive; the events
+      # window covers it plus those 15 minutes. Any message off the queue
+      # counts as traffic, including unparseable ones (SesDlqNotEmpty covers
+      # those).
+      - alert: SesEventsMissing
+        expr: |
+          sum(increase(brygge_email_send_total{job="__SERVICE_NAMESPACE__/brygge-api", provider="ses", result="ok"}[2h] offset 15m)) > 0.5
+          unless on ()
+          sum(increase(brygge_ses_events_received_total{job="__SERVICE_NAMESPACE__/brygge-api"}[2h15m])) > 0.5
+        labels:
+          service_namespace: __SERVICE_NAMESPACE__
+          club: __CLUB_SLUG__
+          severity: warn
+        annotations:
+          summary: "__SERVICE_NAMESPACE__: SES sends but no delivery events"
+          description: "The API handed about {{ $value | printf \"%.0f\" }} message(s) to Amazon SES in the two hours before the last 15 minutes, and the SES events worker took no event off its queue in that time. Bounces and complaints are not being recorded and SesDeliveryFailed can't fire."
+          runbook_url: "__RUNBOOK_BASE__#seseventsmissing"
+
+      # The worker samples the DLQ depth every minute; the gauge exists only
+      # where the worker runs. A message lands there after five failed
+      # receives and is kept 14 days.
+      - alert: SesDlqNotEmpty
+        expr: max(brygge_ses_dlq_messages{job="__SERVICE_NAMESPACE__/brygge-api"}) > 0
+        for: 15m
+        labels:
+          service_namespace: __SERVICE_NAMESPACE__
+          club: __CLUB_SLUG__
+          severity: warn
+        annotations:
+          summary: "__SERVICE_NAMESPACE__: {{ $value }} SES event(s) in the dead-letter queue"
+          description: "The SES events dead-letter queue has held {{ $value }} message(s) for 15 minutes. Those delivery events failed five times and are not recorded; they are deleted 14 days after they were first sent."
+          runbook_url: "__RUNBOOK_BASE__#sesdlqnotempty"
+
   - name: brygge-__CLUB_SLUG__-payments
     rules:
       # A payment webhook answers 5xx when it could not look up or settle an

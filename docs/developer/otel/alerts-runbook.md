@@ -19,6 +19,9 @@ PW=$(cat /etc/stalwart/admin-password); U=http://127.0.0.1:8088
 | [DmarcDkimFailing](#dmarcdkimfailing) | page | A DMARC aggregate report shows DKIM failures |
 | [EmailSendErrors](#emailsenderrors) | page | The API failed to hand 3+ messages to the relay in 15 minutes |
 | [MailBounced](#mailbounced) | daily | Stalwart gave up on a message |
+| [SesDeliveryFailed](#sesdeliveryfailed) | page | Amazon SES reported a bounce, suppression, complaint or reject for app mail in the last hour |
+| [SesEventsMissing](#seseventsmissing) | warn | App mail went out through SES but no delivery event came back |
+| [SesDlqNotEmpty](#sesdlqnotempty) | warn | SES delivery events sit in the dead-letter queue |
 | [TlsCertExpiring](#tlscertexpiring) | warn | A served certificate expires within 14 days |
 | [TlsProbeFailing](#tlsprobefailing) | warn | The TLS probe of one endpoint has reported nothing for 30 minutes |
 | [DiskFilling](#diskfilling) | warn | A filesystem is over 85 % full |
@@ -135,6 +138,8 @@ The reminder worker retries a failed delivery up to three times, so a single fai
 
 **Fixes.** Restart Stalwart if it's down; re-sync the relay password; for a single bad recipient (a reminder retrying), fix or remove the address. Re-send whatever failed once the cause is fixed; the journal lines say which sends those were.
 
+With `EMAIL_PROVIDER=ses` the relay is Amazon SES's SMTP endpoint, not Stalwart: check the SES credentials in `/etc/brygge/env` and the account's sending status (SES console → Account dashboard; a paused account refuses every send). A send whose outcome is ambiguous (the connection broke while the message body was being written or at the end of DATA) is recorded `unknown` in `email_sends`, and is never retried automatically, because SES may already have sent it; check the recipient before resending by hand.
+
 ## MailBounced
 
 **Meaning.** A daily notice: Stalwart gave up on at least one message in the last 24 hours. `kind="dsn_permfail"` means it sent a permanent-failure notice (DSN) to the envelope sender; `kind="double_bounce"` means that notice itself couldn't be delivered and was discarded — app mail's bounce mailbox is broken, see [../mail/setup.md § Where bounces for app mail go](../mail/setup.md#where-bounces-for-app-mail-go).
@@ -142,6 +147,67 @@ The reminder worker retries a failed delivery up to three times, so a single fai
 **First checks.** The DSN lands in the bounce mailbox (the shared mailbox flagged `receives_bounces`, else postmaster@) and names the recipient and the remote server's answer. `journalctl -u stalwart --since -1d | grep -iE 'permanent failure|double bounce'` gives the times.
 
 **Fixes.** Usually data: a mistyped or dead member address — correct it in the member record. Many bounces to one provider point at a block rather than bad addresses: see [MailDeferredByProvider](#maildeferredbyprovider). Double bounces need the bounce mailbox fixed.
+
+This rule watches the Stalwart path only. With `EMAIL_PROVIDER=ses`, app mail (magic links, fakturas, reminders) goes through Amazon SES and its bounces are [SesDeliveryFailed](#sesdeliveryfailed); Stalwart still carries the club mailboxes' own outbound mail, the magic-link fallback and anything sent before the cutover, so this alert stays.
+
+## SesDeliveryFailed
+
+**Meaning.** Amazon SES reported at least one app message (`kind`: magic link, faktura, reminder, …) in the last hour as not delivered, and the SES events worker stored it (`brygge_email_delivery_total`). `result` is the status the event mapped to ([sesevents README § Ordering and the rank rule](../../../backend/internal/sesevents/README.md#ordering-and-the-rank-rule)):
+
+| `result` | SES event | What it means |
+|---|---|---|
+| `rejected` | Bounce `Permanent` (other subtypes) or `Undetermined`, Reject, Rendering Failure | The receiving server refused the address for good (no such mailbox, domain gone), or SES itself refused the message (virus, template). SES adds a hard-bounced address to the account-level suppression list. |
+| `suppressed` | Bounce `Permanent` / `OnAccountSuppressionList` | SES did not try: the address is on the account's suppression list from an earlier hard bounce or complaint. Addresses stay there until removed. |
+| `rejected_temporary` | Bounce `Transient` | SES retried and gave up (mailbox full, message too large, provider throttling). A later delivery of the same send moves it back to `accepted`. |
+| `complaint` | Complaint | The recipient pressed "report spam" (Gmail doesn't report these). The address is suppressed. |
+
+`recipient_domain_class` is only `gmail`, `outlook`, `yahoo`, `icloud` or `other`, and `smtp_status_class` is the first two parts of the enhanced status (`5.1` bad mailbox, `5.7` policy or authentication refusal, `none` when SES gave none): labels are closed sets so no address or raw domain reaches the metrics backend. The details are in the database. The alert fires once per kind, result and class and resolves an hour after the last such event.
+
+**First checks.**
+
+1. The events, with recipient domain, SMTP status and the receiving server's diagnostic (the alert's description carries the same query; addresses come back NULL by design, correlate on `user_id` / `related_id`):
+
+   ```bash
+   just prod-query "SELECT e.event_at, s.kind, e.event_type, e.bounce_type, e.bounce_subtype, e.recipient_domain, e.smtp_status, e.diagnostic, e.remote_mta, s.related_type, s.related_id, s.user_id FROM mail_delivery_events e LEFT JOIN email_sends s ON s.id = e.send_id WHERE e.event_type IN ('bounce', 'complaint', 'reject', 'rendering_failure') AND e.received_at > now() - interval '24 hours' ORDER BY e.event_at DESC LIMIT 20"
+   ```
+
+   Without an SSH key use `just prod-query-http` with the same SQL. `raw_reject_reason`, `raw_complaint_type` and `raw_failure_message` on `mail_delivery_events` add the reject reason, the complaint feedback type and the rendering error.
+2. One address or many? Several `rejected` at one `recipient_domain` with a `5.7.x` status point at a block of the sending domain or of SES's IPs at that provider, not at bad addresses: read the diagnostic, and check the account's reputation (below).
+3. Account health: SES console (eu-north-1) → Reputation metrics. AWS puts the account under review at a bounce rate of 5 % or a complaint rate of 0.1 %, and may pause sending at 10 % / 0.5 % ([reputation metrics messages](https://docs.aws.amazon.com/ses/latest/dg/reputationdashboardmessages.html), [reputation metrics](https://docs.aws.amazon.com/ses/latest/dg/reputation-dashboard-dg.html)). A club sends little, so one faktura run to stale addresses can cross 5 %.
+
+**Fixes.**
+
+- **`rejected` with `5.1.x` (bad mailbox or domain).** Data: correct the member's address in the member record, then resend the faktura or ask the member to log in again. Don't resend to the same address: it is now suppressed.
+- **`suppressed`.** The address bounced or complained before. If the member says the address works now (mailbox recreated, typo fixed at their provider), remove it from the suppression list with the board's un-suppress action (BRY-590), or by hand: SES console → Configuration → Suppression list → Remove, or `aws sesv2 delete-suppressed-destination --email-address <address>` (SESv2 `DeleteSuppressedDestination`; the address must match the stored case exactly). Then resend. [Suppression list](https://docs.aws.amazon.com/ses/latest/dg/sending-email-suppression-list.html).
+- **`complaint`.** Don't remove the suppression unless the member asks for mail again; tell the board who complained (by `user_id`). Several complaints on one kind mean that mail looks like spam to members: look at what was sent.
+- **`rejected_temporary`.** Usually resolves itself (a later send succeeds); a full mailbox is the member's to fix. Repeated transient bounces at one provider are throttling: see step 2.
+- **Reject or rendering failure.** A bug in what the app sent: the reason is in `raw_reject_reason` / `raw_failure_message`. Fix and resend.
+
+Event field meanings: [Contents of event data that Amazon SES publishes to Amazon SNS](https://docs.aws.amazon.com/ses/latest/dg/event-publishing-retrieving-sns-contents.html).
+
+## SesEventsMissing
+
+**Meaning.** The API handed app mail to Amazon SES (`brygge_email_send_total{provider="ses", result="ok"}`) in the two hours up to 15 minutes ago, and the SES events worker took nothing off its SQS queue (`brygge_ses_events_received_total`) in that time plus the 15 minutes after. SES publishes at least a Send event for every message it accepts, so the path configuration set → SNS topic → SQS queue → worker is broken somewhere. Mail itself may well be delivered; what is lost is the record of whether it was, so [SesDeliveryFailed](#sesdeliveryfailed) can't fire and the Leveringslogg shows sends stuck at `submitted`. Events SES published in the meantime wait in the queue (4 days' retention) if the break is on the worker's side.
+
+**First checks.**
+
+1. Is the worker running? `journalctl -u brygge --since -3h | grep -i 'SES events'` — `SES events worker started` at boot, then receive or queue-lookup warnings (`SES events receive failed`, `SQS queue URL lookup failed`: credentials, IAM policy or network). No start line: `SES_EVENTS_QUEUE_NAME` is unset ([configuration.md](../configuration.md)).
+2. Is SQS holding messages? SQS console → `brygge-<slug>-ses-events` → "Messages available". Many available and nothing received: the worker side (step 1). None available: nothing is being published.
+3. Did the sends carry the configuration set? Without the `X-SES-CONFIGURATION-SET` header SES publishes no events. `just prod-query "SELECT provider, status, count(*) FROM email_sends WHERE created_at > now() - interval '3 hours' GROUP BY 1, 2"` — `submitted` with no `queued`/`accepted` across the board fits this.
+4. The publishing side: SES console → Configuration sets → `brygge-<slug>` → Event destinations (enabled, SNS topic `brygge-<slug>-ses-events`); SNS console → the topic's subscription to the queue (confirmed, raw message delivery on). Setup: [../mail/ses.md](../mail/ses.md).
+
+**Fixes.** Fix the credential, policy or Terraform-managed resource that broke (`tf-apply` is the owner's step), then restart the API if the worker gave up (`systemctl restart brygge`). Events still in the queue are processed on their own; events never published are lost, and those sends stay `submitted`.
+
+## SesDlqNotEmpty
+
+**Meaning.** The SES events dead-letter queue (`brygge-<slug>-ses-events-dlq`) has held messages for 15 minutes (`brygge_ses_dlq_messages`, sampled each minute). A message moves there after the worker failed to store it five times: its body didn't parse as an SES event, or the database refused the write each time. Those delivery outcomes are not recorded. The DLQ keeps a message 14 days from when it first entered the source queue, then deletes it. The worker leaves the DLQ alone; only a person moves messages out.
+
+**First checks.**
+
+1. Why they failed: `journalctl -u brygge --since -1d | grep -E 'SES event (unparseable|not stored)'` — the line carries `sqs_message_id` and the error.
+2. The messages themselves: SQS console → the DLQ → Send and receive messages → Poll for messages. The body is the SES event JSON and contains member addresses: read it there, don't paste it anywhere.
+
+**Fixes.** Fix the cause first (a parser gap in `backend/internal/sesevents/event.go` for an event shape SES started sending, or a database problem), deploy, then redrive: SQS console → the DLQ → Start DLQ redrive → Redrive to source queue(s) (API `StartMessageMoveTask`; [configure a dead-letter queue redrive](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-configure-dead-letter-queue-redrive.html)). Redriven messages are new messages to SQS, and the store drops any event it already has, so redriving twice is safe. A message that is not an SES event at all (a test message) can be deleted from the DLQ. Redriving without the fix sends it back to the DLQ after five more failures.
 
 ## TlsCertExpiring
 

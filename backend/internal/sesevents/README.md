@@ -71,7 +71,6 @@ Every minute the worker reads the DLQ's `ApproximateNumberOfMessages` into `bryg
 ## Common misses
 
 - `remote_mta` is only the receiving server's IP from a `Delivery` event (`remoteMtaIp`). `reportingMTA` on `Bounce` and `DeliveryDelay` names the MTA that reported the outcome, which for the bounces SES generates is SES's own host, so it is not copied into `remote_mta`; the dev view exposes it as `raw_reporting_mta`. For "which provider refuses us", use `recipient_domain` and the diagnostic.
-
-- The `kind` and `recipient_domain_class` metric attributes are closed sets. A new `email.Kind` value must also be added to `Kinds` in `status.go`, or it counts as `other`.
+- The `kind`, `recipient_domain_class` and `smtp_status_class` metric attributes are closed sets (the status class is at most 3 × 8 values). A new `email.Kind` value must also be added to `Kinds` in `status.go`, or it counts as `other`.
 - `Raw` stores the whole SES event, including `mail.commonHeaders` (subject, To). It is personal data: dev-query views must mask it.
 - Tests use synthetic fixtures only; never paste a real event from the queue into `testdata/`.

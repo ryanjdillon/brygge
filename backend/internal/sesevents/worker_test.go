@@ -208,10 +208,10 @@ func TestWorkerDeletesOnlyCommittedMessages(t *testing.T) {
 	// The redelivered Delivery is received twice but counted once.
 	assertSum(t, rm, "brygge.email.delivery", 1,
 		attribute.String("kind", "invoice"), attribute.String("result", StatusAccepted),
-		attribute.String("recipient_domain_class", DomainOther))
+		attribute.String("recipient_domain_class", DomainOther), attribute.String("smtp_status_class", "2.6"))
 	assertSum(t, rm, "brygge.email.delivery", 1,
 		attribute.String("kind", "invoice"), attribute.String("result", StatusRejected),
-		attribute.String("recipient_domain_class", DomainOther))
+		attribute.String("recipient_domain_class", DomainOther), attribute.String("smtp_status_class", "5.1"))
 	assertSum(t, rm, "brygge.ses.events.received", 2, attribute.String("event_type", EventDelivery))
 	assertSum(t, rm, "brygge.ses.events.received", 1, attribute.String("event_type", eventTypeInvalid))
 	assertSum(t, rm, "brygge.ses.events.received", 1, attribute.String("event_type", eventTypeIgnored))
