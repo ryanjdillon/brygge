@@ -85,6 +85,10 @@
       # sides derive resource names from slug, so host.nix needs no
       # Terraform outputs.
       sesEnabled       = tfvars.ses_enabled or false;
+      # Sends app mail through SES. Separate from sesEnabled so the
+      # infrastructure and DNS can land and verify before the cutover;
+      # false again is the rollback.
+      sesSending       = tfvars.ses_sending or false;
       awsRegion        = tfvars.aws_region or "eu-north-1";
     };
 

@@ -102,10 +102,17 @@ type Config struct {
 	// faktura delivery log reports "unavailable".
 	MailLogSocket string
 
-	// Amazon SES delivery events. SESEventsQueueName empty disables the
-	// event worker. The AWS access key is not configured here: the SDK's
-	// default credential chain reads AWS_ACCESS_KEY_ID /
-	// AWS_SECRET_ACCESS_KEY from the environment.
+	// EmailProvider selects the relay for app mail: "smtp" (default, the
+	// SMTP_* relay, i.e. Stalwart) or "ses" (the Amazon SES SMTP interface,
+	// with SMTP_* kept as the magic-link fallback).
+	EmailProvider string
+
+	// Amazon SES. SESEventsQueueName empty disables the event worker, which
+	// takes its credentials from the AWS SDK's default chain. The SES SMTP
+	// sender reads the same key pair here, because its password is derived
+	// from the secret key.
+	AWSAccessKeyID      string
+	AWSSecretAccessKey  string
 	SESRegion           string
 	SESConfigurationSet string
 	SESEventsQueueName  string
@@ -194,6 +201,9 @@ func Load() Config {
 		ReconcilerDryRun:             envBool("BRYGGE_RECONCILER_DRY_RUN", false),
 		MailLogSocket:                envStr("MAIL_LOG_SOCKET", ""),
 
+		EmailProvider:       envStr("EMAIL_PROVIDER", "smtp"),
+		AWSAccessKeyID:      envStr("AWS_ACCESS_KEY_ID", ""),
+		AWSSecretAccessKey:  envStr("AWS_SECRET_ACCESS_KEY", ""),
 		SESRegion:           envStr("SES_REGION", ""),
 		SESConfigurationSet: envStr("SES_CONFIGURATION_SET", ""),
 		SESEventsQueueName:  envStr("SES_EVENTS_QUEUE_NAME", ""),

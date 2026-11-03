@@ -2,9 +2,12 @@ package broadcast
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/rs/zerolog"
+
+	"github.com/brygge-klubb/brygge/internal/email"
 )
 
 // OutgoingMessage is one rendered broadcast message bound for a single
@@ -160,7 +163,8 @@ func (w *Worker) drain(ctx context.Context) {
 
 // process dispatches a single delivery to its kind's Sender and records the
 // outcome. A failure short of the attempt cap returns the row to 'pending'
-// for another round; at the cap it becomes terminally 'failed'. A delivery
+// for another round; at the cap, or when the outcome is unknown
+// (email.ErrDeliveryAmbiguous), it becomes terminally 'failed'. A delivery
 // whose kind has no registered sender is left as-is (still 'sending') and
 // reclaimed by the next boot sweep — this shouldn't happen since a kind's
 // rows are only created when its sender exists.
@@ -181,8 +185,11 @@ func (w *Worker) process(ctx context.Context, c Claimed) {
 	}
 
 	// c.Attempts is the count before this attempt; Mark increments it.
+	// An ambiguous send is failed at once: the relay may have the message,
+	// and an automatic retry would mail it twice. The row's error says the
+	// outcome is unknown, so whoever requeues it does so knowingly.
 	next := DeliveryPending
-	if c.Attempts+1 >= w.MaxAttempts {
+	if c.Attempts+1 >= w.MaxAttempts || errors.Is(err, email.ErrDeliveryAmbiguous) {
 		next = DeliveryFailed
 	}
 	if merr := w.store.Mark(ctx, c.DeliveryID, next, err.Error()); merr != nil {

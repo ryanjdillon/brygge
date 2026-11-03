@@ -40,10 +40,11 @@ openssl rand -hex 32
 
 ## Email (SMTP)
 
-Used for magic link login, invoice delivery, and broadcasts. Brygge talks SMTP to the self-hosted Stalwart mail server on the same host. See [mail/setup.md](mail/setup.md) for the server-side setup.
+Used for magic link login, invoice delivery, and broadcasts. By default Brygge talks SMTP to the self-hosted Stalwart mail server on the same host; with `EMAIL_PROVIDER=ses` app mail goes through Amazon SES and the `SMTP_*` relay is kept only as the magic-link fallback ([Sending through SES](#sending-through-amazon-ses)). See [mail/setup.md](mail/setup.md) for the server-side setup.
 
 | Variable        | Required  | Default     | Description                                               |
 |-----------------|-----------|-------------|-----------------------------------------------------------|
+| `EMAIL_PROVIDER`| No        | `smtp`      | `smtp` (the `SMTP_*` relay) or `ses`. Non-secret: set by `nix/host.nix` to `ses` only when both tfvars `ses_enabled` and `ses_sending` are true. Any other value stops the API at startup |
 | `SMTP_HOST`     | For email | —           | SMTP server (usually `mail.<domain>`)                     |
 | `SMTP_PORT`     | No        | `587`       | `465` (SMTPS) recommended; `587` (Submission/STARTTLS) supported |
 | `SMTP_USERNAME` | For email | —           | Stalwart principal name — `relay` (no `@<domain>` suffix) |
@@ -51,7 +52,15 @@ Used for magic link login, invoice delivery, and broadcasts. Brygge talks SMTP t
 | `EMAIL_FROM`    | For email | —           | Header From on outgoing mail (e.g. `<Club Name> <relay@<domain>>`). Stalwart rewrites the envelope sender of the `relay` login to the bounce mailbox (`board_mailboxes` entry with `receives_bounces`, else `postmaster@<domain>`), so bounces never go to the send-only `relay@` — see [mail/setup.md](mail/setup.md#where-bounces-for-app-mail-go) |
 | `EMAIL_REPLY_TO`| No        | —           | Reply-To header (e.g. `post@<domain>`) — routes replies to a human-read mailbox when the From address is sending-only |
 
-If `SMTP_HOST` is not set, the app starts in degraded mode — magic link auth and invoice emails will not work.
+If `SMTP_HOST` is not set (and `EMAIL_PROVIDER` is not `ses`), the app starts in degraded mode — magic link auth and invoice emails will not work.
+
+Every send, through either relay, is logged in `email_sends` before the relay is contacted ([backend/internal/email/README.md § Send log](../../backend/internal/email/README.md#send-log-email_sends)).
+
+### Sending through Amazon SES
+
+With `EMAIL_PROVIDER=ses` the API sends through the SES SMTP interface: host `email-smtp.<SES_REGION>.amazonaws.com`, port 465 (implicit TLS), username `AWS_ACCESS_KEY_ID`, and a password the API derives from `AWS_SECRET_ACCESS_KEY` with [AWS's documented algorithm](https://docs.aws.amazon.com/ses/latest/dg/smtp-credentials.html#smtp-credentials-convert) — no extra secret. Every message carries `X-SES-CONFIGURATION-SET: $SES_CONFIGURATION_SET` and `X-SES-MESSAGE-TAGS: send_id=<email_sends.id>, kind=<kind>`. `EMAIL_FROM` and `EMAIL_REPLY_TO` apply unchanged; the From domain must be the SES-verified identity.
+
+Required with `ses`: `SES_REGION`, `SES_CONFIGURATION_SET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `EMAIL_FROM`. Any missing one stops the API at startup with the names listed, rather than falling back to Stalwart unnoticed. The `SMTP_*` relay, when configured, receives a magic link that SES refused outright (not one whose outcome is unknown). Cutover and rollback: [mail/ses.md § Cutover](mail/ses.md#cutover-sending-app-mail-through-ses).
 
 ### Contact form recipient
 
@@ -92,8 +101,8 @@ The API long-polls an SQS queue that the SES configuration set publishes deliver
 | `SES_CONFIGURATION_SET` | For SES        | —       | Configuration set name, `brygge-<slug>`. Non-secret: `nix/host.nix` |
 | `SES_EVENTS_QUEUE_NAME` | For SES events | —       | SQS queue name, `brygge-<slug>-ses-events`; the URL is resolved at start with `GetQueueUrl`. Unset disables the worker. Non-secret: `nix/host.nix` |
 | `SES_EVENTS_DLQ_NAME`   | No             | —       | Dead-letter queue name, `brygge-<slug>-ses-events-dlq`. Its depth is sampled each minute into `brygge.ses.dlq.messages`; unset skips sampling. Non-secret: `nix/host.nix` |
-| `AWS_ACCESS_KEY_ID`     | For SES events | —       | Access key of the `brygge-<slug>-app` IAM user, read by the AWS SDK's default credential chain. Secret: `/etc/brygge/env`. Created by hand in the AWS console, never in Terraform state |
-| `AWS_SECRET_ACCESS_KEY` | For SES events | —       | Secret of that access key. Secret: `/etc/brygge/env` |
+| `AWS_ACCESS_KEY_ID`     | For SES        | —       | Access key of the `brygge-<slug>-app` IAM user, read by the AWS SDK's default credential chain and used as the SES SMTP username. Secret: `/etc/brygge/env`. Created by hand in the AWS console, never in Terraform state |
+| `AWS_SECRET_ACCESS_KEY` | For SES        | —       | Secret of that access key; the SES SMTP password is derived from it. Secret: `/etc/brygge/env` |
 
 ## Vipps MobilePay
 

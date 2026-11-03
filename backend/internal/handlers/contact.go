@@ -175,8 +175,9 @@ func (h *ContactHandler) HandleContactForm(w http.ResponseWriter, r *http.Reques
 	// From stays the app's configured sender. The visitor's address only
 	// goes into Reply-To, so a forged submitter cannot spoof the club's
 	// domain or trip DMARC.
+	// No user: the sender is a visitor. The club is CLUB_SLUG's.
 	err = h.mailer.SendWithHeaders(
-		ctx,
+		email.WithSendMeta(ctx, email.SendMeta{Kind: email.KindContact}),
 		to,
 		email.ContactSubject(subject),
 		email.ContactBody(email.ContactMessage{Name: name, Email: replyTo, Subject: subject, Message: message}),

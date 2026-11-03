@@ -9,6 +9,7 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"github.com/brygge-klubb/brygge/internal/email"
 	"github.com/brygge-klubb/brygge/internal/testutil"
 )
 
@@ -344,6 +345,40 @@ func TestWorkerInvoiceReminderTerminalFailAfterCap(t *testing.T) {
 	}
 	if st := invoiceDeliveryStatus(t, s, inv); st != DeliveryFailed {
 		t.Errorf("status = %q, want failed at cap", st)
+	}
+}
+
+// ambiguousSender fails every send with an unknown outcome.
+type ambiguousSender struct{ fakeInvoiceSender }
+
+func (a *ambiguousSender) Send(ctx context.Context, c Claimed) error {
+	_ = a.fakeInvoiceSender.Send(ctx, c)
+	return fmt.Errorf("smtp close DATA: %w: EOF", email.ErrDeliveryAmbiguous)
+}
+
+// The relay may already hold an ambiguous send, so the worker must not try
+// it again on its own: one attempt, then failed for a human to review.
+func TestWorkerDoesNotRetryAmbiguousSend(t *testing.T) {
+	s, clubID, _ := workerStore(t)
+	ctx := context.Background()
+	inv := seedInvoiceW(t, s, clubID, "000000040016")
+	if _, _, err := s.EnqueueInvoiceReminders(ctx, clubID, []InvoiceDelivery{
+		{InvoiceID: inv, Email: "maybe@x.no", Payload: []byte(`{}`)},
+	}); err != nil {
+		t.Fatalf("enqueue reminder: %v", err)
+	}
+
+	sender := &ambiguousSender{}
+	w := NewWorker(s, 0, zerolog.Nop())
+	w.MaxAttempts = 3
+	w.RegisterSender(KindInvoiceReminder, sender)
+	w.drain(ctx)
+
+	if sender.callCount() != 1 {
+		t.Errorf("sends = %d, want 1 (no automatic retry)", sender.callCount())
+	}
+	if st := invoiceDeliveryStatus(t, s, inv); st != DeliveryFailed {
+		t.Errorf("status = %q, want failed", st)
 	}
 }
 
