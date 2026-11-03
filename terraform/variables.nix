@@ -141,6 +141,13 @@
       default     = false;
       description = "Create the SES identity, configuration set, SNS/SQS delivery-event pipeline, app IAM user and the matching DNS records. False creates nothing on AWS.";
     };
+    # Read by the flake (clubConfig.sesSending), not by any resource: it is
+    # declared so the shared tfvars file carries no undeclared key.
+    ses_sending = {
+      type        = "bool";
+      default     = false;
+      description = "Send app mail through SES (EMAIL_PROVIDER=ses) once ses_enabled infrastructure is verified. Consumed by nix/host.nix; Terraform does not use it.";
+    };
     aws_access_key = {
       type        = "string";
       sensitive   = true;

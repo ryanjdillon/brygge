@@ -129,7 +129,9 @@ func (h *MagicLinkHandler) HandleRequestMagicLink(w http.ResponseWriter, r *http
 		locale := email.DetectLocale(r)
 		subject := email.MagicLinkSubject(locale, h.config.ClubName, time.Now())
 		htmlBody := email.MagicLinkBody(locale, h.config.ClubName, h.config.Domain, loginURL)
-		if err := h.email.Send(email.WithKind(ctx, email.KindMagicLink), req.Email, subject, htmlBody); err != nil {
+		// The club is CLUB_SLUG's, which the send log resolves itself.
+		mailCtx := email.WithSendMeta(ctx, email.SendMeta{Kind: email.KindMagicLink, UserID: userID})
+		if err := h.email.Send(mailCtx, req.Email, subject, htmlBody); err != nil {
 			h.log.Error().Err(err).Str("email", req.Email).Msg("failed to send magic link email")
 			// Don't fail the request — the link is stored, user can retry
 		}

@@ -127,7 +127,11 @@ func (h *StripeWebhookHandler) notifyTreasurer(ctx context.Context, d payments.D
 		EvidenceDueBy: d.EvidenceDueBy,
 		DashboardURL:  stripeDashboardURL(h.cfg, disputeDashboardPath(d.ProviderDisputeID)),
 	}
-	if err := h.mailer.Send(ctx, to, email.DisputeSubject(d.EvidenceDueBy), email.DisputeBody(notice)); err != nil {
+	// related_id is the order: the dispute's own id is Stripe's, not a UUID.
+	mailCtx := email.WithSendMeta(ctx, email.SendMeta{
+		ClubID: d.ClubID, Kind: email.KindDispute, RelatedType: "order", RelatedID: d.OrderID,
+	})
+	if err := h.mailer.Send(mailCtx, to, email.DisputeSubject(d.EvidenceDueBy), email.DisputeBody(notice)); err != nil {
 		log.Warn().Err(err).Msg("webhook dispute: email to the treasurer failed")
 	}
 }

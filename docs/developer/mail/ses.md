@@ -112,12 +112,11 @@ Untouched: the apex MX (inbound stays on Stalwart), the apex SPF
    The non-secret `SES_REGION`, `SES_CONFIGURATION_SET`,
    `SES_EVENTS_QUEUE_NAME` and `SES_EVENTS_DLQ_NAME` come from
    `nix/host.nix` once the deploy picks up `ses_enabled`.
-6. **SMTP password.** SES SMTP authenticates with the app key id as username
-   and a password derived from the secret key with AWS's SigV4 algorithm
-   (region-specific). See
-   [Obtaining SES SMTP credentials](https://docs.aws.amazon.com/ses/latest/dg/smtp-credentials.html).
-   The SMTP endpoint for the region is listed in
-   [SES endpoints and quotas](https://docs.aws.amazon.com/general/latest/gr/ses.html).
+6. **SMTP password: nothing to do.** SES SMTP authenticates with the app
+   key id as username and a password derived from the secret key with AWS's
+   SigV4 algorithm (region-specific). Brygge derives it at startup from
+   `AWS_SECRET_ACCESS_KEY`, so there is no separate SMTP secret to store
+   ([Obtaining SES SMTP credentials](https://docs.aws.amazon.com/ses/latest/dg/smtp-credentials.html)).
 7. **Verify.** SES console → Identities → `<domain>`: DKIM status
    *Successful* and custom MAIL FROM status *Successful* (DNS propagation can
    take up to 72 hours, usually minutes). Or:
@@ -133,6 +132,45 @@ Untouched: the apex MX (inbound stays on Stalwart), the apex SPF
    ([request production access](https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html));
    AWS usually answers within 24 hours.
 
+## Sending app mail through SES
+
+With `EMAIL_PROVIDER=ses` the API sends over the SES SMTP interface,
+`email-smtp.<SES_REGION>.amazonaws.com:465` with implicit TLS
+([endpoints](https://docs.aws.amazon.com/general/latest/gr/ses.html)). Each
+message carries two headers that SES strips before delivery
+([event publishing headers](https://docs.aws.amazon.com/ses/latest/dg/event-publishing-send-email.html)):
+
+- `X-SES-CONFIGURATION-SET`: routes the message's events to the SNS → SQS
+  pipeline above.
+- `X-SES-MESSAGE-TAGS: send_id=<uuid>, kind=<kind>`: SES echoes the tags in
+  every event, which is how an event finds its `email_sends` row.
+
+Every send, through SES or Stalwart, first writes an `email_sends` row with
+status `sending`. A send that fails while the message body is in flight is
+marked `unknown` and never retried automatically, because SES has no
+idempotency key and the message may already be queued. Magic links fall back
+to Stalwart SMTP when SES refuses them outright. The full invariants are in
+[backend/internal/email/README.md](../../../backend/internal/email/README.md),
+and the decision is recorded as MAIL-3 in [docs/adr/mail.md](../../adr/mail.md).
+
+## Cutover and rollback
+
+Infrastructure (`ses_enabled`) and sending (`ses_sending`) are separate tfvars
+flags, so the AWS side can be created and verified before any mail moves.
+
+1. Complete the runbook above. DKIM and MAIL FROM must both be *Successful*
+   and production access granted. In the sandbox, mail to any unverified
+   member is refused.
+2. Set `"ses_sending": true` in `terraform/terraform.tfvars.json` and deploy.
+   The host then sets `EMAIL_PROVIDER=ses`. The API refuses to start if the
+   AWS keys or the configuration set are missing.
+3. Send yourself a magic link and check that `email_sends` gets a row whose
+   status moves to `queued`, then `accepted`, within a minute.
+
+**Rollback:** set `"ses_sending": false` and deploy. App mail goes back to
+Stalwart at once. The event worker keeps running while `ses_enabled` is on,
+so events for mail already sent through SES still arrive.
+
 ## Delivery-event worker
 
-See backend/internal/sesevents/README.md.
+See [backend/internal/sesevents/README.md](../../../backend/internal/sesevents/README.md).

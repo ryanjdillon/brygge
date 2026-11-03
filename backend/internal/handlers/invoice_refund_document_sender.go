@@ -60,5 +60,6 @@ func (s *RefundDocumentSender) Send(ctx context.Context, c bcast.Claimed) error 
 	if total < 0 {
 		filename = fmt.Sprintf("kreditnota-%d.pdf", number)
 	}
-	return h.email.SendWithAttachment(email.WithKind(ctx, email.KindInvoice), c.Email, subject, body, filename, pdf)
+	mailCtx := h.invoiceMailContext(ctx, email.KindInvoice, c.ClubID, *c.InvoiceID, "", total)
+	return h.email.SendWithAttachment(mailCtx, c.Email, subject, body, filename, pdf)
 }

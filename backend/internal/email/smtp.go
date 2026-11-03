@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -21,8 +22,9 @@ import (
 // Compile-time check that *SMTPClient implements Sender.
 var _ Sender = (*SMTPClient)(nil)
 
-// SMTPClient sends email via an external SMTP relay — typically the
-// self-hosted mail server on the same host (Stalwart on localhost:587).
+// SMTPClient sends email via an external SMTP relay: the self-hosted mail
+// server on the same host (Stalwart), or the Amazon SES SMTP interface when
+// built with WithSESConfigurationSet.
 type SMTPClient struct {
 	host        string
 	port        int
@@ -30,6 +32,19 @@ type SMTPClient struct {
 	password    string
 	fromAddress string
 	replyTo     string
+	// sesConfigurationSet, when set, makes this an SES client: every message
+	// names the configuration set and carries the send_id / kind tags, and
+	// the SES message id is read back from the end-of-DATA reply.
+	sesConfigurationSet string
+}
+
+// SMTPOption configures an SMTPClient.
+type SMTPOption func(*SMTPClient)
+
+// WithSESConfigurationSet sends through an SES configuration set, whose
+// event destination reports what happened to each message.
+func WithSESConfigurationSet(name string) SMTPOption {
+	return func(c *SMTPClient) { c.sesConfigurationSet = name }
 }
 
 // NewSMTPClient returns a Sender that speaks SMTP. Returns nil if host
@@ -38,14 +53,14 @@ type SMTPClient struct {
 // set it's added as the Reply-To header so recipients' mail clients
 // direct replies at a monitored address (e.g. post@) even when the
 // From address is a sending-only identity (e.g. login@).
-func NewSMTPClient(host string, port int, username, password, fromAddress, replyTo string) *SMTPClient {
+func NewSMTPClient(host string, port int, username, password, fromAddress, replyTo string, opts ...SMTPOption) *SMTPClient {
 	if host == "" || fromAddress == "" {
 		return nil
 	}
 	if port == 0 {
 		port = 587
 	}
-	return &SMTPClient{
+	c := &SMTPClient{
 		host:        host,
 		port:        port,
 		username:    username,
@@ -53,6 +68,30 @@ func NewSMTPClient(host string, port int, username, password, fromAddress, reply
 		fromAddress: fromAddress,
 		replyTo:     replyTo,
 	}
+	for _, o := range opts {
+		o(c)
+	}
+	return c
+}
+
+// withSESHeaders returns extraHeaders plus the SES event-publishing headers.
+// They are set last so no caller header can redirect the configuration set
+// or forge a send_id.
+func (c *SMTPClient) withSESHeaders(ctx context.Context, extraHeaders map[string]string) map[string]string {
+	if c.sesConfigurationSet == "" {
+		return extraHeaders
+	}
+	h := make(map[string]string, len(extraHeaders)+2)
+	for k, v := range extraHeaders {
+		h[k] = v
+	}
+	var sendID string
+	if a := attemptFrom(ctx); a != nil {
+		sendID = a.sendID
+	}
+	h[headerSESConfigurationSet] = c.sesConfigurationSet
+	h[headerSESMessageTags] = sesMessageTags(sendID, kindFrom(ctx))
+	return h
 }
 
 func (c *SMTPClient) Send(ctx context.Context, to, subject, htmlBody string) error {
@@ -68,7 +107,7 @@ func (c *SMTPClient) SendWithHeaders(ctx context.Context, to, subject, htmlBody 
 }
 
 func (c *SMTPClient) send(ctx context.Context, to, subject, htmlBody, filename string, attachment []byte, extraHeaders map[string]string) error {
-	msg, err := c.buildMessage(to, subject, htmlBody, filename, attachment, extraHeaders)
+	msg, err := c.buildMessage(to, subject, htmlBody, filename, attachment, c.withSESHeaders(ctx, extraHeaders))
 	if err != nil {
 		return fmt.Errorf("build message: %w", err)
 	}
@@ -133,16 +172,14 @@ func (c *SMTPClient) send(ctx context.Context, to, subject, htmlBody, filename s
 		return fmt.Errorf("smtp RCPT TO: %w", err)
 	}
 
-	w, err := client.Data()
+	reply, err := writeData(client, msg)
 	if err != nil {
-		return fmt.Errorf("smtp DATA: %w", err)
+		return err
 	}
-	if _, err := w.Write(msg); err != nil {
-		_ = w.Close()
-		return fmt.Errorf("smtp write body: %w", err)
-	}
-	if err := w.Close(); err != nil {
-		return fmt.Errorf("smtp close DATA: %w", err)
+	if c.sesConfigurationSet != "" {
+		if a := attemptFrom(ctx); a != nil {
+			a.messageID = sesMessageID(reply)
+		}
 	}
 	// The relay accepted the message when DATA closed cleanly; a QUIT that
 	// fails after that must not report a delivered message as failed, or the
@@ -151,6 +188,47 @@ func (c *SMTPClient) send(ctx context.Context, to, subject, htmlBody, filename s
 	// it is dropped; the deferred Close ends the connection either way.
 	_ = client.Quit()
 	return nil
+}
+
+// writeData runs the DATA exchange and returns the relay's reply to the end
+// of the message. It is net/smtp's Client.Data spelled out, because that
+// discards the reply, which is where SES puts its message id.
+//
+// Errors are classified for the caller's retry decision. Up to the 354 the
+// relay has nothing, so a failure is plain. After it, a definite SMTP reply
+// to the final dot (4xx/5xx) is still a refusal; but a broken connection or
+// timeout while the body is written or the reply awaited leaves the relay
+// possibly holding the message, which is ErrDeliveryAmbiguous.
+func writeData(client *smtp.Client, msg []byte) (string, error) {
+	text := client.Text
+	id, err := text.Cmd("DATA")
+	if err != nil {
+		return "", fmt.Errorf("smtp DATA: %w", err)
+	}
+	text.StartResponse(id)
+	_, _, err = text.ReadResponse(354)
+	text.EndResponse(id)
+	if err != nil {
+		return "", fmt.Errorf("smtp DATA: %w", err)
+	}
+
+	w := text.DotWriter()
+	if _, err := w.Write(msg); err != nil {
+		_ = w.Close()
+		return "", fmt.Errorf("smtp write body: %w: %w", ErrDeliveryAmbiguous, err)
+	}
+	if err := w.Close(); err != nil {
+		return "", fmt.Errorf("smtp close DATA: %w: %w", ErrDeliveryAmbiguous, err)
+	}
+	_, reply, err := text.ReadResponse(250)
+	if err != nil {
+		var refused *textproto.Error
+		if errors.As(err, &refused) {
+			return "", fmt.Errorf("smtp close DATA: %w", err)
+		}
+		return "", fmt.Errorf("smtp close DATA: %w: %w", ErrDeliveryAmbiguous, err)
+	}
+	return reply, nil
 }
 
 // encodeAddressHeader renders a configured "Name <addr>" value for a header.

@@ -1284,6 +1284,11 @@ in
     SES_CONFIGURATION_SET = "brygge-${clubConfig.slug}";
     SES_EVENTS_QUEUE_NAME = "brygge-${clubConfig.slug}-ses-events";
     SES_EVENTS_DLQ_NAME   = "brygge-${clubConfig.slug}-ses-events-dlq";
+  } // lib.optionalAttrs (clubConfig.sesEnabled && clubConfig.sesSending) {
+    # App mail through the SES SMTP interface; the SMTP_* relay in
+    # /etc/brygge/env (Stalwart) stays as the magic-link fallback. Unset,
+    # the API sends through Stalwart.
+    EMAIL_PROVIDER = "ses";
   };
 
   # Pre-create the password-map file so the systemd unit can write to

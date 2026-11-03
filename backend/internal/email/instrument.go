@@ -8,19 +8,26 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
-// Kind classifies an outbound message for the brygge.email.send counter.
-// The set is closed so the metric's cardinality stays fixed: anything not
-// tagged via WithKind is counted as KindOther.
+// Kind classifies an outbound message for the brygge.email.send counter, the
+// email_sends log and the SES kind tag. The set is closed so the metric's
+// cardinality stays fixed: anything not tagged via WithSendMeta or WithKind
+// is counted as KindOther.
 type Kind string
 
 const (
 	KindMagicLink       Kind = "magic_link"
 	KindInvoice         Kind = "invoice"
 	KindInvoiceReminder Kind = "invoice_reminder"
+	KindCreditNote      Kind = "credit_note"
+	KindDispute         Kind = "dispute"
+	KindContact         Kind = "contact"
 	KindOther           Kind = "other"
 )
 
-var allKinds = []Kind{KindMagicLink, KindInvoice, KindInvoiceReminder, KindOther}
+var allKinds = []Kind{
+	KindMagicLink, KindInvoice, KindInvoiceReminder,
+	KindCreditNote, KindDispute, KindContact, KindOther,
+}
 
 const (
 	resultOK    = "ok"
@@ -36,6 +43,9 @@ func WithKind(ctx context.Context, kind Kind) context.Context {
 
 func kindFrom(ctx context.Context) Kind {
 	k, _ := ctx.Value(kindKey{}).(Kind)
+	if m, ok := SendMetaFrom(ctx); ok && m.Kind != "" {
+		k = m.Kind
+	}
 	for _, known := range allKinds {
 		if k == known {
 			return k
@@ -45,8 +55,9 @@ func kindFrom(ctx context.Context) Kind {
 }
 
 // Instrument wraps next so every send increments brygge.email.send with
-// the context's kind and the outcome. Attributes are deliberately limited
-// to kind and result: recipients, subjects and error text would leak
+// the context's kind, the relay (provider) and the outcome. Attributes are
+// deliberately limited to kind, provider and result: recipients, subjects
+// and error text would leak
 // member data into the metrics backend and explode cardinality. Returns
 // nil when next is nil so callers can keep their "email not configured"
 // nil checks.
@@ -54,16 +65,16 @@ func kindFrom(ctx context.Context) Kind {
 // Call after the global MeterProvider is installed (telemetry.Setup): the
 // zero-valued series created here are recorded against whichever provider
 // is current.
-func Instrument(next Sender) Sender {
+func Instrument(next Sender, provider Provider) Sender {
 	if next == nil {
 		return nil
 	}
-	return instrument(next, otel.Meter("brygge-api"))
+	return instrument(next, provider, otel.Meter("brygge-api"))
 }
 
-func instrument(next Sender, meter metric.Meter) Sender {
+func instrument(next Sender, provider Provider, meter metric.Meter) Sender {
 	sends, err := meter.Int64Counter("brygge.email.send",
-		metric.WithDescription("Outbound app emails handed to the SMTP relay, by kind and result"),
+		metric.WithDescription("Outbound app emails handed to the SMTP relay, by kind, provider and result"),
 		metric.WithUnit("{message}"),
 	)
 	if err != nil {
@@ -76,18 +87,20 @@ func instrument(next Sender, meter metric.Meter) Sender {
 	ctx := context.Background()
 	for _, k := range allKinds {
 		for _, r := range []string{resultOK, resultError} {
-			sends.Add(ctx, 0, metric.WithAttributes(kindAttr(k), resultAttr(r)))
+			sends.Add(ctx, 0, metric.WithAttributes(kindAttr(k), providerAttr(provider), resultAttr(r)))
 		}
 	}
-	return &instrumentedSender{next: next, sends: sends}
+	return &instrumentedSender{next: next, provider: provider, sends: sends}
 }
 
-func kindAttr(k Kind) attribute.KeyValue     { return attribute.String("kind", string(k)) }
-func resultAttr(r string) attribute.KeyValue { return attribute.String("result", r) }
+func kindAttr(k Kind) attribute.KeyValue         { return attribute.String("kind", string(k)) }
+func providerAttr(p Provider) attribute.KeyValue { return attribute.String("provider", string(p)) }
+func resultAttr(r string) attribute.KeyValue     { return attribute.String("result", r) }
 
 type instrumentedSender struct {
-	next  Sender
-	sends metric.Int64Counter
+	next     Sender
+	provider Provider
+	sends    metric.Int64Counter
 }
 
 var _ Sender = (*instrumentedSender)(nil)
@@ -97,7 +110,7 @@ func (s *instrumentedSender) record(ctx context.Context, err error) error {
 	if err != nil {
 		result = resultError
 	}
-	s.sends.Add(ctx, 1, metric.WithAttributes(kindAttr(kindFrom(ctx)), resultAttr(result)))
+	s.sends.Add(ctx, 1, metric.WithAttributes(kindAttr(kindFrom(ctx)), providerAttr(s.provider), resultAttr(result)))
 	return err
 }
 

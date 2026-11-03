@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -643,8 +644,12 @@ func (h *InvoiceHandler) emailNewInvoice(ctx context.Context, m newInvoiceMail) 
 	filename := invoiceAttachmentName(fmt.Sprintf("faktura-%d.pdf", m.number), m.total)
 	subject, htmlBody := h.invoiceMessage(ctx, m.locale, m.clubID, m.invoiceID, m.deliverName, m.clubName,
 		m.number, m.dueDate, m.total, m.kid, m.bankAccount, false)
-	if err := h.email.SendWithAttachment(email.WithKind(ctx, email.KindInvoice), m.deliverTo, subject, htmlBody, filename, m.pdf); err != nil {
-		h.log.Error().Err(err).Str("email", m.deliverTo).Msg("failed to send invoice email")
+	mailCtx := h.invoiceMailContext(ctx, email.KindInvoice, m.clubID, m.invoiceID, "", m.total)
+	if err := h.email.SendWithAttachment(mailCtx, m.deliverTo, subject, htmlBody, filename, m.pdf); err != nil {
+		// An ambiguous send is left a draft too; it shows as unknown in the
+		// delivery log, which is where the treasurer decides on a resend.
+		h.log.Error().Err(err).Bool("ambiguous", errors.Is(err, email.ErrDeliveryAmbiguous)).
+			Str("email", m.deliverTo).Msg("failed to send invoice email")
 		return nil, nil
 	}
 	now := time.Now().Format(time.RFC3339)
@@ -690,6 +695,27 @@ func (h *InvoiceHandler) invoiceMessage(ctx context.Context, locale, clubID, inv
 // isCreditTotal is true for the total of a credit note.
 func isCreditTotal(total float64) bool {
 	return math.Round(total*100) < 0
+}
+
+// invoiceMailContext tags ctx for the email that carries a faktura, so the
+// send is logged against it (email_sends) and its member. kind is the
+// faktura's own kind; a credit note (negative total) is logged as one.
+// userID may be empty, in which case the faktura's member is looked up.
+func (h *InvoiceHandler) invoiceMailContext(ctx context.Context, kind email.Kind, clubID, invoiceID, userID string, total float64) context.Context {
+	if userID == "" && h.db != nil {
+		// Best effort: without it the row is only unlinked from the member.
+		_ = h.db.QueryRow(ctx,
+			`SELECT COALESCE(user_id::text, '') FROM invoices WHERE id = $1 AND club_id = $2`,
+			invoiceID, clubID,
+		).Scan(&userID)
+	}
+	if kind == email.KindInvoice && isCreditTotal(total) {
+		kind = email.KindCreditNote
+	}
+	return email.WithSendMeta(ctx, email.SendMeta{
+		ClubID: clubID, Kind: kind, UserID: userID,
+		RelatedType: "invoice", RelatedID: invoiceID,
+	})
 }
 
 // invoiceAttachmentName renames a faktura's PDF filename for a credit note.
@@ -1433,7 +1459,20 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 		Error(w, http.StatusInternalServerError, "failed to mark invoice as sending")
 		return
 	}
-	if err := h.email.SendWithAttachment(email.WithKind(ctx, email.KindInvoice), deliverTo, subject, htmlBody, filename, pdfBytes); err != nil {
+	var memberID string
+	if userID != nil {
+		memberID = *userID
+	}
+	mailCtx := h.invoiceMailContext(ctx, email.KindInvoice, claims.ClubID, invoiceID, memberID, total)
+	if err := h.email.SendWithAttachment(mailCtx, deliverTo, subject, htmlBody, filename, pdfBytes); err != nil {
+		// The relay may hold the message, so the faktura keeps its sent_at:
+		// rolling back would invite a second send of a mail that may have
+		// arrived. The delivery log shows the send as unknown.
+		if errors.Is(err, email.ErrDeliveryAmbiguous) {
+			h.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("send invoice email: outcome unknown, sent_at kept")
+			Error(w, http.StatusBadGateway, "email delivery outcome unknown")
+			return
+		}
 		h.log.Error().Err(err).Str("email", deliverTo).Msg("send invoice email — rolling back sent_at")
 		// Best-effort rollback. If this also fails we log loudly so the
 		// operator can spot the stuck row; the alternative (leaving it
@@ -1453,7 +1492,6 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 			audit.ActionInvoiceEmailed, "invoice", invoiceID,
 			map[string]any{"email": deliverTo, "invoice_number": invoiceNumber})
 	}
-	_ = userID
 
 	resp := map[string]any{"id": invoiceID, "sent": true}
 	if gl := h.bookSentInvoice(ctx, claims.ClubID, invoiceID, claims.UserID); gl != nil {
@@ -1560,7 +1598,8 @@ func (h *InvoiceHandler) HandleResendInvoice(w http.ResponseWriter, r *http.Requ
 		invoiceNumber, dueDate, total, kid, bankAccount, refail)
 	filename := invoiceAttachmentName(buildInvoiceFilename(invoiceNumber, memberLast, memberFirst, fiscalYear), total)
 
-	if err := h.email.SendWithAttachment(email.WithKind(ctx, email.KindInvoice), deliverTo, subject, htmlBody, filename, pdfBytesResend); err != nil {
+	mailCtx := h.invoiceMailContext(ctx, email.KindInvoice, claims.ClubID, invoiceID, "", total)
+	if err := h.email.SendWithAttachment(mailCtx, deliverTo, subject, htmlBody, filename, pdfBytesResend); err != nil {
 		h.log.Error().Err(err).Str("email", deliverTo).Msg("resend invoice email failed")
 		Error(w, http.StatusBadGateway, "failed to send email")
 		return
