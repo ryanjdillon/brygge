@@ -24,7 +24,7 @@ async function mountAs(viewerRoles: string[]) {
   viewer.roles = viewerRoles
   const wrapper = mountWithPlugins(UsersAdminView, {
     global: {
-      stubs: { BulkInvoicesModal: true, DockFilter: true, SpotFilter: true, NotesFilter: true, ColumnSelector: true },
+      stubs: { BulkInvoicesModal: true, DockFilter: true, SpotFilter: true, NotesFilter: true, HarborShareFilter: true, ColumnSelector: true },
     },
   })
   await flushPromises()

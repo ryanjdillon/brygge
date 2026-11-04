@@ -936,6 +936,14 @@ re-opens the same hole.
 
 **Failure mode:** a path that inserts an assignment without a boat answers 500 for every member it accepts. `POST /admin/slips/{slipID}/assign` did exactly this until it was removed; the SPA never called it.
 
+## Harbour shares
+
+### Ownership is `harbor_share_owner`; the paid date is optional and never invented
+
+**Rule (BRD-14, BRY-77):** is-owner is always `users.harbor_share_owner`. Never derive ownership from `harbor_share_paid_on IS NOT NULL`, from a role, or from `slip_assignments.harbor_membership_*`. `harbor_share_paid_on` is NULL when the paid date is unknown (most buy-ins before 2026), and nothing stores a default or placeholder date in its place. A date needs ownership (CHECK `users_harbor_share_paid_on_requires_owner`), so a write that removes ownership clears the date in the same statement, as `HandleUpdateUser` does. The harbour share import (BRY-139) only fills in what is unset: it never overwrites or clears an owner flag or a date already recorded.
+
+**Failure mode:** a filter on the date would drop every owner whose buy-in date is unknown, which is most of them, from pricing, slip-type and key-eligibility decisions. A filler date would read as a real payment date to the board and to later features, with no way to tell it apart.
+
 ## When to add a new invariant
 
 When you fix a bug that traces back to "we didn't explicitly say X must hold," add an invariant here. The doc is append-only — invariants don't get retired, they get tightened.

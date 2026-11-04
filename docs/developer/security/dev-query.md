@@ -96,7 +96,7 @@ Unqualified names (`users`) resolve to the view through the role's search_path;
 
 | Table | NULL-masked (identity / credential / free text / blob) | Derived hint |
 |-------|--------------------------------------------------------|--------------|
-| `users` | email, phone, address_line, postal_code, city, first_name, last_name, full_name, admin_notes, totp_secret_encrypted, webauthn_handle, payables_token | `has_email` (`kind` passes through) |
+| `users` | email, phone, address_line, postal_code, city, first_name, last_name, full_name, admin_notes, totp_secret_encrypted, webauthn_handle, payables_token | `has_email` (`kind`, `harbor_share_owner`, `harbor_share_paid_on` pass through) |
 | `clubs` | config, faktura_logo_data, site_logo_data, all `*_email` (board), phone, feedback_linear_* + anthropic_api_key (secrets) | — |
 | `billing_recipients` | contact_person, email | `has_email` |
 | `orders` | guest_email, guest_name, token (pay-link capability) | `has_guest_email` |
@@ -124,6 +124,8 @@ Org fields (`*_org_name/number/address`), the club's own `bank_account`/`org_num
 The mail log of migration 000132 (BRY-588) keeps `recipient_domain` and `remote_mta`: which provider refuses the club's mail is the diagnosis, and for the large providers the domain names nobody. For a member on their own domain it is an indirect identifier, which is accepted because the role already sees `user_id` and cannot see the address. SMTP diagnostics quote the address (`550 5.1.1 <…>: user unknown`), so the views replace any `local@domain` token rather than NULLing the text.
 
 Four columns of migration 000129 (BRY-554) pass through raw, none is PII, so the automatic-booking checks can be queried read-only: `users.kind` (`person` or `system`, which tells the system actor's bilags apart), `clubs.automatic_booking` (the club switch) and `auto_declined_at` on `vipps_import_rows` and `bank_import_rows` (when a person's undo took the row out of the automatic passes; the column exists before anything sets it). `dev_masked_test.go`'s column-parity test fails until each is classified.
+
+The harbour share columns of migration 000133 (BRY-77, BRD-14), `users.harbor_share_owner` and `users.harbor_share_paid_on`, pass through raw: whether and when a member bought a share is club membership data, not identity, and the role sees it only against a `user_id`.
 
 ### Allowlist — readable raw (verified no PII)
 

@@ -46,6 +46,8 @@ SELECT
     NULL::bytea AS webauthn_handle,
     NULL::text  AS payables_token,
     kind,                                -- person | system, not PII
+    harbor_share_owner,                  -- ownership flag, not identity
+    harbor_share_paid_on,                -- ownership date, not identity
     (email IS NOT NULL) AS has_email
 FROM public.users;
 

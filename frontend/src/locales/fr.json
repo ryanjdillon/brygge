@@ -780,7 +780,17 @@
       "showing": "Affichage de {from}–{to} sur {total}",
       "searchPlaceholder": "Rechercher par nom ou e-mail…",
       "dockFilterLabel": "Ponton",
-      "dockFilterAll": "Tous"
+      "dockFilterAll": "Tous",
+      "harborShareFilterLabel": "Part du port",
+      "harborShareFilterAll": "Tous",
+      "harborShareFilterOwner": "Propriétaires",
+      "harborShareFilterNotOwner": "Non propriétaires",
+      "harborShareYesPaid": "Oui ({date})",
+      "harborShareYesUnknownDate": "Oui (date inconnue)",
+      "harborShareOwner": "Propriétaire d'une part du port",
+      "harborSharePaidOn": "Part du port payée le",
+      "harborSharePaidOnHint": "laisser vide si inconnue",
+      "harborShareClearDate": "Effacer la date"
     },
     "waitingList": {
       "loadError": "Impossible de charger la liste d'attente",
@@ -1694,6 +1704,9 @@
           "generic": "Impossible d'émettre une nouvelle facture. Réessayez."
         }
       }
+    },
+    "columns": {
+      "harborShare": "Part du port"
     }
   },
   "projects": {

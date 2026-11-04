@@ -299,7 +299,7 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   default-language, the legacy `bank_account` text column (read-only mirror
   pending removal), and six `feature_*` BOOLEAN columns added in migration
   000049 that override env-var defaults at runtime.
-- `users`, `user_roles` — accounts and RBAC. `users.kind` is `person` or `system`; a club's system actor (000129) is not a member.
+- `users`, `user_roles` — accounts and RBAC. `users.kind` is `person` or `system`; a club's system actor (000129) is not a member. Harbour share (moloandel) ownership is on the member, not a role (000133, BRD-14): see below.
 - `slips`, `dock_fingers`, `docks` — harbor map geometry + metadata.
 - `slip_assignments` — joins `users` ↔ `slips` (a user can hold multiple
   active assignments; each slip can only be held by one active user, via
@@ -533,6 +533,18 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   when no system user remains, otherwise it stays so that row is still told apart
   from a person. Every query that lists, matches or loads users must filter
   `kind = 'person'`; see the accounting README "System actor".
+- **Harbour share ownership.** 000133 (BRY-77, BRD-14) adds
+  `users.harbor_share_owner` (BOOLEAN NOT NULL, default false), the only
+  is-owner predicate, and `users.harbor_share_paid_on` (DATE, nullable; NULL =
+  the paid date is unknown, as for most buy-ins before 2026, and nothing stores
+  a placeholder). CHECK `users_harbor_share_paid_on_requires_owner` refuses a
+  date without ownership. No index and no backfill: the legacy
+  `slip_assignments.harbor_membership_amount` / `harbor_membership_paid_at`
+  were only ever written by the seed, so the harbour share import (BRY-139) is
+  the source; those two columns are superseded and are to be dropped in a
+  follow-up. Both new columns pass through `dev_masked.users` raw. **The down**
+  drops `dev_masked.users` first (the repeatable file rebuilds it), then the
+  CHECK and both columns.
 - `invoice_pdf_archive` (migration 000050) — preserves prior PDF bytes when
   `invoices.pdf_data` is regenerated, so Norwegian bokføringsloven §13's
   5-year retention requirement is satisfied.

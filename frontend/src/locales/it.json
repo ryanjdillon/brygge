@@ -780,7 +780,17 @@
       "showing": "Mostrando {from}–{to} di {total}",
       "searchPlaceholder": "Cerca per nome o e-mail…",
       "dockFilterLabel": "Pontile",
-      "dockFilterAll": "Tutti"
+      "dockFilterAll": "Tutti",
+      "harborShareFilterLabel": "Quota del porto",
+      "harborShareFilterAll": "Tutti",
+      "harborShareFilterOwner": "Proprietari",
+      "harborShareFilterNotOwner": "Non proprietari",
+      "harborShareYesPaid": "Sì ({date})",
+      "harborShareYesUnknownDate": "Sì (data sconosciuta)",
+      "harborShareOwner": "Proprietario di quota del porto",
+      "harborSharePaidOn": "Quota del porto pagata il",
+      "harborSharePaidOnHint": "lasciare vuoto se sconosciuta",
+      "harborShareClearDate": "Cancella data"
     },
     "waitingList": {
       "loadError": "Impossibile caricare la lista d'attesa",
@@ -1695,6 +1705,9 @@
           "generic": "Impossibile emettere una nuova fattura. Riprova."
         }
       }
+    },
+    "columns": {
+      "harborShare": "Quota del porto"
     }
   },
   "projects": {

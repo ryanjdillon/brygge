@@ -155,6 +155,12 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		sortCol = "(CASE slip_status.state WHEN 'paid' THEN 3 WHEN 'sent' THEN 2 WHEN 'draft' THEN 1 ELSE 0 END), u.last_name"
 	case "-slip_fee":
 		sortCol = "(CASE slip_status.state WHEN 'paid' THEN 3 WHEN 'sent' THEN 2 WHEN 'draft' THEN 1 ELSE 0 END) DESC, u.last_name"
+	case "harbor_share":
+		// Owners first, then by paid date with unknown dates last, so the
+		// owners read as one block in both directions.
+		sortCol = "u.harbor_share_owner DESC, u.harbor_share_paid_on NULLS LAST, u.last_name"
+	case "-harbor_share":
+		sortCol = "u.harbor_share_owner DESC, u.harbor_share_paid_on DESC NULLS LAST, u.last_name DESC"
 	}
 
 	// Optional ?spot=permanent|seasonal|none filter. Anything else is
@@ -209,6 +215,16 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		notesClause = " AND COALESCE(u.admin_notes, '') = ''"
 	}
 
+	// Optional ?harbor_share=owner|not_owner filter (BRD-14). ANDed with
+	// ?spot= so "owner&spot=none" lists owners without an active slip.
+	harborShareClause := ""
+	switch strings.ToLower(r.URL.Query().Get("harbor_share")) {
+	case "owner":
+		harborShareClause = " AND u.harbor_share_owner"
+	case "not_owner":
+		harborShareClause = " AND NOT u.harbor_share_owner"
+	}
+
 	// Optional ?q= fuzzy search across first_name, last_name, email.
 	// Token-AND so multi-word queries (e.g. "ola nor") narrow the result;
 	// each token is independently anchored with ILIKE %tok% across the
@@ -241,7 +257,7 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 	var totalCount int
 	err := h.db.QueryRow(ctx,
 		`SELECT COUNT(*) FROM users u
-		 WHERE u.club_id = $1 AND u.kind = 'person' `+spotFilter+dockClause+notesClause+searchClause+statusClause,
+		 WHERE u.club_id = $1 AND u.kind = 'person' `+spotFilter+dockClause+notesClause+harborShareClause+searchClause+statusClause,
 		args...,
 	).Scan(&totalCount)
 	if err != nil {
@@ -265,7 +281,9 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		        COALESCE(membership_status.state, ''),
 		        COALESCE(slip_status.state, ''),
 		        COALESCE(boat_summary.boats, '[]'::jsonb),
-		        u.deactivated_at
+		        u.deactivated_at,
+		        u.harbor_share_owner,
+		        to_char(u.harbor_share_paid_on, 'YYYY-MM-DD')
 		 FROM users u
 		 LEFT JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
 		 LEFT JOIN LATERAL (
@@ -365,7 +383,7 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		       JOIN boats b ON b.id = sa.boat_id
 		      WHERE sa.user_id = u.id AND sa.club_id = u.club_id AND sa.released_at IS NULL
 		 ) boat_summary ON true
-		 WHERE u.club_id = $1 AND u.kind = 'person' `+spotFilter+dockClause+notesClause+searchClause+statusClause+`
+		 WHERE u.club_id = $1 AND u.kind = 'person' `+spotFilter+dockClause+notesClause+harborShareClause+searchClause+statusClause+`
 		 GROUP BY u.id, primary_sa.slip_id, primary_sa.assignment_type, primary_sa.number, primary_sa.section,
 		          all_slips.slips, membership_status.state, slip_status.state, boat_summary.boats
 		 ORDER BY `+sortCol+`
@@ -403,12 +421,14 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		SlipFeeStatus      string          `json:"slip_fee_status"`
 		Boats              json.RawMessage `json:"boats"`
 		DeactivatedAt      *time.Time      `json:"deactivated_at,omitempty"`
+		HarborShareOwner   bool            `json:"harbor_share_owner"`
+		HarborSharePaidOn  *string         `json:"harbor_share_paid_on"`
 	}
 
 	var users []userRow
 	for rows.Next() {
 		var u userRow
-		if err := rows.Scan(&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.FullName, &u.Phone, &u.AddressLine, &u.PostalCode, &u.City, &u.IsLocal, &u.AdminNotes, &u.CreatedAt, &u.UpdatedAt, &u.Roles, &u.SlipID, &u.SlipNumber, &u.SlipSection, &u.SlipAssignmentType, &u.Slips, &u.MembershipStatus, &u.SlipFeeStatus, &u.Boats, &u.DeactivatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.FullName, &u.Phone, &u.AddressLine, &u.PostalCode, &u.City, &u.IsLocal, &u.AdminNotes, &u.CreatedAt, &u.UpdatedAt, &u.Roles, &u.SlipID, &u.SlipNumber, &u.SlipSection, &u.SlipAssignmentType, &u.Slips, &u.MembershipStatus, &u.SlipFeeStatus, &u.Boats, &u.DeactivatedAt, &u.HarborShareOwner, &u.HarborSharePaidOn); err != nil {
 			h.log.Error().Err(err).Msg("failed to scan user row")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
@@ -456,21 +476,25 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 	}
 
 	type userDetail struct {
-		ID         string                 `json:"id"`
-		Email      string                 `json:"email"`
-		FirstName  string                 `json:"first_name"`
-		LastName   string                 `json:"last_name"`
-		FullName   string                 `json:"full_name"`
-		Phone      string                 `json:"phone"`
-		Address    string                 `json:"address_line"`
-		PostalCd   string                 `json:"postal_code"`
-		City       string                 `json:"city"`
-		IsLocal    bool                   `json:"is_local"`
-		AdminNotes string                 `json:"admin_notes"`
-		CreatedAt  time.Time              `json:"created_at"`
-		UpdatedAt  time.Time              `json:"updated_at"`
-		Roles      []string               `json:"roles"`
-		Slips      []slipAssignmentDetail `json:"slips"`
+		ID               string                 `json:"id"`
+		Email            string                 `json:"email"`
+		FirstName        string                 `json:"first_name"`
+		LastName         string                 `json:"last_name"`
+		FullName         string                 `json:"full_name"`
+		Phone            string                 `json:"phone"`
+		Address          string                 `json:"address_line"`
+		PostalCd         string                 `json:"postal_code"`
+		City             string                 `json:"city"`
+		IsLocal          bool                   `json:"is_local"`
+		AdminNotes       string                 `json:"admin_notes"`
+		CreatedAt        time.Time              `json:"created_at"`
+		UpdatedAt        time.Time              `json:"updated_at"`
+		Roles            []string               `json:"roles"`
+		Slips            []slipAssignmentDetail `json:"slips"`
+		HarborShareOwner bool                   `json:"harbor_share_owner"`
+		// YYYY-MM-DD, or null when the member is not an owner or the
+		// paid date is unknown.
+		HarborSharePaidOn *string `json:"harbor_share_paid_on"`
 	}
 
 	var u userDetail
@@ -491,7 +515,9 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 		              FROM slip_assignments sa
 		              JOIN slips s ON s.id = sa.slip_id
 		             WHERE sa.user_id = u.id AND sa.club_id = u.club_id AND sa.released_at IS NULL
-		        ), '[]'::jsonb)
+		        ), '[]'::jsonb),
+		        u.harbor_share_owner,
+		        to_char(u.harbor_share_paid_on, 'YYYY-MM-DD')
 		 FROM users u
 		 LEFT JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
 		 WHERE u.id = $1 AND u.club_id = $2 AND u.kind = 'person'
@@ -499,7 +525,8 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 		userID, claims.ClubID,
 	).Scan(&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.FullName,
 		&u.Phone, &u.Address, &u.PostalCd, &u.City,
-		&u.IsLocal, &u.AdminNotes, &u.CreatedAt, &u.UpdatedAt, &u.Roles, &slipsJSON)
+		&u.IsLocal, &u.AdminNotes, &u.CreatedAt, &u.UpdatedAt, &u.Roles, &slipsJSON,
+		&u.HarborShareOwner, &u.HarborSharePaidOn)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "user not found")
 		return
@@ -1481,6 +1508,8 @@ func (h *AdminUsersHandler) HandleImportUsersCSV(w http.ResponseWriter, r *http.
 // same column shape that HandleImportUsersCSV accepts, so an admin can
 // round-trip (export → edit in spreadsheet → import) without column
 // renames. Roles are joined with ';' to match the import parser.
+// The harbor_share_* columns are export-only here; the user import
+// ignores columns it does not know.
 func (h *AdminUsersHandler) HandleExportUsersCSV(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -1499,7 +1528,9 @@ func (h *AdminUsersHandler) HandleExportUsersCSV(w http.ResponseWriter, r *http.
 		              FROM user_roles ur
 		             WHERE ur.user_id = u.id),
 		           ''
-		       ) AS roles
+		       ) AS roles,
+		       u.harbor_share_owner,
+		       COALESCE(to_char(u.harbor_share_paid_on, 'YYYY-MM-DD'), '')
 		  FROM users u
 		 WHERE u.club_id = $1
 		   AND u.kind = 'person'
@@ -1522,22 +1553,18 @@ func (h *AdminUsersHandler) HandleExportUsersCSV(w http.ResponseWriter, r *http.
 	_ = cw.Write([]string{
 		"email", "first_name", "last_name",
 		"phone", "address_line", "postal_code", "city", "is_local",
-		"admin_notes", "roles",
+		"admin_notes", "roles", "harbor_share_owner", "harbor_share_paid_on",
 	})
 
 	count := 0
 	for rows.Next() {
-		var email, firstName, lastName, phone, addr, postal, city, notes, roles string
-		var isLocal bool
-		if err := rows.Scan(&email, &firstName, &lastName, &phone, &addr, &postal, &city, &isLocal, &notes, &roles); err != nil {
+		var email, firstName, lastName, phone, addr, postal, city, notes, roles, harborSharePaidOn string
+		var isLocal, harborShareOwner bool
+		if err := rows.Scan(&email, &firstName, &lastName, &phone, &addr, &postal, &city, &isLocal, &notes, &roles, &harborShareOwner, &harborSharePaidOn); err != nil {
 			h.log.Error().Err(err).Msg("failed to scan user CSV row")
 			continue
 		}
-		isLocalStr := "false"
-		if isLocal {
-			isLocalStr = "true"
-		}
-		_ = cw.Write([]string{email, firstName, lastName, phone, addr, postal, city, isLocalStr, notes, roles})
+		_ = cw.Write([]string{email, firstName, lastName, phone, addr, postal, city, strconv.FormatBool(isLocal), notes, roles, strconv.FormatBool(harborShareOwner), harborSharePaidOn})
 		count++
 	}
 	cw.Flush()
@@ -1558,21 +1585,27 @@ type adminUserUpdateRequest struct {
 	City        *string `json:"city,omitempty"`
 	IsLocal     *bool   `json:"is_local,omitempty"`
 	AdminNotes  *string `json:"admin_notes,omitempty"`
+	// false also clears the paid date (BRD-14).
+	HarborShareOwner *bool `json:"harbor_share_owner,omitempty"`
+	// YYYY-MM-DD sets the harbor share paid date; "" clears it (date unknown).
+	HarborSharePaidOn *string `json:"harbor_share_paid_on,omitempty"`
 }
 
 // updatedFields lists the JSON names of the fields a partial update carries.
 func updatedFields(req adminUserUpdateRequest) []string {
 	fields := []string{}
 	for name, set := range map[string]bool{
-		"email":        req.Email != nil,
-		"first_name":   req.FirstName != nil,
-		"last_name":    req.LastName != nil,
-		"phone":        req.Phone != nil,
-		"address_line": req.AddressLine != nil,
-		"postal_code":  req.PostalCode != nil,
-		"city":         req.City != nil,
-		"is_local":     req.IsLocal != nil,
-		"admin_notes":  req.AdminNotes != nil,
+		"email":                req.Email != nil,
+		"first_name":           req.FirstName != nil,
+		"last_name":            req.LastName != nil,
+		"phone":                req.Phone != nil,
+		"address_line":         req.AddressLine != nil,
+		"postal_code":          req.PostalCode != nil,
+		"city":                 req.City != nil,
+		"is_local":             req.IsLocal != nil,
+		"admin_notes":          req.AdminNotes != nil,
+		"harbor_share_owner":   req.HarborShareOwner != nil,
+		"harbor_share_paid_on": writesHarborSharePaidOn(req),
 	} {
 		if set {
 			fields = append(fields, name)
@@ -1580,6 +1613,74 @@ func updatedFields(req adminUserUpdateRequest) []string {
 	}
 	slices.Sort(fields)
 	return fields
+}
+
+const errHarborShareDateNeedsOwner = "harbor_share_paid_on requires harbor_share_owner"
+
+// writesHarborSharePaidOn reports whether a PATCH writes the paid date: when
+// it is sent, and when ownership is removed, which clears it.
+func writesHarborSharePaidOn(req adminUserUpdateRequest) bool {
+	return req.HarborSharePaidOn != nil || (req.HarborShareOwner != nil && !*req.HarborShareOwner)
+}
+
+// addHarborShareSets adds the harbor share columns a PATCH writes. It returns
+// false after writing a 400 for an invalid or contradictory date.
+func addHarborShareSets(w http.ResponseWriter, req adminUserUpdateRequest, add func(col string, val any)) bool {
+	if req.HarborShareOwner != nil {
+		add("harbor_share_owner", *req.HarborShareOwner)
+	}
+	if !writesHarborSharePaidOn(req) {
+		return true
+	}
+	paidOn, ok := harborSharePaidOnValue(w, req)
+	if ok {
+		add("harbor_share_paid_on", paidOn)
+	}
+	return ok
+}
+
+// writeUpdateUserConstraintError maps the constraint violations a profile
+// PATCH can hit to client errors, reporting whether it wrote a response.
+func writeUpdateUserConstraintError(w http.ResponseWriter, err error) bool {
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return false
+	}
+	switch {
+	case pgErr.Code == "23505":
+		Error(w, http.StatusConflict, "email already in use")
+	case pgErr.ConstraintName == "users_harbor_share_paid_on_requires_owner":
+		// A date sent alone for a member who is not an owner.
+		Error(w, http.StatusBadRequest, errHarborShareDateNeedsOwner)
+	default:
+		return false
+	}
+	return true
+}
+
+// harborSharePaidOnValue resolves the harbor_share_paid_on column value for a
+// PATCH: nil (NULL) when cleared, when the date is unknown, or when ownership
+// is being removed, else the date as YYYY-MM-DD text so pgx never applies a
+// timezone to it. A date sent alongside harbor_share_owner=false is rejected
+// here; a date sent alone for a non-owner is left to the CHECK constraint.
+func harborSharePaidOnValue(w http.ResponseWriter, req adminUserUpdateRequest) (any, bool) {
+	v := ""
+	if req.HarborSharePaidOn != nil {
+		v = strings.TrimSpace(*req.HarborSharePaidOn)
+	}
+	if v == "" {
+		return nil, true
+	}
+	d, err := time.Parse(time.DateOnly, v)
+	if err != nil {
+		Error(w, http.StatusBadRequest, "harbor_share_paid_on must be YYYY-MM-DD or empty")
+		return nil, false
+	}
+	if req.HarborShareOwner != nil && !*req.HarborShareOwner {
+		Error(w, http.StatusBadRequest, errHarborShareDateNeedsOwner)
+		return nil, false
+	}
+	return d.Format(time.DateOnly), true
 }
 
 // HandleUpdateUser applies a partial update to a user's profile fields.
@@ -1660,6 +1761,9 @@ func (h *AdminUsersHandler) HandleUpdateUser(w http.ResponseWriter, r *http.Requ
 	if req.AdminNotes != nil {
 		add("admin_notes", *req.AdminNotes)
 	}
+	if !addHarborShareSets(w, req, add) {
+		return
+	}
 	if len(sets) == 0 {
 		Error(w, http.StatusBadRequest, "no fields to update")
 		return
@@ -1674,9 +1778,7 @@ func (h *AdminUsersHandler) HandleUpdateUser(w http.ResponseWriter, r *http.Requ
 
 	tag, err := h.db.Exec(ctx, q, args...)
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			Error(w, http.StatusConflict, "email already in use")
+		if writeUpdateUserConstraintError(w, err) {
 			return
 		}
 		h.log.Error().Err(err).Str("user_id", userID).Msg("failed to update user")
