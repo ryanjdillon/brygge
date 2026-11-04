@@ -103,6 +103,11 @@ keep `moneyGate` (treasurer/admin + fresh step-up).
 `/shopping-lists/*`. These are correctly member-scoped; ownership checks
 live in the handlers.
 
+`GET /bookings/{id}` is in this group but answers only the booking's owner
+and the club's board, harbor_master or admin (`canReadBooking`); everyone
+else, other clubs included, gets 404, because the row carries the guest's
+email and phone (BRY-551).
+
 ## Role-gated, non-admin (`AuthenticateSession` + `RequireRole`)
 
 | Route | Roles |

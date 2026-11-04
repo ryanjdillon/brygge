@@ -16,6 +16,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
 
+	"github.com/brygge-klubb/brygge/internal/auth"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 	"github.com/brygge-klubb/brygge/internal/shared"
@@ -912,8 +913,30 @@ func (h *BookingsHandler) findAvailableUnit(ctx context.Context, resourceID stri
 	return &unitID, nil
 }
 
+// bookingReaderRoles may read any booking of their club by id. The
+// owner may always read their own; everyone else gets 404, so a booking
+// id does not reveal that the booking exists or whose guest it holds.
+var bookingReaderRoles = []string{"board", "harbor_master", "admin"}
+
+func canReadBooking(b *booking, claims *auth.Claims) bool {
+	if b.UserID != nil && *b.UserID == claims.UserID {
+		return true
+	}
+	for _, role := range bookingReaderRoles {
+		if hasRole(claims.Roles, role) {
+			return true
+		}
+	}
+	return false
+}
+
 func (h *BookingsHandler) HandleGetBooking(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
 
 	bookingID := chi.URLParam(r, "bookingID")
 	if bookingID == "" {
@@ -923,15 +946,11 @@ func (h *BookingsHandler) HandleGetBooking(w http.ResponseWriter, r *http.Reques
 
 	var b booking
 	err := scanBooking(h.db.QueryRow(ctx,
-		`SELECT b.id, b.resource_id, b.resource_unit_id, b.user_id, b.club_id, b.start_date, b.end_date, b.status,
-		        b.guest_name, b.guest_email, b.guest_phone, b.payment_id, b.boat_length_m, b.boat_beam_m, b.boat_draft_m,
-		        b.notes, b.created_at, b.updated_at
-		 FROM bookings b
-		 JOIN clubs c ON c.id = b.club_id
-		 WHERE b.id = $1 AND c.slug = $2`,
-		bookingID, h.config.ClubSlug,
+		`SELECT `+bookingColumns+`
+		 FROM bookings WHERE id = $1 AND club_id = $2`,
+		bookingID, claims.ClubID,
 	), &b)
-	if err == pgx.ErrNoRows {
+	if err == pgx.ErrNoRows || (err == nil && !canReadBooking(&b, claims)) {
 		Error(w, http.StatusNotFound, "booking not found")
 		return
 	}
