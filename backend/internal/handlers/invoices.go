@@ -1464,16 +1464,15 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 		memberID = *userID
 	}
 	mailCtx := h.invoiceMailContext(ctx, email.KindInvoice, claims.ClubID, invoiceID, memberID, total)
-	if err := h.email.SendWithAttachment(mailCtx, deliverTo, subject, htmlBody, filename, pdfBytes); err != nil {
-		// The relay may hold the message, so the faktura keeps its sent_at:
-		// rolling back would invite a second send of a mail that may have
-		// arrived. The delivery log shows the send as unknown.
-		if errors.Is(err, email.ErrDeliveryAmbiguous) {
-			h.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("send invoice email: outcome unknown, sent_at kept")
-			Error(w, http.StatusBadGateway, "email delivery outcome unknown")
-			return
-		}
-		h.log.Error().Err(err).Str("email", deliverTo).Msg("send invoice email — rolling back sent_at")
+	sendErr := h.email.SendWithAttachment(mailCtx, deliverTo, subject, htmlBody, filename, pdfBytes)
+	// An ambiguous send may have reached the member, so the faktura is
+	// treated as issued: it keeps sent_at and is audited and booked like a
+	// delivered one, because rolling back would invite a second send and an
+	// issued faktura missing from the ledger is a receivable nobody books.
+	// The delivery log shows the send as unknown.
+	ambiguous := errors.Is(sendErr, email.ErrDeliveryAmbiguous)
+	if sendErr != nil && !ambiguous {
+		h.log.Error().Err(sendErr).Str("email", deliverTo).Msg("send invoice email — rolling back sent_at")
 		// Best-effort rollback. If this also fails we log loudly so the
 		// operator can spot the stuck row; the alternative (leaving it
 		// stamped) is acceptable because the recipient definitely did
@@ -1487,14 +1486,34 @@ func (h *InvoiceHandler) HandleSendInvoice(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if h.audit != nil {
-		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
-			audit.ActionInvoiceEmailed, "invoice", invoiceID,
-			map[string]any{"email": deliverTo, "invoice_number": invoiceNumber})
-	}
+	h.issueSentInvoice(w, r, claims, invoiceID, deliverTo, invoiceNumber, sendErr)
+}
 
+// issueSentInvoice finishes HandleSendInvoice once the faktura counts as
+// issued: the mail went out, or its outcome is unknown (sendErr wraps
+// email.ErrDeliveryAmbiguous). Both are audited and booked; only the
+// response differs.
+func (h *InvoiceHandler) issueSentInvoice(w http.ResponseWriter, r *http.Request, claims *auth.Claims,
+	invoiceID, deliverTo string, invoiceNumber int, sendErr error) {
+	ctx := r.Context()
+	if sendErr != nil {
+		h.log.Error().Err(sendErr).Str("invoice_id", invoiceID).Msg("send invoice email: outcome unknown, faktura kept as sent")
+	}
+	if h.audit != nil {
+		details := map[string]any{"email": deliverTo, "invoice_number": invoiceNumber}
+		if sendErr != nil {
+			details["delivery_unknown"] = true
+		}
+		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
+			audit.ActionInvoiceEmailed, "invoice", invoiceID, details)
+	}
+	gl := h.bookSentInvoice(ctx, claims.ClubID, invoiceID, claims.UserID)
+	if sendErr != nil {
+		Error(w, http.StatusBadGateway, "email delivery outcome unknown")
+		return
+	}
 	resp := map[string]any{"id": invoiceID, "sent": true}
-	if gl := h.bookSentInvoice(ctx, claims.ClubID, invoiceID, claims.UserID); gl != nil {
+	if gl != nil {
 		resp["gl_booking"] = gl
 	}
 	JSON(w, http.StatusOK, resp)
@@ -1601,6 +1620,12 @@ func (h *InvoiceHandler) HandleResendInvoice(w http.ResponseWriter, r *http.Requ
 	mailCtx := h.invoiceMailContext(ctx, email.KindInvoice, claims.ClubID, invoiceID, "", total)
 	if err := h.email.SendWithAttachment(mailCtx, deliverTo, subject, htmlBody, filename, pdfBytesResend); err != nil {
 		h.log.Error().Err(err).Str("email", deliverTo).Msg("resend invoice email failed")
+		// Say so when the relay may have the message, so nobody resends
+		// again on the strength of a "failed".
+		if errors.Is(err, email.ErrDeliveryAmbiguous) {
+			Error(w, http.StatusBadGateway, "email delivery outcome unknown")
+			return
+		}
 		Error(w, http.StatusBadGateway, "failed to send email")
 		return
 	}
