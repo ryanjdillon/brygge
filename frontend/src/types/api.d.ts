@@ -849,23 +849,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/slips/{slipID}/assign": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Assign slip to member */
-        post: operations["admin-assign-slip"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/admin/slips/{slipID}/release": {
         parameters: {
             query?: never;
@@ -7863,44 +7846,6 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StatusResponse"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "admin-assign-slip": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Slip UUID */
-                slipID: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
-            };
-        };
         responses: {
             /** @description OK */
             200: {

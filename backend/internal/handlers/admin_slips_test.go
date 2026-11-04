@@ -146,41 +146,6 @@ func TestHandleUpdateSlipForbidden(t *testing.T) {
 	}
 }
 
-func TestHandleAssignSlipUnauthenticated(t *testing.T) {
-	h := newTestAdminSlipsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodPost, "/admin/slips/{slipID}/assign", h.HandleAssignSlip, "board", "harbor_master")
-
-	body := `{"user_id":"user-2"}`
-	req := httptest.NewRequest(http.MethodPost, "/admin/slips/some-id/assign", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-
-	r.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected status %d, got %d; body: %s", http.StatusUnauthorized, rec.Code, rec.Body.String())
-	}
-}
-
-func TestHandleAssignSlipForbidden(t *testing.T) {
-	h := newTestAdminSlipsHandler(t)
-	r := setupRoleProtectedRouter(http.MethodPost, "/admin/slips/{slipID}/assign", h.HandleAssignSlip, "board", "harbor_master")
-
-	token := generateTestToken("user-1", "club-1", []string{"member"})
-
-	body := `{"user_id":"user-2"}`
-	req := httptest.NewRequest(http.MethodPost, "/admin/slips/some-id/assign", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", authHeader(token))
-	rec := httptest.NewRecorder()
-
-	r.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected status %d, got %d; body: %s", http.StatusForbidden, rec.Code, rec.Body.String())
-	}
-}
-
 func TestHandleReleaseSlipUnauthenticated(t *testing.T) {
 	h := newTestAdminSlipsHandler(t)
 	r := setupRoleProtectedRouter(http.MethodPost, "/admin/slips/{slipID}/release", h.HandleReleaseSlip, "board", "harbor_master")
