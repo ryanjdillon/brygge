@@ -41,7 +41,10 @@ jobs:
           POSTGRES_DB: brygge_test
         ports:
           - 5432:5432
+        # A throwaway database: data on tmpfs, and durability turned off in
+        # the step below. A crash loses nothing that matters.
         options: >-
+          --tmpfs /var/lib/postgresql/data
           --health-cmd "pg_isready -U brygge"
           --health-interval 10s
           --health-timeout 5s
@@ -63,6 +66,16 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26"
+      # Every test commits into its own database; on a disposable server the
+      # fsync and WAL-flush waits are pure cost. ALTER SYSTEM cannot run in a
+      # transaction block, hence one -c per statement.
+      - name: Turn off Postgres durability
+        run: >-
+          docker exec ${{ job.services.postgres.id }} psql -U brygge -d brygge_test -v ON_ERROR_STOP=1
+          -c "ALTER SYSTEM SET fsync = off"
+          -c "ALTER SYSTEM SET synchronous_commit = off"
+          -c "ALTER SYSTEM SET full_page_writes = off"
+          -c "SELECT pg_reload_conf()"
       - name: Run tests with coverage
         run: cd backend && go test -timeout 20m -coverprofile=coverage.out -covermode=atomic ./...
       - name: Coverage summary
