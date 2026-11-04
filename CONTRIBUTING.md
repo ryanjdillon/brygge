@@ -185,7 +185,7 @@ The API is available at `http://localhost:8080` and the Vue dev server at `http:
 just test-go
 ```
 
-Go tests use `testcontainers-go` to spin up real PostgreSQL and Redis instances. No mocking of database calls. Tests run against the actual schema after applying all migrations.
+Integration tests run against the real PostgreSQL and Redis named by `DATABASE_URL` and `REDIS_URL` (`just test-go-integration`), and skip when those are unset. No mocking of database calls. `testutil.SetupTestDB` gives each test its own database, cloned from a template database that holds every migration. The first test process to need the template builds it, named `brygge_tmpl_<hash>` after the migration files, so a changed migration gets a fresh template and older ones are dropped. The `DATABASE_URL` role needs `CREATEDB`. On a throwaway local server, turn off `fsync`, `synchronous_commit` and `full_page_writes` (as CI does) for a much faster run.
 
 For finance tests (invoices, orders, bank and Vipps rows, GL), build fixtures with `internal/testutil/fin`: `fin.NewClub(t, pool, fin.WithKontoplan(svc.SeedKontoplan))` gives a club with an open fiscal period, a treasurer and a 1920 bank account. `club.NewInvoice`, `NewOrderForInvoice`, `NewBankRow` and `NewVippsRow` take amounts in integer øre. Use synthetic data only, never real members or account numbers.
 
