@@ -47,7 +47,7 @@
   };
 
   # Reverse DNS for mail deliverability. Gmail/Outlook require PTR to match
-  # the HELO hostname (FCrDNS). Points at mail.<domain>; ensure dns.nix
+  # the HELO hostname (FCrDNS). Points at mail.<domain>; ensure hetzner/dns.nix
   # publishes an A record for `mail` in the same tf-apply.
   resource.hcloud_rdns.brygge_ipv4 = {
     server_id  = "\${hcloud_server.brygge.id}";

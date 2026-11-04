@@ -38,7 +38,7 @@ in
   };
 
   # Domain identity with Easy DKIM. SES publishes three selector tokens;
-  # dns.nix turns them into `<token>._domainkey` CNAMEs. Signing with
+  # hetzner/dns.nix turns them into `<token>._domainkey` CNAMEs. Signing with
   # d=<domain> is what makes DMARC align for mail sent through SES.
   # https://docs.aws.amazon.com/ses/latest/dg/send-email-authentication-dkim-easy.html
   resource.aws_sesv2_email_identity.domain = {

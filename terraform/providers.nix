@@ -19,7 +19,7 @@
   # credentials, so the keys are always explicit: the tfvars keys when
   # set, otherwise a placeholder with every startup AWS call skipped.
   # The placeholder lets plan run with SES disabled and no AWS account;
-  # ses.nix fails the plan early if SES is enabled without keys.
+  # aws/ses.nix fails the plan early if SES is enabled without keys.
   locals.aws_keys_set = "\${var.aws_access_key != \"\" && var.aws_secret_key != \"\"}";
 
   provider.aws = {

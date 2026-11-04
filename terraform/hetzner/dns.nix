@@ -90,7 +90,7 @@
       ttl     = 300;
       records = [{ value = "custom-email-domain.stripe.com."; }];
     };
-    # Amazon SES (ses.nix). Easy DKIM's three selectors, then the custom
+    # Amazon SES (aws/ses.nix). Easy DKIM's three selectors, then the custom
     # MAIL FROM subdomain: its MX receives SES's bounce feedback and its
     # SPF authorises SES, so SPF aligns relaxed with the From domain. The
     # apex MX, SPF and DMARC stay as they are.

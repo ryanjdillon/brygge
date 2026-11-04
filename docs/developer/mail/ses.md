@@ -9,7 +9,7 @@ the board's own mailboxes. SES reports what happened to every message
 Brygge stores those events per send, which is what the Leveringslogg shows.
 
 Everything on the AWS side is created by Terraform in
-[`terraform/ses.nix`](../../../terraform/ses.nix), gated on the tfvars flag
+[`terraform/aws/ses.nix`](../../../terraform/aws/ses.nix), gated on the tfvars flag
 `ses_enabled`. With the flag off (the default) Terraform creates nothing on
 AWS, publishes no SES DNS records and makes no AWS API calls, and the host
 sets none of the `SES_*` variables.
@@ -53,7 +53,7 @@ account. They are separate from the app user's runtime key.
 
 ## DNS records
 
-Published by [`terraform/dns.nix`](../../../terraform/dns.nix) when
+Published by [`terraform/hetzner/dns.nix`](../../../terraform/hetzner/dns.nix) when
 `ses_enabled` is true:
 
 | Type | Name | Value |
@@ -63,7 +63,7 @@ Published by [`terraform/dns.nix`](../../../terraform/dns.nix) when
 | TXT | `send` | `"v=spf1 include:amazonses.com ~all"` |
 
 The DKIM zone is the identity's `SigningHostedZone`, which the aws provider
-does not export. `ses.nix` derives it from AWS's
+does not export. `aws/ses.nix` derives it from AWS's
 [per-region DKIM domain table](https://docs.aws.amazon.com/general/latest/gr/ses.html#ses_dkim_domains):
 `dkim.amazonses.com` for eu-north-1 and most regions, `dkim.<region>.amazonses.com`
 for the listed newer ones. AWS notes the zone can differ per identity, so after
