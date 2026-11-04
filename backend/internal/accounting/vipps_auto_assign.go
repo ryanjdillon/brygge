@@ -106,12 +106,20 @@ func (s *Service) AutoAssignVippsCharges(ctx context.Context, clubID, createdBy 
 	var queue []charge
 	for rows.Next() {
 		var c charge
-		var d time.Time
+		// Neither booking_date nor tx_at may be set; such a row cannot be
+		// dated, so it is reported instead of failing the scan and aborting
+		// the pass.
+		var d *time.Time
 		if err := rows.Scan(&c.id, &c.amount, &d, &c.customer, &c.message); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("scanning queued charge: %w", err)
 		}
-		c.paidOn = d
+		if d == nil {
+			res.SkippedDetails = append(res.SkippedDetails, SkippedItem{Ref: fmt.Sprintf("vipps-rad %s %.2f kr", c.id, c.amount), Reason: "mangler dato"})
+			res.NeedsReview++
+			continue
+		}
+		c.paidOn = *d
 		c.date = d.Format("2006-01-02")
 		queue = append(queue, c)
 	}
@@ -121,7 +129,7 @@ func (s *Service) AutoAssignVippsCharges(ctx context.Context, clubID, createdBy 
 	}
 
 	if !cfg.enabled {
-		res.NeedsReview = len(queue)
+		res.NeedsReview += len(queue)
 		return res, nil
 	}
 

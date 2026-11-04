@@ -482,3 +482,22 @@ func TestClearReadyVippsPayoutsReportsDismissedDeposit(t *testing.T) {
 		t.Errorf("skipped = %+v, want %s reported with a dismissed deposit", res.Skipped, s.number)
 	}
 }
+
+// A payout row without a booking date is reported as skipped; it must not
+// abort the sweep, and a dated settlement is still cleared.
+func TestClearReadyVippsPayoutsSkipsADatelessPayout(t *testing.T) {
+	f := newPayoutSweepFixture(t)
+	ok := f.settlement(t, "3002001", 2, []int64{40000}, 2000, true)
+	f.book(t, ok.charges...)
+	bad := f.settlement(t, "3002002", 5, []int64{30000}, 1500, false)
+	f.exec(t, `UPDATE vipps_import_rows SET booking_date = NULL
+	            WHERE club_id = $1 AND row_type = 'payout' AND settlement_number = $2`, f.club.ID, bad.number)
+
+	res := f.sweep(t)
+	if _, cleared := settlementsOf(res.Cleared)[ok.number]; !cleared {
+		t.Errorf("cleared = %+v, want %s cleared", res.Cleared, ok.number)
+	}
+	if r := settlementsOf(res.Skipped)[bad.number]; r != "mangler dato" {
+		t.Errorf("skipped = %+v, want %s reported as mangler dato", res.Skipped, bad.number)
+	}
+}
