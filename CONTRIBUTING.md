@@ -211,7 +211,7 @@ npx playwright install
 
 ### CI
 
-GitHub Actions runs all of the above on every push and pull request to `main`. The CI pipeline uses the Nix flake for linting and `nix flake check` for flake integrity. Go tests run with real PostgreSQL and Redis service containers. The Postgres data lives on tmpfs with durability turned off.
+GitHub Actions runs all of the above on every push and pull request to `main`. The CI pipeline uses the Nix flake for linting and `nix flake check` for flake integrity. Go tests run with real PostgreSQL and Redis service containers. The Postgres data lives on tmpfs with durability turned off. The jobs run in parallel; `build` does not wait for the test jobs.
 
 ---
 
