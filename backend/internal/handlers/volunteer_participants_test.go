@@ -152,3 +152,37 @@ func TestIntegration_TaskParticipantsHonourHideInDirectory(t *testing.T) {
 		})
 	}
 }
+
+func TestIntegration_AdjustHoursCrossClub(t *testing.T) {
+	t.Parallel()
+	env := setupIntegrationEnv(t)
+	f := directoryFixture{t: t, db: env.db, clubID: env.clubID}
+	caller := f.member("Syn", "Board", "board@example.test", "", false, "member", "board")
+
+	other := testutil.SeedClub(t, env.db)
+	foreign := directoryFixture{t: t, db: env.db, clubID: other}
+	foreignUser := foreign.member("Syn", "ForeignParticipant", "foreign@example.test", "", false, "member")
+	foreignTask := seedTask(t, env, other, foreignUser, foreignUser)
+
+	h := NewVolunteerHandler(env.db, env.cfg, env.log)
+	r := chi.NewRouter()
+	r.Use(testAuthMiddleware)
+	r.Put("/tasks/{taskID}/hours", h.HandleAdjustHours)
+
+	body := `{"actual_hours": 3, "participants": [{"user_id": "` + foreignUser + `", "hours": 99}]}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPut, "/tasks/"+foreignTask+"/hours", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+env.generateToken(caller, []string{"member", "board"}))
+	r.ServeHTTP(rec, req)
+	assertStatus(t, rec, http.StatusNotFound)
+
+	var hours *float64
+	if err := env.db.QueryRow(context.Background(),
+		`SELECT hours FROM task_participants WHERE task_id = $1 AND user_id = $2`, foreignTask, foreignUser,
+	).Scan(&hours); err != nil {
+		t.Fatalf("reading participant hours: %v", err)
+	}
+	if hours != nil {
+		t.Errorf("another club's participant hours = %v, want unchanged (NULL)", *hours)
+	}
+}
