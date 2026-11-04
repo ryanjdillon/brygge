@@ -17,6 +17,8 @@ import (
 
 	"github.com/brygge-klubb/brygge/internal/accounting"
 	"github.com/brygge-klubb/brygge/internal/audit"
+	"github.com/brygge-klubb/brygge/internal/config"
+	"github.com/brygge-klubb/brygge/internal/middleware"
 	"github.com/brygge-klubb/brygge/internal/testutil"
 )
 
@@ -55,6 +57,47 @@ func TestReadCSVUpload(t *testing.T) {
 		_, err := readCSVUpload(strings.NewReader("name\nBj\xF8rn\n"))
 		if !errors.Is(err, errCSVNotUTF8) {
 			t.Errorf("err = %v, want errCSVNotUTF8", err)
+		}
+	})
+
+	t.Run("delimiters inside quotes do not vote", func(t *testing.T) {
+		u, err := readCSVUpload(strings.NewReader("\"Navn, fullt, med komma\";email;note\nAda Synthetic;a@example.com;x\n"))
+		if err != nil {
+			t.Fatalf("readCSVUpload: %v", err)
+		}
+		if u.Comma != ';' {
+			t.Fatalf("delimiter = %q, want ';'", u.Comma)
+		}
+		if !u.has("navn, fullt, med komma") || !u.has("email") {
+			t.Errorf("cols = %v", u.cols)
+		}
+	})
+
+	t.Run("a quoted newline does not end the header", func(t *testing.T) {
+		u, err := readCSVUpload(strings.NewReader("\"a,\nb,c\";email;name\nx;a@example.com;A\n"))
+		if err != nil {
+			t.Fatalf("readCSVUpload: %v", err)
+		}
+		if u.Comma != ';' || !u.has("name") {
+			t.Errorf("delimiter = %q, cols = %v", u.Comma, u.cols)
+		}
+	})
+
+	t.Run("lone CR line endings", func(t *testing.T) {
+		u, err := readCSVUpload(strings.NewReader("email,name\ra@example.com,Ada\rb@example.com,Bo\r"))
+		if err != nil {
+			t.Fatalf("readCSVUpload: %v", err)
+		}
+		var names []string
+		for {
+			rec, err := u.Read()
+			if err != nil {
+				break
+			}
+			names = append(names, u.get(rec, "name"))
+		}
+		if strings.Join(names, "|") != "Ada|Bo" {
+			t.Errorf("rows = %q, want two rows", names)
 		}
 	})
 
@@ -98,6 +141,151 @@ func TestHarborShareParsers(t *testing.T) {
 	if a, b := normaliseMemberName("Åsa Synthetic"), normaliseMemberName("Åsa synthetic"); a != b {
 		t.Errorf("NFC: %q vs %q", a, b)
 	}
+}
+
+func readHarborShareCSV(t *testing.T, csv string) ([]harborShareInput, error) {
+	t.Helper()
+	u, err := readCSVUpload(strings.NewReader(csv))
+	if err != nil {
+		t.Fatalf("readCSVUpload: %v", err)
+	}
+	return readHarborShareInputs(u)
+}
+
+func TestReadHarborShareInputs(t *testing.T) {
+	t.Parallel()
+
+	t.Run("a date on a row that is not an owner is an error", func(t *testing.T) {
+		inputs, err := readHarborShareCSV(t, "name,harbor_share_owner,harbor_share_paid_on\nAda Synthetic,nei,2026-03-15\n")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(inputs) != 1 || inputs[0].err == "" {
+			t.Fatalf("inputs = %+v, want one error row", inputs)
+		}
+		plan, err := planHarborShareImport(inputs, nil, nil, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if plan.rows[0].Outcome != harborShareError {
+			t.Errorf("outcome = %q, want error", plan.rows[0].Outcome)
+		}
+	})
+
+	t.Run("the row cap", func(t *testing.T) {
+		var b strings.Builder
+		b.WriteString("name,harbor_share_owner\n")
+		for range harborShareMaxRows {
+			b.WriteString("Ada Synthetic,ja\n")
+		}
+		if _, err := readHarborShareCSV(t, b.String()); err != nil {
+			t.Fatalf("%d rows refused: %v", harborShareMaxRows, err)
+		}
+		b.WriteString("Ada Synthetic,ja\n")
+		if _, err := readHarborShareCSV(t, b.String()); err == nil || !strings.Contains(err.Error(), "5000") {
+			t.Errorf("%d rows: err = %v, want the cap named", harborShareMaxRows+1, err)
+		}
+	})
+}
+
+func TestPlanHarborShareImport(t *testing.T) {
+	t.Parallel()
+	member := func(id, email, name string) harborShareMember {
+		return harborShareMember{id: id, email: email, name: name, nameKey: normaliseMemberName(name)}
+	}
+	members := []harborShareMember{
+		member("u-ada", "ada@example.com", "Ada Synthetic"),
+		member("u-bo1", "Shared@example.com", "Bo Synthetic"),
+		member("u-bo2", "shared@example.com", "Bo Annen"),
+		member("u-ola1", "ola1@example.com", "Ola Nordmann"),
+		member("u-ola2", "ola2@example.com", "Ola Nordmann"),
+	}
+	owner := func(row int, email, name string) harborShareInput {
+		return harborShareInput{row: row, email: email, name: name, owner: true}
+	}
+	isResolutionErr := func(err error) bool {
+		var re *errHarborShareResolution
+		return errors.As(err, &re)
+	}
+
+	t.Run("an email two members share is ambiguous between them", func(t *testing.T) {
+		plan, err := planHarborShareImport([]harborShareInput{owner(2, "SHARED@example.com", "Bo Synthetic")}, members, nil, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		r := plan.rows[0]
+		if r.Outcome != harborShareAmbiguous || len(r.Candidates) != 2 {
+			t.Fatalf("row = %+v, want ambiguous with two candidates", r)
+		}
+		got := map[string]bool{r.Candidates[0].UserID: true, r.Candidates[1].UserID: true}
+		if !got["u-bo1"] || !got["u-bo2"] {
+			t.Errorf("candidates = %+v, want the two members sharing the email", r.Candidates)
+		}
+		plan, err = planHarborShareImport([]harborShareInput{owner(2, "shared@example.com", "")}, members, map[int]string{2: "u-bo2"}, false)
+		if err != nil || plan.rows[0].UserID != "u-bo2" || len(plan.writes) != 1 {
+			t.Errorf("resolved shared email = %+v, %v", plan, err)
+		}
+	})
+
+	t.Run("a pick for a row that matches by itself", func(t *testing.T) {
+		inputs := []harborShareInput{owner(2, "", "Ada Synthetic")}
+		picks := map[int]string{2: "u-ola1"}
+		plan, err := planHarborShareImport(inputs, members, picks, true)
+		if err != nil {
+			t.Fatalf("dry run: %v", err)
+		}
+		r := plan.rows[0]
+		if !r.ResolutionDropped || r.Resolved || r.UserID != "u-ada" || r.Message != msgHarborSharePickDropped {
+			t.Errorf("dry-run row = %+v, want the pick dropped and the automatic match kept", r)
+		}
+		without, err := planHarborShareImport(inputs, members, nil, true)
+		if err != nil || without.token != plan.token {
+			t.Errorf("dropping the pick changes the plan token (%v)", err)
+		}
+		if _, err := planHarborShareImport(inputs, members, picks, false); !isResolutionErr(err) {
+			t.Errorf("apply err = %v, want a resolution error", err)
+		}
+	})
+
+	t.Run("a pick for an error row", func(t *testing.T) {
+		inputs := []harborShareInput{{row: 2, name: "Ada Synthetic", err: "bad date"}}
+		for _, dryRun := range []bool{true, false} {
+			if _, err := planHarborShareImport(inputs, members, map[int]string{2: "u-ada"}, dryRun); !isResolutionErr(err) {
+				t.Errorf("dry_run=%v: err = %v, want a resolution error", dryRun, err)
+			}
+		}
+	})
+
+	t.Run("rows that agree on a member write once", func(t *testing.T) {
+		plan, err := planHarborShareImport([]harborShareInput{
+			owner(2, "ada@example.com", ""), owner(3, "", "Ada Synthetic"),
+		}, members, nil, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(plan.writes) != 1 || plan.rows[0].Outcome != harborShareSet || plan.rows[1].Outcome != harborShareDuplicate {
+			t.Errorf("writes = %+v, rows = %+v", plan.writes, plan.rows)
+		}
+	})
+
+	t.Run("a pick that names a member another row already sets", func(t *testing.T) {
+		paid := "2026-03-15"
+		ada := owner(2, "ada@example.com", "")
+		ada.paidOn = &paid
+		plan, err := planHarborShareImport([]harborShareInput{ada, owner(3, "", "Ola Nordmann")}, members,
+			map[int]string{3: "u-ada"}, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range plan.rows {
+			if r.Outcome != harborShareDuplicate {
+				t.Errorf("row %d outcome = %q, want duplicate", r.Row, r.Outcome)
+			}
+		}
+		if len(plan.writes) != 0 {
+			t.Errorf("writes = %+v, want none for contradicting rows", plan.writes)
+		}
+	})
 }
 
 // harborShareImportEnv is a club with one synthetic member per import outcome.
@@ -430,13 +618,25 @@ func TestIntegration_HarborShareImport(t *testing.T) { //nolint:gocognit,cyclop 
 		for name, fields := range map[string]map[string]string{
 			"another club's member": pick("12", e.otherID),
 			"an erased member":      pick("12", e.ids["ivar"]),
-			"a row that matched":    pick("2", e.ids["frida"]),
 			"a row not in the file": pick("99", e.ids["frida"]),
+			"an error row":          pick("16", e.ids["carl"]),
 			"not JSON":              {"resolutions": "12=ola"},
 		} {
 			if code, resp := e.post(t, sheet, fields); code != http.StatusBadRequest {
 				t.Errorf("%s: status = %d, want 400 (%+v)", name, code, resp)
 			}
+		}
+
+		// A pick for a row that matches by itself is dropped from a dry run
+		// (a 409 re-preview can make an earlier pick moot) and refused on apply.
+		code, resp = e.post(t, sheet, pick("2", e.ids["frida"]))
+		if r := rowByNumber(t, resp, 2); code != http.StatusOK || !r.ResolutionDropped || r.UserID != e.ids["alice"] || r.Message == "" {
+			t.Errorf("dry run with a moot pick = %d %+v", code, r)
+		}
+		moot := pick("2", e.ids["frida"])
+		moot["dry_run"], moot["plan_token"] = "false", resp.PlanToken
+		if code, _ := e.post(t, sheet, moot); code != http.StatusBadRequest {
+			t.Errorf("apply with a moot pick = %d, want 400", code)
 		}
 
 		resolution := pick("12", e.ids["ola2"])
@@ -488,10 +688,89 @@ func TestIntegration_HarborShareImport(t *testing.T) { //nolint:gocognit,cyclop 
 			"no member column":      {"harbor_share_owner\nja\n", nil},
 			"apply without a token": {"name,harbor_share_owner\nAlice Synthetic,ja\n", map[string]string{"dry_run": "false"}},
 			"bad dry_run":           {"name,harbor_share_owner\nAlice Synthetic,ja\n", map[string]string{"dry_run": "maybe"}},
+			"over the row cap":      {"name,harbor_share_owner\n" + strings.Repeat("Alice Synthetic,ja\n", harborShareMaxRows+1), nil},
 		} {
 			if code, resp := e.post(t, []byte(c.csv), c.fields); code != http.StatusBadRequest {
 				t.Errorf("%s: status = %d, want 400 (%+v)", name, code, resp)
 			}
+		}
+	})
+
+	t.Run("a write that misses mid-transaction rolls back the whole apply", func(t *testing.T) {
+		t.Parallel()
+		e := newHarborShareImportEnv(t)
+		sheet := []byte(e.sheet(t))
+		_, preview := e.post(t, sheet, nil)
+
+		// Kari is the plan's last write (row 11). A trigger that skips her
+		// UPDATE stands in for a member changed by another transaction after
+		// this one read them: alice, bjorn and harald are already written.
+		ctx := context.Background()
+		mustExec(t, e.db, ctx, `CREATE FUNCTION skip_kari() RETURNS trigger LANGUAGE plpgsql AS $$
+			BEGIN
+				IF OLD.id = '`+e.ids["kari"]+`'::uuid THEN RETURN NULL; END IF;
+				RETURN NEW;
+			END $$`)
+		mustExec(t, e.db, ctx, `CREATE TRIGGER skip_kari BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION skip_kari()`)
+		before := e.state(t)
+
+		code, resp := e.post(t, sheet, map[string]string{"dry_run": "false", "plan_token": preview.PlanToken})
+		if code != http.StatusConflict || resp.Code != codeHarborSharePlanStale {
+			t.Fatalf("apply = %d %+v, want 409 plan_changed", code, resp)
+		}
+		if after := e.state(t); !maps.Equal(before, after) {
+			t.Errorf("a missed write left earlier writes behind:\nbefore %v\nafter  %v", before, after)
+		}
+		if n := e.importAuditRows(t); n != 0 {
+			t.Errorf("a rolled-back apply left %d audit rows", n)
+		}
+	})
+
+	t.Run("rows that agree on a member write and audit once", func(t *testing.T) {
+		t.Parallel()
+		e := newHarborShareImportEnv(t)
+		sheet := []byte("email;name;harbor_share_owner;harbor_share_paid_on\n" +
+			e.email(t, "alice") + ";;ja;15.03.2026\n" +
+			";Alice Synthetic;ja;2026-03-15\n")
+		_, preview := e.post(t, sheet, nil)
+		if r := rowByNumber(t, preview, 3); r.Outcome != harborShareDuplicate {
+			t.Fatalf("row 3 = %+v, want duplicate of row 2", r)
+		}
+		if code, resp := e.post(t, sheet, map[string]string{"dry_run": "false", "plan_token": preview.PlanToken}); code != http.StatusOK {
+			t.Fatalf("apply = %d %+v", code, resp)
+		}
+		var n int
+		if err := e.db.QueryRow(context.Background(),
+			`SELECT count(*) FROM audit_log WHERE club_id = $1 AND action = $2 AND resource_id = $3`,
+			e.clubID, audit.ActionUserHarborShareSet, e.ids["alice"]).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		if n != 1 {
+			t.Errorf("alice has %d per-member audit rows, want 1", n)
+		}
+		if got := e.state(t)["alice"]; got != "yes 2026-03-15" {
+			t.Errorf("alice = %q", got)
+		}
+	})
+
+	t.Run("a system actor is never matched", func(t *testing.T) {
+		t.Parallel()
+		e := newHarborShareImportEnv(t)
+		sysEmail := "system-" + testutil.RandomHex(3) + "@example.com"
+		mustExec(t, e.db, context.Background(),
+			`UPDATE users SET first_name = 'Sys', last_name = 'Synthetic', email = $2 WHERE id = $1`, e.systemID, sysEmail)
+		code, resp := e.post(t, []byte("email,name,harbor_share_owner\n"+sysEmail+",,ja\n,Sys Synthetic,ja\n"), nil)
+		if code != http.StatusOK {
+			t.Fatalf("dry run = %d %+v", code, resp)
+		}
+		for _, n := range []int{2, 3} {
+			if r := rowByNumber(t, resp, n); r.Outcome != harborShareUnmatched || r.UserID != "" {
+				t.Errorf("row %d = %+v, want unmatched", n, r)
+			}
+		}
+		if code, _ := e.post(t, []byte("name,harbor_share_owner\nNobody Synthetic,ja\n"),
+			map[string]string{"resolutions": `{"2":"` + e.systemID + `"}`}); code != http.StatusBadRequest {
+			t.Errorf("resolving to the system actor = %d, want 400", code)
 		}
 	})
 
@@ -533,5 +812,46 @@ func TestIntegration_UserImportReadsExcelCSV(t *testing.T) {
 	_ = json.Unmarshal(rec.Body.Bytes(), &body)
 	if rec.Code != http.StatusOK || body.Created != 1 {
 		t.Errorf("import = %d %s, want one member created", rec.Code, rec.Body.String())
+	}
+}
+
+// The import writes ownership for the whole club, so it is admin-only behind
+// a fresh TOTP, inside /users's own board-or-admin gate. cmd/api mounts the
+// route inline, so this composes the same gates in the same order; the
+// handler's 400 on the non-multipart body shows the gates let it through.
+func TestHarborShareImportRouteGates(t *testing.T) {
+	t.Parallel()
+	h := NewAdminUsersHandler(nil, &config.Config{}, zerolog.Nop())
+	r := chi.NewRouter()
+	r.Route("/admin", func(r chi.Router) {
+		r.Use(testAuthMiddleware)
+		r.Use(testSessionState)
+		r.Use(middleware.RequireAdminTOTP(nil))
+		r.Use(panicAsTeapot)
+		r.Route("/users", func(r chi.Router) {
+			r.Use(middleware.RequireRoleOrBoardRead("board", "admin"))
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequireRole("admin"))
+				r.With(middleware.RequireFreshTOTPDefault()).
+					Post("/harbor-shares/import", h.HandleImportHarborShares)
+			})
+		})
+	})
+	c := routeCall{http.MethodPost, "/admin/users/harbor-shares/import", true}
+
+	if rec := serveWaitingList(r, c, nil, sessFresh); rec.Code != http.StatusUnauthorized {
+		t.Errorf("without auth: %d, want 401", rec.Code)
+	}
+	for _, role := range []string{"board", "treasurer", "member"} {
+		if rec := serveWaitingList(r, c, []string{role}, sessFresh); rec.Code != http.StatusForbidden {
+			t.Errorf("as %s with a fresh TOTP: %d %s, want 403", role, rec.Code, rec.Body.String())
+		}
+	}
+	if rec := serveWaitingList(r, c, []string{"admin"}, sessStepUp); rec.Code != http.StatusForbidden ||
+		!strings.Contains(rec.Body.String(), `"totp_fresh_required"`) {
+		t.Errorf("as admin with a stale TOTP: %d %s, want 403 totp_fresh_required", rec.Code, rec.Body.String())
+	}
+	if rec := serveWaitingList(r, c, []string{"admin"}, sessFresh); !handlerReached(rec.Code) {
+		t.Errorf("as admin with a fresh TOTP: %d %s, want the handler reached", rec.Code, rec.Body.String())
 	}
 }

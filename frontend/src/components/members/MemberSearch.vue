@@ -16,6 +16,11 @@ const props = defineProps<{
   /** Currently-selected member, if any. Undefined while searching. */
   modelValue: MemberHit | null
   placeholder?: string
+  /**
+   * Account status filter passed to /admin/users. Unset keeps the server's
+   * default, which hides deactivated members.
+   */
+  status?: 'deactivated' | 'all'
 }>()
 
 const emit = defineEmits<{
@@ -39,7 +44,8 @@ watch(query, (q) => {
   debounce = setTimeout(async () => {
     loading.value = true
     try {
-      const url = `/api/v1/admin/users?q=${encodeURIComponent(q.trim())}&limit=20`
+      let url = `/api/v1/admin/users?q=${encodeURIComponent(q.trim())}&limit=20`
+      if (props.status) url += `&status=${props.status}`
       const res = await fetch(url, { credentials: 'include' })
       if (!res.ok) {
         results.value = []
