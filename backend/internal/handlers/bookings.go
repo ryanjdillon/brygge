@@ -1063,10 +1063,16 @@ func (h *BookingsHandler) HandleCancelBooking(w http.ResponseWriter, r *http.Req
 	oldStatus := b.Status
 	err = scanBooking(h.db.QueryRow(ctx,
 		`UPDATE bookings SET status = 'cancelled', updated_at = now()
-		 WHERE id = $1 AND club_id = $2
+		 WHERE id = $1 AND club_id = $2 AND status <> 'cancelled'
 		 RETURNING `+bookingColumns,
 		bookingID, claims.ClubID,
 	), &b)
+	// No row means a concurrent cancel won the race since the load above;
+	// answering 409 keeps the audit log to one cancel_booking entry.
+	if err == pgx.ErrNoRows {
+		Error(w, http.StatusConflict, "booking is already cancelled")
+		return
+	}
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to cancel booking")
 		Error(w, http.StatusInternalServerError, "internal error")
@@ -1120,10 +1126,15 @@ func (h *BookingsHandler) HandleConfirmBooking(w http.ResponseWriter, r *http.Re
 	var b booking
 	err = scanBooking(h.db.QueryRow(ctx,
 		`UPDATE bookings SET status = 'confirmed', updated_at = now()
-		 WHERE id = $1 AND club_id = $2
+		 WHERE id = $1 AND club_id = $2 AND status = 'pending'
 		 RETURNING `+bookingColumns,
 		bookingID, claims.ClubID,
 	), &b)
+	// No row means the status moved off pending since the check above.
+	if err == pgx.ErrNoRows {
+		Error(w, http.StatusConflict, "booking is no longer pending")
+		return
+	}
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to confirm booking")
 		Error(w, http.StatusInternalServerError, "internal error")
