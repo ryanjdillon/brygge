@@ -492,6 +492,12 @@ A payer with one matching open faktura (`member_invoice`) is never reclassified 
 
 **Failure mode:** the admin routes sat under `/waiting-list` behind a role check only, so a board member whose step-up had lapsed still read every entry's name, email and phone and could change queue positions with a stale session.
 
+### A booking is read by its owner and its club's booking staff only
+
+**Rule (BRY-551):** `GET /bookings/{id}` loads the booking scoped to `claims.ClubID` and returns it only to its owner (`bookings.user_id`) or to a caller holding board, harbor_master or admin (`bookingReaderRoles`, `canReadBooking`). Every other caller, including staff of another club, gets the same 404 as a missing booking. A guest booking (`user_id` NULL) has no owner, so only staff read it. A guest flow that needs its booking back uses its own token path, never this route. `TestIntegration_GetBookingOwnershipAndClubScope` pins each case.
+
+**Failure mode:** the handler was scoped only by the process's club slug and checked no owner, so any logged-in member holding a booking id read the guest's name, email and phone.
+
 ### The club always keeps an active admin
 
 **Rule (BRD-9, BRY-535):** nothing removes the last active admin of a club: not a delete, a deactivation, a role change that drops `admin`, nor processing that admin's GDPR deletion. An active admin holds the `admin` role and has `deactivated_at IS NULL`. Each such path takes `lockClubAdmins` (a per-club `pg_advisory_xact_lock`) before any row lock and checks `ensureNotLastActiveAdmin` under it; a refusal is 409 `last_admin` and writes nothing. A member who holds `admin`, and the grant of the role, can only be changed by an admin (403 `admin_required`) even though the board reaches `/admin/users` writes: that covers the profile and email (`PATCH`; the email is a login credential, so a board edit would be an account takeover), slips, deactivate, reactivate and roles; `DELETE /admin/users/{id}` is `RequireRole("admin")`, and boats, TOTP, passkeys and CSV are admin-only at the route. A new path that takes a `{userID}` the board can reach, deactivates a user or edits `user_roles` must call the same guards (`requireAdminForAdminTarget`, `checkAdminTarget`, `lockClubAdmins`).

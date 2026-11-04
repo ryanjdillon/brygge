@@ -1,12 +1,12 @@
 package handlers
 
 import (
-	"strings"
 	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -552,6 +552,97 @@ func TestIntegration_BookingsFullFlow(t *testing.T) {
 	cancelled := decodeJSON[booking](t, rec)
 	if cancelled.Status != "cancelled" {
 		t.Fatalf("expected cancelled status, got %q", cancelled.Status)
+	}
+}
+
+// GET /bookings/{id} carries the guest's email and phone, so only the
+// booking's owner and the club's booking staff may read it; anyone else,
+// including staff of another club, gets the same 404 as a missing booking.
+func TestIntegration_GetBookingOwnershipAndClubScope(t *testing.T) {
+	t.Parallel()
+	env := setupIntegrationEnv(t)
+	bh := env.bookingsHandler()
+	ctx := context.Background()
+
+	ownerID, _ := testutil.SeedUser(t, env.db, env.clubID, []string{"member"})
+	otherID, _ := testutil.SeedUser(t, env.db, env.clubID, []string{"member"})
+	treasurerID, _ := testutil.SeedUser(t, env.db, env.clubID, []string{"treasurer"})
+
+	otherClubID := testutil.SeedClub(t, env.db)
+	otherClubBoardID, _ := testutil.SeedUser(t, env.db, otherClubID, []string{"board"})
+
+	var resourceID string
+	if err := env.db.QueryRow(ctx,
+		`INSERT INTO resources (club_id, type, name, description, capacity, price_per_unit, unit)
+		 VALUES ($1, 'guest_slip', 'Guest Slip A', '', 1, 250, 'night')
+		 RETURNING id`,
+		env.clubID,
+	).Scan(&resourceID); err != nil {
+		t.Fatalf("seeding resource: %v", err)
+	}
+
+	insertBooking := func(userID *string) string {
+		t.Helper()
+		var id string
+		if err := env.db.QueryRow(ctx,
+			`INSERT INTO bookings (resource_id, user_id, club_id, start_date, end_date, guest_name, guest_email, guest_phone)
+			 VALUES ($1, $2, $3, now() + interval '7 days', now() + interval '9 days',
+			         'Guest Person', 'guest@example.invalid', '+4700000001')
+			 RETURNING id`,
+			resourceID, userID, env.clubID,
+		).Scan(&id); err != nil {
+			t.Fatalf("seeding booking: %v", err)
+		}
+		return id
+	}
+	memberBooking := insertBooking(&ownerID)
+	guestBooking := insertBooking(nil)
+
+	r := chi.NewRouter()
+	r.Group(func(r chi.Router) {
+		r.Use(testAuthMiddleware)
+		r.Get("/bookings/{bookingID}", bh.HandleGetBooking)
+	})
+
+	get := func(bookingID, token string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/bookings/"+bookingID, nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		r.ServeHTTP(rec, req)
+		return rec
+	}
+
+	staffID, _ := testutil.SeedUser(t, env.db, env.clubID, []string{"member"})
+	cases := []struct {
+		name      string
+		bookingID string
+		token     string
+		want      int
+	}{
+		{"owner reads own booking", memberBooking, env.generateToken(ownerID, []string{"member"}), http.StatusOK},
+		{"other member", memberBooking, env.generateToken(otherID, []string{"member"}), http.StatusNotFound},
+		{"other member on guest booking", guestBooking, env.generateToken(otherID, []string{"member"}), http.StatusNotFound},
+		{"board role without booking duty", memberBooking, env.generateToken(treasurerID, []string{"treasurer"}), http.StatusNotFound},
+		{"other club's board", memberBooking, generateTestToken(otherClubBoardID, otherClubID, []string{"board"}), http.StatusNotFound},
+		{"board", memberBooking, env.generateToken(staffID, []string{"board"}), http.StatusOK},
+		{"harbor master on guest booking", guestBooking, env.generateToken(staffID, []string{"harbor_master"}), http.StatusOK},
+		{"admin", guestBooking, env.generateToken(staffID, []string{"admin"}), http.StatusOK},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := get(tc.bookingID, tc.token)
+			assertStatus(t, rec, tc.want)
+			if tc.want != http.StatusOK {
+				if strings.Contains(rec.Body.String(), "guest@example.invalid") {
+					t.Fatalf("refused response leaked the guest email: %s", rec.Body.String())
+				}
+				return
+			}
+			got := decodeJSON[booking](t, rec)
+			if got.ID != tc.bookingID {
+				t.Fatalf("expected booking %s, got %s", tc.bookingID, got.ID)
+			}
+		})
 	}
 }
 
