@@ -286,7 +286,7 @@ Or directly on the server: `nixos-rebuild switch --rollback`.
 
 ### Automated flake.lock updates
 
-`.github/workflows/update-flake-lock.yml` opens a PR every Monday that bumps the flake inputs. It opens the PR with a GitHub App token, because a PR opened with the workflow's own `GITHUB_TOKEN` doesn't trigger `ci.yml`, so the nix-build would never check the bump. One-time setup, per fork or repo:
+`.github/workflows/update-flake-lock.yml` opens a PR every Monday that bumps the flake inputs. It opens the PR with a GitHub App token, because a PR opened with the workflow's own `GITHUB_TOKEN` doesn't trigger `ci.yml`, so the nix-check job would never check the bump. One-time setup, per fork or repo:
 
 1. Create a GitHub App (Settings → Developer settings → GitHub Apps → New). No webhook. Repository permissions: **Contents: Read and write**, **Pull requests: Read and write**. Nothing else.
 2. Install the App on this repository only.
