@@ -42,6 +42,8 @@ The action string is the JSON wire format (`row.action`); the constant is the Go
 | `ActionMemberPIIPurged` | `user.pii_purged` | user | Scheduled sweep erases a deactivated member's PII once retention clears (actor is NULL — system job) | `reason` |
 | `ActionUserMailProvisioned` | `user.mail_provisioned` | user | Stalwart mailbox created for the user | `jmap_user` (the principal slug, no PII) |
 | `ActionUserMailDeprovisioned` | `user.mail_deprovisioned` | user | Stalwart mailbox removed | `jmap_user` |
+| `ActionUserHarborShareSet` | `user.harbor_share_set` | user | The harbor share import (BRY-139) set a member as owner or filled in a missing paid date; one row per member it changed, in the import's transaction. A PATCH of the same fields logs `update_user` instead. | `source` (`import`); never the values |
+| `ActionUserHarborSharesImported` | `user.harbor_shares_imported` | user | Summary of one applied harbor share import; no `resource_id` | the per-outcome row counts (`set`, `date_added`, `unchanged`, `conflict`, `not_owner_but_set`, `duplicate`, `skipped`, `unmatched`, `ambiguous`, `error`); counts only |
 
 `HandleDeleteUser` (`DELETE /admin/users/{userID}`, which always anonymises in place) writes the raw action string `delete_user` rather than `ActionUserDeleted`: resource `user`, `extra` `sessions_revoked` (session rows deleted by `revokeMemberAccess`, including expired ones). The string is shipped, so it stays. Rows written before BRY-536 also carry `old_email`, `old_full_name` and `erasure`; the identity keys are scrubbed for members who are erased.
 

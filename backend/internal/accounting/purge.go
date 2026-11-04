@@ -7,11 +7,12 @@ import (
 	"github.com/brygge-klubb/brygge/internal/audit"
 )
 
-// legacyAnonymizedEmail is the constant address earlier versions wrote when
+// LegacyAnonymizedEmail is the constant address earlier versions wrote when
 // anonymising a member. users carries UNIQUE (club_id, email), so only one
-// member per club could ever hold it. The sweep still skips rows that have it;
-// nothing writes it any more.
-const legacyAnonymizedEmail = "deleted@deleted"
+// member per club could ever hold it. The sweep still skips rows that have it,
+// as does anything that must not match an erased member; nothing writes it any
+// more.
+const LegacyAnonymizedEmail = "deleted@deleted"
 
 // ErasedEmailSuffix marks every user whose identity has been erased, by the
 // purge sweep, the admin delete, or a processed GDPR request. The address is
@@ -65,7 +66,7 @@ func (s *Service) PurgeExpiredMemberPII(ctx context.Context) (int64, error) {
 		         WHERE i.user_id = u.id
 		           AND make_date(EXTRACT(YEAR FROM i.issue_date)::int + $2, 1, 1) > now()
 		    )`,
-		legacyAnonymizedEmail, RetentionYears+1, ErasedEmailSuffix,
+		LegacyAnonymizedEmail, RetentionYears+1, ErasedEmailSuffix,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("select purge-eligible members: %w", err)
@@ -212,7 +213,7 @@ func (s *Service) purgeOneMember(ctx context.Context, userID, clubID string) (bo
 		    AND deactivated_at IS NOT NULL
 		    AND email <> $3
 		    AND email NOT LIKE '%' || $1`,
-		ErasedEmailSuffix, userID, legacyAnonymizedEmail,
+		ErasedEmailSuffix, userID, LegacyAnonymizedEmail,
 	)
 	if err != nil {
 		return false, err

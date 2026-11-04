@@ -19,6 +19,7 @@ import { UserPlus, Upload, Download, X, Pencil, Ban, RotateCcw, Link2 } from 'lu
 import BoatForm, { type BoatFormValue } from '@/components/boats/BoatForm.vue'
 import BoatCard from '@/components/boats/BoatCard.vue'
 import BulkInvoicesModal from '@/components/admin/BulkInvoicesModal.vue'
+import HarborShareImportModal from '@/components/admin/HarborShareImportModal.vue'
 import { Receipt } from 'lucide-vue-next'
 import type { components } from '@/types/api'
 import { formatName, formatDate } from '@/lib/format'
@@ -909,6 +910,18 @@ async function submitImport() {
     importing.value = false
   }
 }
+
+// --- Harbor share import (BRY-139) ---
+const showHarborShareImport = ref(false)
+
+async function openHarborShareImport() {
+  if (!(await ensureFreshTotp())) return
+  showHarborShareImport.value = true
+}
+
+function harborSharesImported() {
+  queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+}
 </script>
 
 <template>
@@ -972,6 +985,14 @@ async function submitImport() {
           @click="openImportModal"
         >
           <Upload class="h-4 w-4" /> {{ t('admin.users.importButton') }}
+        </button>
+        <button
+          v-if="auth.hasRole('admin')"
+          data-testid="harbor-share-import-open"
+          class="inline-flex items-center gap-1 rounded-md bg-white px-3 py-1.5 text-sm font-semibold text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50"
+          @click="openHarborShareImport"
+        >
+          <Upload class="h-4 w-4" /> {{ t('admin.users.harborShareImport.button') }}
         </button>
         <button
           v-if="auth.hasRole('admin')"
@@ -1668,6 +1689,12 @@ grace@example.com,Grace,Hopper,+47 555 1234,,,,true,member</pre>
         </div>
       </div>
     </div>
+
+    <HarborShareImportModal
+      v-if="auth.hasRole('admin')"
+      v-model:open="showHarborShareImport"
+      @applied="harborSharesImported"
+    />
 
     <BulkInvoicesModal
       v-if="showBulkInvoices"

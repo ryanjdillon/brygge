@@ -32,6 +32,11 @@ const (
 	ActionUserMailProvisioned   = "user.mail_provisioned"
 	ActionUserMailDeprovisioned = "user.mail_deprovisioned"
 
+	// Harbor share import (BRY-139): one row per member it changed and a
+	// summary of the counts. A PATCH logs the same change as update_user.
+	ActionUserHarborShareSet       = "user.harbor_share_set"
+	ActionUserHarborSharesImported = "user.harbor_shares_imported"
+
 	// Admin slip operations
 	ActionSlipCreated  = "slip.created"
 	ActionSlipAssigned = "slip.assigned"

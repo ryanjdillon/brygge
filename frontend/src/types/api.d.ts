@@ -901,6 +901,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/users/harbor-shares/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import harbor share (moloandel) ownership for existing members from a CSV
+         * @description multipart/form-data: `file` (UTF-8 CSV, ',' or ';', 8 MB cap; columns harbor_share_owner, optional harbor_share_paid_on, and email and/or name or first_name + last_name), `dry_run` (default true), `resolutions` (JSON {row: user_id} for ambiguous or unmatched rows) and, to apply, the dry run's `plan_token`. Never overwrites or clears. 409 with code plan_changed when members changed since the preview. Site-admin role and a fresh TOTP step-up required.
+         */
+        post: operations["admin-import-harbor-shares"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/users/import": {
         parameters: {
             query?: never;
@@ -4036,6 +4056,83 @@ export interface components {
             in_progress: components["schemas"]["Task"][] | null;
             /** @description Todo tasks */
             todo: components["schemas"]["Task"][] | null;
+        };
+        HarborShareCandidate: {
+            deactivated: boolean;
+            name: string;
+            /** @description Active slips (section + number), to tell same-named members apart */
+            slips: string[] | null;
+            user_id: string;
+        };
+        HarborShareImportCounts: {
+            /** Format: int64 */
+            ambiguous: number;
+            /** Format: int64 */
+            conflict: number;
+            /** Format: int64 */
+            date_added: number;
+            /** Format: int64 */
+            duplicate: number;
+            /** Format: int64 */
+            error: number;
+            /** Format: int64 */
+            not_owner_but_set: number;
+            /** Format: int64 */
+            set: number;
+            /** Format: int64 */
+            skipped: number;
+            /** Format: int64 */
+            unchanged: number;
+            /** Format: int64 */
+            unmatched: number;
+        };
+        HarborShareImportResult: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/HarborShareImportResult.json
+             */
+            readonly $schema?: string;
+            counts: components["schemas"]["HarborShareImportCounts"];
+            dry_run: boolean;
+            /** @description Identifies this plan; send it back with dry_run=false to apply exactly what was previewed */
+            plan_token: string;
+            rows: components["schemas"]["HarborShareImportRow"][] | null;
+        };
+        HarborShareImportRow: {
+            /** @description Members an ambiguous name could mean */
+            candidates?: components["schemas"]["HarborShareCandidate"][] | null;
+            /** @description The member's stored state, when matched */
+            current?: components["schemas"]["HarborShareState"];
+            /** @description The matched member is deactivated (still set: they own the share) */
+            deactivated: boolean;
+            /** @description Email as uploaded */
+            email?: string;
+            /** @description Reason for error and duplicate rows */
+            message?: string;
+            /** @description Name as uploaded */
+            name?: string;
+            /** @enum {string} */
+            outcome: "set" | "date_added" | "unchanged" | "conflict" | "not_owner_but_set" | "duplicate" | "skipped" | "unmatched" | "ambiguous" | "error";
+            /** @description The state a set or date_added row writes */
+            proposed?: components["schemas"]["HarborShareState"];
+            /** @description Matched through a resolution the operator picked */
+            resolved: boolean;
+            /**
+             * Format: int64
+             * @description 1-based row number in the CSV (header is row 1)
+             */
+            row: number;
+            /** @description Matched member */
+            user_id?: string;
+        };
+        HarborShareState: {
+            owner: boolean;
+            /**
+             * Format: date
+             * @description YYYY-MM-DD, or null when unknown
+             */
+            paid_on: string | null;
         };
         HealthPoolStats: {
             /**
@@ -8006,6 +8103,35 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-import-harbor-shares": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HarborShareImportResult"];
+                };
             };
             /** @description Error */
             default: {
