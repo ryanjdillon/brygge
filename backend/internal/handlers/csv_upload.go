@@ -32,6 +32,24 @@ func (u *csvUpload) has(col string) bool {
 	return ok
 }
 
+// alias lets a header use another name for a column: each alias found in the
+// header is indexed under its canonical name too. A canonical name already in
+// the header wins, and among aliases for one column the first listed wins, so
+// a sheet carrying both never has a column silently swapped.
+func (u *csvUpload) alias(aliases map[string][]string) {
+	for canonical, names := range aliases {
+		if u.has(canonical) {
+			continue
+		}
+		for _, name := range names {
+			if i, ok := u.cols[name]; ok {
+				u.cols[canonical] = i
+				break
+			}
+		}
+	}
+}
+
 // get returns record's trimmed value in col, or "" when the column is absent
 // or the record is short.
 func (u *csvUpload) get(record []string, col string) string {
