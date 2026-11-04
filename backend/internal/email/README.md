@@ -88,7 +88,7 @@ Every send through the production sender increments `brygge.email.send` with `ki
 
 ## Send log (`email_sends`)
 
-`Record` writes one `email_sends` row per relay attempt (migration 000130; the delivery-event side is [sesevents](../sesevents/README.md)):
+`Record` writes one `email_sends` row per relay attempt (migration 000132; the delivery-event side is [sesevents](../sesevents/README.md)):
 
 | Moment | Status |
 |---|---|
