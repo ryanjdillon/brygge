@@ -121,8 +121,9 @@ func TestIntegration_AdminUsersHarborShare(t *testing.T) { //nolint:gocognit,cyc
 		if got, want := ids(list(t, "sort=harbor_share")), []string{ownerWithSlip, ownerNoDate, nonOwner}; !slices.Equal(got, want) {
 			t.Errorf("sort=harbor_share = %v, want %v", got, want)
 		}
-		if got := ids(list(t, "sort=-harbor_share")); got[len(got)-1] != nonOwner {
-			t.Errorf("sort=-harbor_share = %v, want non-owner last", got)
+		// Owners stay one block in both directions; only the date order flips.
+		if got, want := ids(list(t, "sort=-harbor_share")), []string{ownerWithSlip, ownerNoDate, nonOwner}; !slices.Equal(got, want) {
+			t.Errorf("sort=-harbor_share = %v, want %v", got, want)
 		}
 	})
 
@@ -233,8 +234,50 @@ func TestIntegration_AdminUsersHarborShare(t *testing.T) { //nolint:gocognit,cyc
 			  ORDER BY created_at DESC LIMIT 1`, target).Scan(&details); err != nil {
 			t.Fatalf("read audit: %v", err)
 		}
-		if !strings.Contains(details, "harbor_share_owner") || strings.Contains(details, "2026") {
-			t.Errorf("audit details = %s", details)
+		// Removing ownership clears the date, so the row names both columns.
+		var audit struct {
+			Fields []string `json:"fields"`
+		}
+		if err := json.Unmarshal([]byte(details), &audit); err != nil {
+			t.Fatalf("decode audit details %s: %v", details, err)
+		}
+		if want := []string{"harbor_share_owner", "harbor_share_paid_on"}; !slices.Equal(audit.Fields, want) {
+			t.Errorf("audit fields = %v, want %v", audit.Fields, want)
+		}
+		if strings.Contains(details, "2026") {
+			t.Errorf("audit details carry a value: %s", details)
 		}
 	})
+}
+
+func TestUpdatedFields_HarborShare(t *testing.T) {
+	t.Parallel()
+	yes, no := true, false
+	date, empty := "2026-01-02", ""
+	for _, c := range []struct {
+		name        string
+		req         adminUserUpdateRequest
+		writesDate  bool
+		wantUpdated []string
+	}{
+		{"empty", adminUserUpdateRequest{}, false, []string{}},
+		{"owner=true", adminUserUpdateRequest{HarborShareOwner: &yes}, false, []string{"harbor_share_owner"}},
+		{"owner=false clears date", adminUserUpdateRequest{HarborShareOwner: &no}, true,
+			[]string{"harbor_share_owner", "harbor_share_paid_on"}},
+		{"date only", adminUserUpdateRequest{HarborSharePaidOn: &date}, true, []string{"harbor_share_paid_on"}},
+		{"clear date", adminUserUpdateRequest{HarborSharePaidOn: &empty}, true, []string{"harbor_share_paid_on"}},
+		{"owner=true with date", adminUserUpdateRequest{HarborShareOwner: &yes, HarborSharePaidOn: &date}, true,
+			[]string{"harbor_share_owner", "harbor_share_paid_on"}},
+		{"other fields only", adminUserUpdateRequest{City: &date, Phone: &date}, false, []string{"city", "phone"}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			if got := writesHarborSharePaidOn(c.req); got != c.writesDate {
+				t.Errorf("writesHarborSharePaidOn = %v, want %v", got, c.writesDate)
+			}
+			if got := updatedFields(c.req); !slices.Equal(got, c.wantUpdated) {
+				t.Errorf("updatedFields = %v, want %v", got, c.wantUpdated)
+			}
+		})
+	}
 }
