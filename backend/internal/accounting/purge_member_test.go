@@ -27,7 +27,7 @@ func TestIntegration_PurgeExpiredMemberPIIUniqueAddresses(t *testing.T) {
 		return id
 	}
 	legacy := deactivated()
-	if _, err := pool.Exec(ctx, `UPDATE users SET email = $2 WHERE id = $1`, legacy, legacyAnonymizedEmail); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE users SET email = $2 WHERE id = $1`, legacy, LegacyAnonymizedEmail); err != nil {
 		t.Fatalf("seed legacy row: %v", err)
 	}
 	first, second, third := deactivated(), deactivated(), deactivated()
@@ -56,7 +56,7 @@ func TestIntegration_PurgeExpiredMemberPIIUniqueAddresses(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT email FROM users WHERE id = $1`, legacy).Scan(&legacyEmail); err != nil {
 		t.Fatalf("read legacy row: %v", err)
 	}
-	if legacyEmail != legacyAnonymizedEmail {
+	if legacyEmail != LegacyAnonymizedEmail {
 		t.Errorf("legacy row email = %q, want it untouched", legacyEmail)
 	}
 

@@ -1011,6 +1011,11 @@ func main() {
 						r.Get("/export.csv", adminUsersHandler.HandleExportUsersCSV)
 						r.With(middleware.RequireFreshTOTPDefault()).
 							Post("/import", adminUsersHandler.HandleImportUsersCSV)
+						// Harbor share ownership import (BRY-139). Admin-only,
+						// which is what lets it write admin members without
+						// a per-row BRD-9 check.
+						r.With(middleware.RequireFreshTOTPDefault()).
+							Post("/harbor-shares/import", adminUsersHandler.HandleImportHarborShares)
 					})
 
 					// High-blast-radius mutations — re-prompt for TOTP

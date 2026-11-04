@@ -918,6 +918,60 @@ type ImportUsersResult struct {
 	Rows    []ImportUsersResultRow `json:"rows" doc:"Per-row outcome"`
 }
 
+// HarborShareState is a member's harbor share fields, as stored or as an
+// import row would leave them.
+type HarborShareState struct {
+	Owner  bool    `json:"owner"`
+	PaidOn *string `json:"paid_on" format:"date" doc:"YYYY-MM-DD, or null when unknown"`
+}
+
+// HarborShareCandidate is one member an ambiguous name could mean.
+type HarborShareCandidate struct {
+	UserID      string   `json:"user_id"`
+	Name        string   `json:"name"`
+	Slips       []string `json:"slips" doc:"Active slips (section + number), to tell same-named members apart"`
+	Deactivated bool     `json:"deactivated"`
+}
+
+// HarborShareImportRow is the outcome of one CSV row. email and name echo the
+// uploaded file only.
+type HarborShareImportRow struct {
+	Row         int                    `json:"row" doc:"1-based row number in the CSV (header is row 1)"`
+	Email       string                 `json:"email,omitempty" doc:"Email as uploaded"`
+	Name        string                 `json:"name,omitempty" doc:"Name as uploaded"`
+	UserID      string                 `json:"user_id,omitempty" doc:"Matched member"`
+	Outcome     string                 `json:"outcome" enum:"set,date_added,unchanged,conflict,not_owner_but_set,duplicate,skipped,unmatched,ambiguous,error"`
+	Deactivated bool                   `json:"deactivated" doc:"The matched member is deactivated (still set: they own the share)"`
+	Resolved    bool                   `json:"resolved" doc:"Matched through a resolution the operator picked"`
+	Current     *HarborShareState      `json:"current,omitempty" doc:"The member's stored state, when matched"`
+	Proposed    *HarborShareState      `json:"proposed,omitempty" doc:"The state a set or date_added row writes"`
+	Candidates  []HarborShareCandidate `json:"candidates,omitempty" doc:"Members an ambiguous name could mean"`
+	Message     string                 `json:"message,omitempty" doc:"Reason for error and duplicate rows"`
+}
+
+// HarborShareImportCounts counts rows per outcome.
+type HarborShareImportCounts struct {
+	Set            int `json:"set"`
+	DateAdded      int `json:"date_added"`
+	Unchanged      int `json:"unchanged"`
+	Conflict       int `json:"conflict"`
+	NotOwnerButSet int `json:"not_owner_but_set"`
+	Duplicate      int `json:"duplicate"`
+	Skipped        int `json:"skipped"`
+	Unmatched      int `json:"unmatched"`
+	Ambiguous      int `json:"ambiguous"`
+	Error          int `json:"error"`
+}
+
+// HarborShareImportResult is the dry run or applied result of a harbor share
+// import.
+type HarborShareImportResult struct {
+	DryRun    bool                    `json:"dry_run"`
+	Counts    HarborShareImportCounts `json:"counts"`
+	Rows      []HarborShareImportRow  `json:"rows"`
+	PlanToken string                  `json:"plan_token" doc:"Identifies this plan; send it back with dry_run=false to apply exactly what was previewed"`
+}
+
 // --- Broadcasts ---
 
 type Broadcast struct {
