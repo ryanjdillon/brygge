@@ -40,6 +40,9 @@ type InvoiceHandler struct {
 	// mailJournal reads the mail server's delivery events for the
 	// delivery log; nil when the host has no mail-log helper.
 	mailJournal mailJournal
+	// suppression removes an address from the SES suppression list; nil
+	// when SES is not configured.
+	suppression suppressionRemover
 	log         zerolog.Logger
 
 	// deliveries is the shared durable delivery queue (broadcasts +

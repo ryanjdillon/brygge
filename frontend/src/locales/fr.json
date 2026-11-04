@@ -1144,7 +1144,7 @@
         "deliveryLog": {
           "title": "Journal de livraison",
           "noRecipient": "Cette facture n'a pas d'e-mail destinataire enregistré.",
-          "helpText": "Une entrée par envoi de cette facture par Brygge : ce que le serveur de messagerie du club en a fait et ce que le serveur du destinataire a répondu. « Acceptée » signifie que le serveur du destinataire a pris l'e-mail ; s'il est arrivé dans la boîte de réception ou dans les spams ne peut pas être vu d'ici. Le journal du serveur de messagerie couvre environ le dernier mois.",
+          "helpText": "Une entrée par envoi de cette facture par Brygge et ce qu'il en est advenu. Les envois via Amazon SES affichent le rapport de remise reçu par SES ; les envois plus anciens viennent du journal du serveur de messagerie du club, qui couvre environ le dernier mois. « Acceptée » signifie que le serveur du destinataire a pris le message ; s'il est arrivé en boîte de réception ou en spam ne se voit pas ici.",
           "noSends": "Brygge n'a pas envoyé cette facture par e-mail. Elle a peut-être été envoyée par l'ancien système.",
           "kind": {
             "sent": "Premier envoi",
@@ -1159,7 +1159,14 @@
             "no_record": "Aucune trace de livraison",
             "pending": "Envoyée à l'instant",
             "beyond_retention": "Plus ancienne que le journal",
-            "unavailable": "Journal indisponible"
+            "unavailable": "Journal indisponible",
+            "sending": "Envoi en cours",
+            "submitted": "Remis au service d'envoi",
+            "failed": "Non envoyé",
+            "unknown": "Résultat inconnu",
+            "rejected_temporary": "Abandon après plusieurs essais",
+            "suppressed": "Bloqué : sur la liste de suppression",
+            "complaint": "Signalé comme spam"
           },
           "statusHelp": {
             "deferred": "Le serveur du destinataire a demandé de réessayer plus tard (greylisting, par exemple). Le serveur de messagerie réessaie de lui-même.",
@@ -1167,9 +1174,37 @@
             "no_record": "Le serveur de messagerie n'a aucune trace de cet envoi ; l'e-mail ne l'a probablement jamais quitté. Renvoyez la facture et signalez-le si cela se reproduit.",
             "pending": "Envoyée il y a quelques minutes ; le journal ne l'affiche peut-être pas encore.",
             "beyond_retention": "Le journal du serveur de messagerie ne couvre qu'environ le dernier mois.",
-            "unavailable": "Le journal du serveur de messagerie ne peut pas être lu sur ce serveur."
+            "unavailable": "Le journal du serveur de messagerie ne peut pas être lu sur ce serveur.",
+            "sending": "Brygge remet le message au service d'envoi. Si cela dure plus de quelques minutes, l'envoi a été interrompu : demandez au destinataire avant de renvoyer.",
+            "submitted": "Le service d'envoi a le message ; son rapport de remise suit en général en quelques minutes.",
+            "failed": "Le service d'envoi a refusé le message avant de le prendre ; rien n'a été envoyé. Renvoyez la facture.",
+            "unknown": "La connexion a été coupée pendant la remise ; le message est peut-être parti. Demandez au destinataire avant de renvoyer, pour éviter un doublon.",
+            "rejected_temporary": "Le serveur du destinataire a demandé de réessayer plus tard jusqu'à ce qu'Amazon SES abandonne. Vérifiez l'adresse et renvoyez plus tard.",
+            "suppressed": "Amazon SES n'a pas envoyé ce message : l'adresse a déjà provoqué un rebond définitif (ou le destinataire a signalé du spam), elle est donc sur la liste de suppression du club. Si l'adresse est correcte et que le rebond ne se reproduira pas (boîte pleine depuis vidée, ou erreur côté club), retirez-la de la liste et renvoyez la facture.",
+            "complaint": "Le destinataire a signalé le message comme spam. Ne renvoyez pas et ne retirez pas l'adresse de la liste de suppression ; contactez le membre autrement."
           },
-          "nextRetry": "Prochain essai {time}"
+          "nextRetry": "Prochain essai {time}",
+          "eventType": {
+            "send": "Accepté par Amazon SES",
+            "delivery": "Remis au serveur du destinataire",
+            "delivery_delay": "Remise retardée",
+            "bounce": "Rebond",
+            "complaint": "Signalé comme spam",
+            "reject": "Rejeté par Amazon SES",
+            "rendering_failure": "Impossible de construire le message"
+          },
+          "sentTo": "À {email}",
+          "hardBounceHint": "Un rebond définitif place aussi l'adresse sur la liste de suppression ; les messages suivants sont bloqués. Corrigez l'adresse si elle est fausse ; si elle était correcte, retirez-la de la liste avant de renvoyer.",
+          "badgeTitle": "Dernier e-mail : {status}",
+          "unsuppress": {
+            "button": "Retirer de la liste de suppression",
+            "confirmTitle": "Retirer {email} de la liste de suppression ?",
+            "confirmBody": "Amazon SES enverra de nouveau à cette adresse. Ne le faites que si l'adresse est correcte et que le rebond ne se reproduira pas, jamais après un signalement de spam par le destinataire. Renvoyez ensuite la facture.",
+            "confirm": "Retirer",
+            "done": "Retirée de la liste de suppression. Renvoyez la facture pour la remettre.",
+            "notListed": "L'adresse n'était pas sur la liste de suppression. Vous pouvez renvoyer la facture.",
+            "failed": "Impossible de retirer l'adresse : {error}"
+          }
         },
         "lastReminder": "Dernier rappel",
         "reissueKidSelected": "Nouveau KID",

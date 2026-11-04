@@ -12,8 +12,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
+	"github.com/aws/aws-sdk-go-v2/service/sesv2"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
@@ -334,6 +336,15 @@ func main() {
 	refundService := payments.NewRefundService(db, paymentProviders, log)
 	orderRefundHandler := handlers.NewOrderRefundHandler(refundService, &cfg, auditService, log)
 	invoiceHandler := handlers.NewInvoiceHandler(db, &cfg, emailClient, auditService, s3LegalClient, paymentProviders, log)
+	// "Remove from suppression list" in the delivery log (BRY-590) needs the
+	// SES region and the app's AWS key; without them the action answers 503.
+	if cfg.SESRegion != "" {
+		if awsCfg, err := sesAWSConfig(ctx, cfg.SESRegion); err != nil {
+			log.Error().Err(err).Msg("SES suppression list unavailable: AWS config failed")
+		} else {
+			invoiceHandler.SetSuppressionList(sesevents.NewSuppressionList(sesv2.NewFromConfig(awsCfg)))
+		}
+	}
 	// The refund routes exist only with accounting (a refund is booked by
 	// its pass), so the lists show a refund button only then too.
 	if cfg.Features.Accounting {
@@ -932,6 +943,14 @@ func main() {
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTPDefault()).
 							Get("/invoices/{invoiceID}/delivery-log", invoiceHandler.HandleGetDeliveryLog)
+						// Removes a safety block SES set after a hard bounce, so it
+						// takes a fresh step-up like the other faktura mail writes.
+						r.With(middleware.RequireRole("treasurer", "admin"),
+							middleware.RequireFreshTOTPDefault()).
+							Post("/invoices/{invoiceID}/email-sends/{sendID}/unsuppress", invoiceHandler.HandleUnsuppressRecipient)
+						// Statuses only (no addresses), for the list badge.
+						r.With(middleware.RequireRole("treasurer", "admin")).
+							Get("/invoices/delivery-statuses", invoiceHandler.HandleGetDeliveryStatuses)
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTPDefault()).
 							Post("/invoices/{invoiceID}/void", invoiceHandler.HandleVoidInvoice)
@@ -1542,10 +1561,7 @@ func main() {
 	case cfg.SESRegion == "":
 		log.Error().Msg("SES events worker not started: SES_EVENTS_QUEUE_NAME is set but SES_REGION is empty")
 	default:
-		// IMDS off: the host is not on EC2, and a missing key should fail
-		// fast rather than probe a link-local metadata endpoint.
-		awsCfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(cfg.SESRegion),
-			awsconfig.WithEC2IMDSClientEnableState(imds.ClientDisabled))
+		awsCfg, err := sesAWSConfig(ctx, cfg.SESRegion)
 		if err != nil {
 			log.Error().Err(err).Msg("SES events worker not started: AWS config failed")
 		} else {
@@ -1796,4 +1812,13 @@ func serveFrontend(r chi.Router, frontendFS fs.FS) {
 		}
 		fileServer.ServeHTTP(w, req)
 	})
+}
+
+// sesAWSConfig loads the AWS config the SES clients share: credentials from
+// the SDK's default chain (AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY in the
+// environment). IMDS is off: the host is not on EC2, and a missing key should
+// fail fast rather than probe a link-local metadata endpoint.
+func sesAWSConfig(ctx context.Context, region string) (aws.Config, error) {
+	return awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(region),
+		awsconfig.WithEC2IMDSClientEnableState(imds.ClientDisabled))
 }

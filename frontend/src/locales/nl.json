@@ -1145,7 +1145,7 @@
         "deliveryLog": {
           "title": "Bezorglogboek",
           "noRecipient": "Deze factuur heeft geen ontvanger-e-mail vastgelegd.",
-          "helpText": "Eén regel per keer dat Brygge deze factuur mailde: wat de mailserver van de club ermee deed en wat de mailserver van de ontvanger antwoordde. \"Geaccepteerd\" betekent dat de server van de ontvanger de mail heeft aangenomen; of hij in de inbox of in spam belandde, is hier niet te zien. Het mailserverlogboek beslaat ongeveer de laatste maand.",
+          "helpText": "Eén regel per keer dat Brygge deze factuur mailde en wat ermee gebeurde. Verzendingen via Amazon SES tonen het afleverrapport dat SES ontving; oudere verzendingen komen uit het logboek van de mailserver van de club, dat ongeveer de laatste maand beslaat. 'Geaccepteerd' betekent dat de server van de ontvanger de mail heeft aangenomen; of hij in de inbox of in spam belandde, is hier niet te zien.",
           "noSends": "Brygge heeft deze factuur niet per e-mail verzonden. Mogelijk is hij door het vorige systeem verzonden.",
           "kind": {
             "sent": "Eerste verzending",
@@ -1160,7 +1160,14 @@
             "no_record": "Geen afleverspoor",
             "pending": "Net verzonden",
             "beyond_retention": "Ouder dan het maillogboek",
-            "unavailable": "Logboek niet beschikbaar"
+            "unavailable": "Logboek niet beschikbaar",
+            "sending": "Wordt verzonden",
+            "submitted": "Aan de maildienst overgedragen",
+            "failed": "Niet verzonden",
+            "unknown": "Uitkomst onbekend",
+            "rejected_temporary": "Opgegeven na herhaalpogingen",
+            "suppressed": "Geblokkeerd: op de onderdrukkingslijst",
+            "complaint": "Als spam gemarkeerd"
           },
           "statusHelp": {
             "deferred": "De server van de ontvanger vroeg om het later opnieuw te proberen (bijvoorbeeld greylisting). De mailserver probeert het zelf opnieuw.",
@@ -1168,9 +1175,37 @@
             "no_record": "De mailserver heeft geen spoor van deze verzending; de mail heeft hem waarschijnlijk nooit verlaten. Verzend de factuur opnieuw en meld het als het nog eens gebeurt.",
             "pending": "Enkele minuten geleden verzonden; het logboek toont het mogelijk nog niet.",
             "beyond_retention": "Het mailserverlogboek beslaat alleen ongeveer de laatste maand.",
-            "unavailable": "Het mailserverlogboek kan op deze server niet worden gelezen."
+            "unavailable": "Het mailserverlogboek kan op deze server niet worden gelezen.",
+            "sending": "Brygge draagt de mail over aan de maildienst. Blijft dit langer dan een paar minuten staan, dan is de verzending onderbroken: vraag het de ontvanger voordat je opnieuw verstuurt.",
+            "submitted": "De maildienst heeft het bericht; het afleverrapport volgt meestal binnen enkele minuten.",
+            "failed": "De maildienst weigerde het bericht voordat hij het aannam, dus er is niets verzonden. Verstuur de factuur opnieuw.",
+            "unknown": "De verbinding viel weg tijdens het overdragen; het bericht is misschien verzonden. Vraag het de ontvanger voordat je opnieuw verstuurt, om een dubbele te voorkomen.",
+            "rejected_temporary": "De server van de ontvanger vroeg steeds om het later te proberen tot Amazon SES opgaf. Controleer het adres en verstuur later opnieuw.",
+            "suppressed": "Amazon SES heeft deze mail niet verzonden: het adres gaf eerder een harde bounce (of de ontvanger meldde spam) en staat daarom op de onderdrukkingslijst van de club. Is het adres juist en herhaalt de bounce zich niet (een volle mailbox die is geleegd, of een fout aan de kant van de club), haal het dan van de lijst en verstuur de factuur opnieuw.",
+            "complaint": "De ontvanger markeerde de mail als spam. Verstuur niet opnieuw en haal het adres niet van de onderdrukkingslijst; neem op een andere manier contact op met het lid."
           },
-          "nextRetry": "Volgende poging {time}"
+          "nextRetry": "Volgende poging {time}",
+          "eventType": {
+            "send": "Geaccepteerd door Amazon SES",
+            "delivery": "Afgeleverd bij de server van de ontvanger",
+            "delivery_delay": "Aflevering vertraagd",
+            "bounce": "Bounce",
+            "complaint": "Als spam gemarkeerd",
+            "reject": "Geweigerd door Amazon SES",
+            "rendering_failure": "Bericht kon niet worden opgebouwd"
+          },
+          "sentTo": "Aan {email}",
+          "hardBounceHint": "Een harde bounce zet het adres ook op de onderdrukkingslijst, zodat latere mail wordt geblokkeerd. Corrigeer het adres als het fout is; was het juist, haal het dan van de lijst voordat je opnieuw verstuurt.",
+          "badgeTitle": "Laatste e-mail: {status}",
+          "unsuppress": {
+            "button": "Van onderdrukkingslijst halen",
+            "confirmTitle": "{email} van de onderdrukkingslijst halen?",
+            "confirmBody": "Amazon SES verstuurt weer naar dit adres. Doe dit alleen als het adres juist is en de bounce niet terugkomt, nooit nadat de ontvanger mail als spam heeft gemarkeerd. Verstuur daarna de factuur opnieuw.",
+            "confirm": "Verwijderen",
+            "done": "Van de onderdrukkingslijst gehaald. Verstuur de factuur opnieuw om hem af te leveren.",
+            "notListed": "Het adres stond niet op de onderdrukkingslijst. Je kunt de factuur opnieuw versturen.",
+            "failed": "Adres kon niet worden verwijderd: {error}"
+          }
         },
         "lastReminder": "Laatste herinnering",
         "reissueKidSelected": "Nieuwe KID",

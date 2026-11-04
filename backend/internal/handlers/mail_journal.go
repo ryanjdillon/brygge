@@ -15,6 +15,11 @@ import (
 	"github.com/brygge-klubb/brygge/internal/config"
 )
 
+// The journal path is read-only legacy since the SES send log (BRY-590): it
+// answers only for faktura sends from before email_sends existed and for
+// sends that went through Stalwart. Remove this file with the
+// brygge-mail-log units 35 days after the SES cutover (BRY-594).
+
 // mailJournal returns the mail server's delivery events for one recipient,
 // oldest first. The host's mail-log helper does the journal read: the API
 // itself has no journal access (docs/developer/mail/stalwart-internals.md

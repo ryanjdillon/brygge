@@ -1145,7 +1145,7 @@
         "deliveryLog": {
           "title": "Zustellungsprotokoll",
           "noRecipient": "Diese Rechnung hat keine hinterlegte Empfänger-E-Mail.",
-          "helpText": "Ein Eintrag pro E-Mail-Versand dieser Rechnung durch Brygge: was der Mailserver des Vereins damit gemacht hat und was der Mailserver des Empfängers geantwortet hat. „Angenommen“ heißt, dass der Server des Empfängers die E-Mail übernommen hat; ob sie im Posteingang oder im Spam landete, ist von hier aus nicht sichtbar. Das Mailserver-Protokoll umfasst etwa den letzten Monat.",
+          "helpText": "Ein Eintrag pro E-Mail-Versand dieser Rechnung durch Brygge und was damit geschah. Sendungen über Amazon SES zeigen den Zustellbericht von SES; ältere Sendungen stammen aus dem Protokoll des Club-Mailservers, das etwa den letzten Monat abdeckt. „Angenommen“ heißt, dass der Server des Empfängers die Mail angenommen hat; ob sie im Posteingang oder im Spam landete, ist hier nicht sichtbar.",
           "noSends": "Brygge hat diese Rechnung nicht per E-Mail versendet. Sie wurde möglicherweise vom vorherigen System versendet.",
           "kind": {
             "sent": "Erstversand",
@@ -1160,7 +1160,14 @@
             "no_record": "Kein Zustellnachweis",
             "pending": "Gerade gesendet",
             "beyond_retention": "Älter als das Mailprotokoll",
-            "unavailable": "Protokoll nicht verfügbar"
+            "unavailable": "Protokoll nicht verfügbar",
+            "sending": "Wird gesendet",
+            "submitted": "An den Maildienst übergeben",
+            "failed": "Nicht gesendet",
+            "unknown": "Ergebnis unbekannt",
+            "rejected_temporary": "Nach Wiederholungen aufgegeben",
+            "suppressed": "Blockiert: auf der Sperrliste",
+            "complaint": "Als Spam markiert"
           },
           "statusHelp": {
             "deferred": "Der Server des Empfängers bat um einen späteren Versuch (z. B. Greylisting). Der Mailserver wiederholt selbstständig.",
@@ -1168,9 +1175,37 @@
             "no_record": "Der Mailserver hat keinen Eintrag zu diesem Versand; die E-Mail hat ihn wahrscheinlich nie verlassen. Senden Sie die Rechnung erneut und melden Sie es, falls es wieder passiert.",
             "pending": "Vor wenigen Minuten gesendet; das Protokoll zeigt es eventuell noch nicht.",
             "beyond_retention": "Das Mailserver-Protokoll umfasst nur etwa den letzten Monat.",
-            "unavailable": "Das Mailserver-Protokoll kann auf diesem Server nicht gelesen werden."
+            "unavailable": "Das Mailserver-Protokoll kann auf diesem Server nicht gelesen werden.",
+            "sending": "Brygge übergibt die Mail an den Maildienst. Bleibt es länger als ein paar Minuten so, wurde der Versand unterbrochen: Fragen Sie den Empfänger, bevor Sie erneut senden.",
+            "submitted": "Der Maildienst hat die Nachricht; der Zustellbericht folgt meist innerhalb weniger Minuten.",
+            "failed": "Der Maildienst hat die Nachricht abgelehnt, bevor er sie annahm; es wurde nichts gesendet. Senden Sie die Rechnung erneut.",
+            "unknown": "Die Verbindung brach während der Übergabe ab; die Nachricht ist vielleicht verschickt worden. Fragen Sie den Empfänger, bevor Sie erneut senden, um ein Duplikat zu vermeiden.",
+            "rejected_temporary": "Der Server des Empfängers bat so lange um einen späteren Versuch, bis Amazon SES aufgab. Prüfen Sie die Adresse und senden Sie später erneut.",
+            "suppressed": "Amazon SES hat diese Mail nicht gesendet: Die Adresse hatte früher einen harten Bounce (oder der Empfänger meldete Spam) und steht auf der Sperrliste des Clubs. Ist die Adresse richtig und wiederholt sich der Bounce nicht (ein inzwischen geleertes volles Postfach oder ein Fehler auf Club-Seite), entfernen Sie sie aus der Liste und senden Sie die Rechnung erneut.",
+            "complaint": "Der Empfänger hat die Mail als Spam markiert. Nicht erneut senden und die Adresse nicht von der Sperrliste entfernen; kontaktieren Sie das Mitglied auf anderem Weg."
           },
-          "nextRetry": "Nächster Versuch {time}"
+          "nextRetry": "Nächster Versuch {time}",
+          "eventType": {
+            "send": "Von Amazon SES angenommen",
+            "delivery": "An den Server des Empfängers zugestellt",
+            "delivery_delay": "Zustellung verzögert",
+            "bounce": "Bounce",
+            "complaint": "Als Spam markiert",
+            "reject": "Von Amazon SES abgelehnt",
+            "rendering_failure": "Nachricht konnte nicht erstellt werden"
+          },
+          "sentTo": "An {email}",
+          "hardBounceHint": "Ein harter Bounce setzt die Adresse auch auf die Sperrliste, sodass spätere Mails blockiert werden. Korrigieren Sie eine falsche Adresse; war sie richtig, entfernen Sie sie vor dem erneuten Senden aus der Liste.",
+          "badgeTitle": "Letzte E-Mail: {status}",
+          "unsuppress": {
+            "button": "Von der Sperrliste entfernen",
+            "confirmTitle": "{email} von der Sperrliste entfernen?",
+            "confirmBody": "Amazon SES sendet wieder an diese Adresse. Tun Sie das nur, wenn die Adresse richtig ist und sich der Bounce nicht wiederholt, niemals nachdem der Empfänger Mail als Spam markiert hat. Senden Sie danach die Rechnung erneut.",
+            "confirm": "Entfernen",
+            "done": "Von der Sperrliste entfernt. Senden Sie die Rechnung erneut, um sie zuzustellen.",
+            "notListed": "Die Adresse stand nicht auf der Sperrliste. Sie können die Rechnung erneut senden.",
+            "failed": "Adresse konnte nicht entfernt werden: {error}"
+          }
         },
         "lastReminder": "Letzte Mahnung",
         "reissueKidSelected": "Neue KID",

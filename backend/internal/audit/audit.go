@@ -72,6 +72,9 @@ const (
 	ActionPaymentCreated              = "payment.created"
 	ActionPaymentViewed               = "finance.payment_viewed"
 
+	// A faktura recipient taken off the SES suppression list (BRY-590)
+	ActionInvoiceRecipientUnsuppressed = "invoice.recipient_unsuppressed"
+
 	// Posted Vipps charges moved off the 3900 fallback (BRY-557)
 	ActionAccountingVippsFallbackReclassified = "accounting.vipps_fallback_reclassified"
 

@@ -87,7 +87,7 @@ The API's handle on the mail server's management REST API (`/api/…`). What it 
 | `BRYGGE_MAILBOXES_PATH`   | For the inbox | —       | Path to the board-mailbox spec the shared-inbox reconciler applies ([mail/inbox.md](mail/inbox.md)) |
 | `STALWART_MAILBOX_PASSWORDS_PATH` | For the inbox | — | Path to the shared mailboxes' password file |
 | `BRYGGE_RECONCILER_DRY_RUN` | No          | `false` | Logs what the reconciler would change without writing to Stalwart |
-| `MAIL_LOG_SOCKET`         | No            | —       | Unix socket of the host's mail-log helper (`/run/brygge-mail-log.sock` in `nix/host.nix`). The faktura delivery log reads Stalwart's delivery events through it; unset, the log says "unavailable" ([mail/stalwart-internals.md § Faktura delivery log](mail/stalwart-internals.md#faktura-delivery-log)) |
+| `MAIL_LOG_SOCKET`         | No            | —       | Unix socket of the host's mail-log helper (`/run/brygge-mail-log.sock` in `nix/host.nix`). The faktura delivery log reads Stalwart's delivery events through it; unset, the log says "unavailable" for sends it cannot answer from `email_sends` ([mail/stalwart-internals.md § Faktura delivery log](mail/stalwart-internals.md#faktura-delivery-log)). Legacy: removed 35 days after the SES cutover (BRY-594) |
 
 The fallback admin has every permission. Any other principal used here needs at least `message-queue-list` for the queue gauges, plus the principal-management permissions provisioning uses.
 
@@ -97,7 +97,7 @@ The API long-polls an SQS queue that the SES configuration set publishes deliver
 
 | Variable                | Required       | Default | Description |
 |-------------------------|----------------|---------|-------------|
-| `SES_REGION`            | For SES events | —       | AWS region of the SES identity and the queues (e.g. `eu-north-1`). Non-secret: `nix/host.nix` `extraEnvironment`, from `clubConfig`. With the queue name set but no region, the worker logs an error and does not start |
+| `SES_REGION`            | For SES events | —       | AWS region of the SES identity and the queues (e.g. `eu-north-1`). Non-secret: `nix/host.nix` `extraEnvironment`, from `clubConfig`. With the queue name set but no region, the worker logs an error and does not start. Also enables the delivery log's "remove from suppression list" action (SESv2 with the same AWS key); unset, that action answers 503 |
 | `SES_CONFIGURATION_SET` | For SES        | —       | Configuration set name, `brygge-<slug>`. Non-secret: `nix/host.nix` |
 | `SES_EVENTS_QUEUE_NAME` | For SES events | —       | SQS queue name, `brygge-<slug>-ses-events`; the URL is resolved at start with `GetQueueUrl`. Unset disables the worker. Non-secret: `nix/host.nix` |
 | `SES_EVENTS_DLQ_NAME`   | No             | —       | Dead-letter queue name, `brygge-<slug>-ses-events-dlq`. Its depth is sampled each minute into `brygge.ses.dlq.messages`; unset skips sampling. Non-secret: `nix/host.nix` |

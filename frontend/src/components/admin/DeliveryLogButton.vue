@@ -3,26 +3,24 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { MailSearch } from 'lucide-vue-next'
 import { useFreshTotp } from '@/composables/useFreshTotp'
+import { useConfirm } from '@/stores/confirm'
+import { useToast } from '@/composables/useToast'
 import Modal from '@/components/ui/Modal.vue'
 import { formatDateTime as fmtDateTime } from '@/lib/format'
+import { statusClass, statusWithHelp, type SendStatus } from '@/lib/deliveryStatus'
 
 const props = defineProps<{ invoiceId: string }>()
 
 const { t, locale } = useI18n()
-const { totpAwareFetch } = useFreshTotp()
-
-type SendStatus =
-  | 'accepted'
-  | 'deferred'
-  | 'rejected'
-  | 'queued'
-  | 'no_record'
-  | 'pending'
-  | 'beyond_retention'
-  | 'unavailable'
+const { ensureFreshTotp, totpAwareFetch } = useFreshTotp()
+const askConfirm = useConfirm()
+const toast = useToast()
 
 interface DeliveryEvent {
   timestamp: string
+  // SES event type; absent on a mail-server journal event.
+  type?: string
+  subtype?: string
   message: string
   hostname?: string
   smtp_code?: number
@@ -30,13 +28,18 @@ interface DeliveryEvent {
 }
 
 interface DeliverySend {
+  // email_sends row id; absent for a send from before the send log.
+  id?: string
   kind: 'sent' | 'resent' | 'reminder'
   at: string
   status: SendStatus
+  provider?: 'ses' | 'stalwart'
+  recipient?: string
   smtp_code?: number
   remote_host?: string
   details?: string
   next_retry_at?: string
+  can_unsuppress?: boolean
   events: DeliveryEvent[]
 }
 
@@ -76,18 +79,48 @@ function formatTime(iso: string): string {
   return fmtDateTime(iso, locale.value)
 }
 
-const statusClass: Record<SendStatus, string> = {
-  accepted: 'bg-emerald-50 text-emerald-800 ring-emerald-200',
-  deferred: 'bg-amber-50 text-amber-800 ring-amber-200',
-  rejected: 'bg-red-50 text-red-800 ring-red-200',
-  no_record: 'bg-red-50 text-red-800 ring-red-200',
-  queued: 'bg-gray-50 text-gray-700 ring-gray-200',
-  pending: 'bg-gray-50 text-gray-700 ring-gray-200',
-  beyond_retention: 'bg-gray-50 text-gray-700 ring-gray-200',
-  unavailable: 'bg-gray-50 text-gray-700 ring-gray-200',
+// SES event types the server reports; anything else falls back to the
+// server's English message.
+const sesEventTypes = new Set(['send', 'delivery', 'delivery_delay', 'bounce', 'complaint', 'reject', 'rendering_failure'])
+
+function eventLabel(ev: DeliveryEvent): string {
+  return ev.type && sesEventTypes.has(ev.type) ? t(`admin.faktura.sent.deliveryLog.eventType.${ev.type}`) : ev.message
 }
 
-const statusWithHelp = new Set<SendStatus>(['deferred', 'rejected', 'no_record', 'pending', 'beyond_retention', 'unavailable'])
+// Sends whose address was taken off the list in this session: the send
+// itself stays suppressed (it was never delivered), only the button goes.
+const unsuppressed = ref(new Set<string>())
+const busy = ref<string | null>(null)
+
+// Removes a safety block SES set, so the step-up comes first (at click
+// time), then the confirm that says when not to do it.
+async function unsuppress(send: DeliverySend) {
+  if (!send.id) return
+  if (!(await ensureFreshTotp())) return
+  const email = send.recipient ?? recipient.value ?? ''
+  const ok = await askConfirm({
+    title: t('admin.faktura.sent.deliveryLog.unsuppress.confirmTitle', { email }),
+    body: t('admin.faktura.sent.deliveryLog.unsuppress.confirmBody'),
+    confirmLabel: t('admin.faktura.sent.deliveryLog.unsuppress.confirm'),
+    tone: 'warning',
+  })
+  if (!ok) return
+  busy.value = send.id
+  try {
+    const res = await totpAwareFetch(
+      `/api/v1/admin/financials/invoices/${props.invoiceId}/email-sends/${send.id}/unsuppress`,
+      { method: 'POST' },
+    )
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(body.error ?? `${res.status} ${res.statusText}`)
+    unsuppressed.value = new Set([...unsuppressed.value, send.id])
+    toast.success(t(`admin.faktura.sent.deliveryLog.unsuppress.${body.removed ? 'done' : 'notListed'}`))
+  } catch (e: unknown) {
+    toast.error(t('admin.faktura.sent.deliveryLog.unsuppress.failed', { error: e instanceof Error ? e.message : String(e) }))
+  } finally {
+    busy.value = null
+  }
+}
 
 function codeClass(code: number | undefined): string {
   if (!code) return 'text-gray-500'
@@ -137,9 +170,32 @@ function codeClass(code: number | undefined): string {
               {{ t(`admin.faktura.sent.deliveryLog.status.${send.status}`) }}
             </span>
           </div>
+          <p
+            v-if="send.recipient && send.recipient !== recipient"
+            class="mt-0.5 break-all font-mono text-xs text-gray-500"
+            data-testid="delivery-send-recipient"
+          >
+            {{ t('admin.faktura.sent.deliveryLog.sentTo', { email: send.recipient }) }}
+          </p>
           <p v-if="statusWithHelp.has(send.status)" class="mt-1.5 text-xs leading-snug text-gray-600">
             {{ t(`admin.faktura.sent.deliveryLog.statusHelp.${send.status}`) }}
           </p>
+          <p
+            v-if="send.status === 'rejected' && send.can_unsuppress"
+            class="mt-1 text-xs leading-snug text-gray-600"
+          >
+            {{ t('admin.faktura.sent.deliveryLog.hardBounceHint') }}
+          </p>
+          <button
+            v-if="send.can_unsuppress && send.id && !unsuppressed.has(send.id)"
+            type="button"
+            class="mt-2 inline-flex min-h-11 w-full items-center justify-center rounded-md border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 sm:w-auto"
+            :disabled="busy === send.id"
+            data-testid="delivery-unsuppress"
+            @click="unsuppress(send)"
+          >
+            {{ t('admin.faktura.sent.deliveryLog.unsuppress.button') }}
+          </button>
           <p v-if="send.status === 'deferred' && send.next_retry_at" class="mt-1 text-xs text-gray-600">
             {{ t('admin.faktura.sent.deliveryLog.nextRetry', { time: formatTime(send.next_retry_at) }) }}
           </p>
@@ -155,7 +211,10 @@ function codeClass(code: number | undefined): string {
                   {{ ev.smtp_code }}
                 </span>
               </div>
-              <p class="mt-0.5 text-xs text-gray-800">{{ ev.message }}</p>
+              <p class="mt-0.5 text-xs text-gray-800">
+                {{ eventLabel(ev) }}
+                <span v-if="ev.subtype" class="font-mono text-gray-500">· {{ ev.subtype }}</span>
+              </p>
               <p v-if="ev.hostname" class="mt-0.5 break-all font-mono text-xs text-gray-600">{{ ev.hostname }}</p>
               <p v-if="ev.details" class="mt-0.5 break-words font-mono text-xs text-gray-400">{{ ev.details }}</p>
             </li>

@@ -1145,7 +1145,7 @@
         "deliveryLog": {
           "title": "Registro consegne",
           "noRecipient": "Questa fattura non ha un'email destinatario registrata.",
-          "helpText": "Una voce per ogni invio di questa fattura da parte di Brygge: cosa ne ha fatto il server di posta del club e cosa ha risposto il server del destinatario. \"Accettata\" significa che il server del destinatario ha preso l'e-mail; se sia finita in posta in arrivo o nello spam non è visibile da qui. Il registro del server di posta copre circa l'ultimo mese.",
+          "helpText": "Una voce per ogni invio di questa fattura da parte di Brygge e cosa ne è stato. Gli invii tramite Amazon SES mostrano il rapporto di consegna ricevuto da SES; quelli più vecchi provengono dal registro del server di posta del club, che copre circa l'ultimo mese. «Accettata» significa che il server del destinatario ha preso il messaggio; se sia finito in posta in arrivo o nello spam non si vede da qui.",
           "noSends": "Brygge non ha inviato questa fattura via e-mail. Potrebbe essere stata inviata dal sistema precedente.",
           "kind": {
             "sent": "Primo invio",
@@ -1160,7 +1160,14 @@
             "no_record": "Nessuna traccia di consegna",
             "pending": "Appena inviata",
             "beyond_retention": "Più vecchia del registro",
-            "unavailable": "Registro non disponibile"
+            "unavailable": "Registro non disponibile",
+            "sending": "Invio in corso",
+            "submitted": "Consegnato al servizio di posta",
+            "failed": "Non inviato",
+            "unknown": "Esito sconosciuto",
+            "rejected_temporary": "Rinuncia dopo vari tentativi",
+            "suppressed": "Bloccato: nella lista di soppressione",
+            "complaint": "Segnalato come spam"
           },
           "statusHelp": {
             "deferred": "Il server del destinatario ha chiesto di riprovare più tardi (ad esempio greylisting). Il server di posta riprova da solo.",
@@ -1168,9 +1175,37 @@
             "no_record": "Il server di posta non ha traccia di questo invio; probabilmente l'e-mail non è mai partita. Reinvia la fattura e segnalalo se succede di nuovo.",
             "pending": "Inviata pochi minuti fa; il registro potrebbe non mostrarla ancora.",
             "beyond_retention": "Il registro del server di posta copre solo circa l'ultimo mese.",
-            "unavailable": "Il registro del server di posta non può essere letto su questo server."
+            "unavailable": "Il registro del server di posta non può essere letto su questo server.",
+            "sending": "Brygge sta consegnando il messaggio al servizio di posta. Se resta così per più di qualche minuto, l'invio è stato interrotto: chiedi al destinatario prima di reinviare.",
+            "submitted": "Il servizio di posta ha il messaggio; il rapporto di consegna arriva di solito entro pochi minuti.",
+            "failed": "Il servizio di posta ha rifiutato il messaggio prima di prenderlo, quindi non è stato inviato nulla. Reinvia la fattura.",
+            "unknown": "La connessione si è interrotta durante la consegna; il messaggio potrebbe essere partito. Chiedi al destinatario prima di reinviare, per evitare un doppione.",
+            "rejected_temporary": "Il server del destinatario ha chiesto di riprovare più tardi finché Amazon SES ha rinunciato. Controlla l'indirizzo e reinvia più tardi.",
+            "suppressed": "Amazon SES non ha inviato questo messaggio: l'indirizzo ha dato in passato un rimbalzo definitivo (o il destinatario ha segnalato spam), quindi è nella lista di soppressione del club. Se l'indirizzo è corretto e il rimbalzo non si ripeterà (casella piena poi svuotata, o un errore del club), rimuovilo dalla lista e reinvia la fattura.",
+            "complaint": "Il destinatario ha segnalato il messaggio come spam. Non reinviare e non rimuovere l'indirizzo dalla lista di soppressione; contatta il socio in altro modo."
           },
-          "nextRetry": "Prossimo tentativo {time}"
+          "nextRetry": "Prossimo tentativo {time}",
+          "eventType": {
+            "send": "Accettato da Amazon SES",
+            "delivery": "Consegnato al server del destinatario",
+            "delivery_delay": "Consegna in ritardo",
+            "bounce": "Rimbalzo",
+            "complaint": "Segnalato come spam",
+            "reject": "Rifiutato da Amazon SES",
+            "rendering_failure": "Impossibile comporre il messaggio"
+          },
+          "sentTo": "A {email}",
+          "hardBounceHint": "Un rimbalzo definitivo mette anche l'indirizzo nella lista di soppressione, quindi i messaggi successivi vengono bloccati. Correggi l'indirizzo se è sbagliato; se era giusto, rimuovilo dalla lista prima di reinviare.",
+          "badgeTitle": "Ultima e-mail: {status}",
+          "unsuppress": {
+            "button": "Rimuovi dalla lista di soppressione",
+            "confirmTitle": "Rimuovere {email} dalla lista di soppressione?",
+            "confirmBody": "Amazon SES invierà di nuovo a questo indirizzo. Fallo solo se l'indirizzo è corretto e il rimbalzo non si ripeterà, mai dopo che il destinatario ha segnalato spam. Poi reinvia la fattura.",
+            "confirm": "Rimuovi",
+            "done": "Rimosso dalla lista di soppressione. Reinvia la fattura per consegnarla.",
+            "notListed": "L'indirizzo non era nella lista di soppressione. Puoi reinviare la fattura.",
+            "failed": "Impossibile rimuovere l'indirizzo: {error}"
+          }
         },
         "lastReminder": "Ultimo sollecito",
         "reissueKidSelected": "Nuovo KID",

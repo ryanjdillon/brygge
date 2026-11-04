@@ -1119,7 +1119,7 @@
         "deliveryLog": {
           "title": "Dziennik dostaw",
           "noRecipient": "Ta faktura nie ma zapisanego adresu e-mail odbiorcy.",
-          "helpText": "Jeden wpis na każdą wysyłkę tej faktury przez Brygge: co zrobił z nią serwer pocztowy klubu i co odpowiedział serwer odbiorcy. „Przyjęta” oznacza, że serwer odbiorcy przyjął wiadomość; czy trafiła do skrzynki odbiorczej, czy do spamu, nie jest stąd widoczne. Dziennik serwera pocztowego obejmuje mniej więcej ostatni miesiąc.",
+          "helpText": "Jeden wpis na każdą wysyłkę tej faktury przez Brygge i to, co się z nią stało. Wysyłki przez Amazon SES pokazują raport doręczenia otrzymany przez SES; starsze pochodzą z dziennika serwera poczty klubu, który obejmuje mniej więcej ostatni miesiąc. „Przyjęta” oznacza, że serwer odbiorcy przyjął wiadomość; czy trafiła do skrzynki odbiorczej, czy do spamu, nie widać tutaj.",
           "noSends": "Brygge nie wysłało tej faktury e-mailem. Mogła zostać wysłana przez poprzedni system.",
           "kind": {
             "sent": "Pierwsza wysyłka",
@@ -1134,7 +1134,14 @@
             "no_record": "Brak śladu doręczenia",
             "pending": "Właśnie wysłana",
             "beyond_retention": "Starsza niż dziennik",
-            "unavailable": "Dziennik niedostępny"
+            "unavailable": "Dziennik niedostępny",
+            "sending": "Wysyłanie",
+            "submitted": "Przekazana do usługi pocztowej",
+            "failed": "Nie wysłano",
+            "unknown": "Wynik nieznany",
+            "rejected_temporary": "Rezygnacja po ponowieniach",
+            "suppressed": "Zablokowana: na liście blokad",
+            "complaint": "Oznaczona jako spam"
           },
           "statusHelp": {
             "deferred": "Serwer odbiorcy poprosił o ponowną próbę później (np. greylisting). Serwer pocztowy ponawia sam.",
@@ -1142,9 +1149,37 @@
             "no_record": "Serwer pocztowy nie ma śladu tej wysyłki; wiadomość prawdopodobnie nigdy go nie opuściła. Wyślij fakturę ponownie i zgłoś, jeśli to się powtórzy.",
             "pending": "Wysłana kilka minut temu; dziennik może jej jeszcze nie pokazywać.",
             "beyond_retention": "Dziennik serwera pocztowego obejmuje tylko mniej więcej ostatni miesiąc.",
-            "unavailable": "Na tym serwerze nie można odczytać dziennika serwera pocztowego."
+            "unavailable": "Na tym serwerze nie można odczytać dziennika serwera pocztowego.",
+            "sending": "Brygge przekazuje wiadomość do usługi pocztowej. Jeśli trwa to dłużej niż kilka minut, wysyłka została przerwana: zapytaj odbiorcę przed ponownym wysłaniem.",
+            "submitted": "Usługa pocztowa ma wiadomość; raport doręczenia zwykle przychodzi w ciągu kilku minut.",
+            "failed": "Usługa pocztowa odrzuciła wiadomość, zanim ją przyjęła, więc nic nie wysłano. Wyślij fakturę ponownie.",
+            "unknown": "Połączenie zerwało się w trakcie przekazywania; wiadomość mogła zostać wysłana. Zapytaj odbiorcę przed ponownym wysłaniem, aby uniknąć duplikatu.",
+            "rejected_temporary": "Serwer odbiorcy prosił o ponowienie później, aż Amazon SES zrezygnował. Sprawdź adres i wyślij ponownie później.",
+            "suppressed": "Amazon SES nie wysłał tej wiadomości: adres wcześniej dał trwały zwrot (lub odbiorca zgłosił spam), więc jest na liście blokad klubu. Jeśli adres jest poprawny, a zwrot się nie powtórzy (pełna skrzynka, którą opróżniono, lub błąd po stronie klubu), usuń go z listy i wyślij fakturę ponownie.",
+            "complaint": "Odbiorca oznaczył wiadomość jako spam. Nie wysyłaj ponownie i nie usuwaj adresu z listy blokad; skontaktuj się z członkiem w inny sposób."
           },
-          "nextRetry": "Następna próba {time}"
+          "nextRetry": "Następna próba {time}",
+          "eventType": {
+            "send": "Przyjęta przez Amazon SES",
+            "delivery": "Doręczona do serwera odbiorcy",
+            "delivery_delay": "Doręczenie opóźnione",
+            "bounce": "Zwrot",
+            "complaint": "Oznaczona jako spam",
+            "reject": "Odrzucona przez Amazon SES",
+            "rendering_failure": "Nie udało się utworzyć wiadomości"
+          },
+          "sentTo": "Do {email}",
+          "hardBounceHint": "Trwały zwrot umieszcza też adres na liście blokad, więc kolejne wiadomości są blokowane. Popraw adres, jeśli jest błędny; jeśli był poprawny, usuń go z listy przed ponownym wysłaniem.",
+          "badgeTitle": "Ostatni e-mail: {status}",
+          "unsuppress": {
+            "button": "Usuń z listy blokad",
+            "confirmTitle": "Usunąć {email} z listy blokad?",
+            "confirmBody": "Amazon SES znów będzie wysyłać na ten adres. Rób to tylko, gdy adres jest poprawny, a zwrot się nie powtórzy, nigdy po tym, jak odbiorca oznaczył wiadomość jako spam. Następnie wyślij fakturę ponownie.",
+            "confirm": "Usuń",
+            "done": "Usunięto z listy blokad. Wyślij fakturę ponownie, aby ją doręczyć.",
+            "notListed": "Adresu nie było na liście blokad. Możesz wysłać fakturę ponownie.",
+            "failed": "Nie udało się usunąć adresu: {error}"
+          }
         },
         "lastReminder": "Ostatnie przypomnienie",
         "reissueKidSelected": "Nowy KID",

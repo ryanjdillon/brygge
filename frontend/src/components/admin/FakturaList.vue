@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { FileDown, Send, Trash2, Ban, Bell, RefreshCw, KeyRound, Copy, Check, ChevronUp, ChevronDown, X, Link2, Scale, Undo2 } from 'lucide-vue-next'
 import FakturaArchiveButton from '@/components/admin/FakturaArchiveButton.vue'
 import DeliveryLogButton from '@/components/admin/DeliveryLogButton.vue'
+import DeliveryStatusBadge from '@/components/admin/DeliveryStatusBadge.vue'
 import CreditNoteSearchModal, { type CreditSearchHit } from '@/components/admin/CreditNoteSearchModal.vue'
 import InvoiceNumberChip from '@/components/ui/InvoiceNumberChip.vue'
 import RefundOrderButton from '@/components/admin/RefundOrderButton.vue'
@@ -18,6 +19,7 @@ import { copyPayLink as copyPayLinkFor, payLinkErrorKey } from '@/composables/us
 import { useRangeSelect } from '@/composables/useRangeSelect'
 import { useCan } from '@/composables/useCan'
 import { formatNOK, formatDate, formatDateTime } from '@/lib/format'
+import type { SendStatus } from '@/lib/deliveryStatus'
 
 interface Row {
   id: string
@@ -165,6 +167,7 @@ async function load() {
   loading.value = true
   error.value = null
   selected.value = new Set()
+  void loadDeliveryStatuses()
   try {
     const res = await fetch(`/api/v1/admin/financials/invoices?status=${props.status}`, { credentials: 'include' })
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
@@ -174,6 +177,24 @@ async function load() {
     error.value = (e as Error).message
   } finally {
     loading.value = false
+  }
+}
+
+// Latest email status per sent faktura, one request for the whole list. A
+// failure only hides the badges; the list itself does not depend on it.
+const deliveryStatuses = ref<Record<string, { status: SendStatus }>>({})
+async function loadDeliveryStatuses() {
+  if (!canAct || props.status !== 'sent') {
+    deliveryStatuses.value = {}
+    return
+  }
+  try {
+    const res = await fetch('/api/v1/admin/financials/invoices/delivery-statuses', { credentials: 'include' })
+    if (!res.ok) return
+    const body = await res.json()
+    deliveryStatuses.value = body.statuses ?? {}
+  } catch {
+    deliveryStatuses.value = {}
   }
 }
 
@@ -1075,6 +1096,7 @@ defineExpose({ load })
                 </div>
                 <div v-if="d.member_phone" class="text-xs text-gray-500">{{ d.member_phone }}</div>
                 <div class="text-xs text-gray-500">{{ d.member_email }}</div>
+                <DeliveryStatusBadge v-if="status === 'sent'" :status="deliveryStatuses[d.id]?.status" />
                 <span
                   v-if="status === 'sent' && d.online_paid_at && !d.paid"
                   class="mt-1 inline-flex items-center rounded-full bg-orange-50 px-1.5 py-0.5 text-[10px] font-medium text-orange-700 ring-1 ring-orange-200"

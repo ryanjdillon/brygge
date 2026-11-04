@@ -794,7 +794,7 @@
         "deliveryLog": {
           "title": "Delivery log",
           "noRecipient": "This invoice has no recipient email on file.",
-          "helpText": "One entry per time Brygge emailed this invoice: what the club's mail server did with it and what the recipient's mail server answered. \"Accepted\" means the recipient's server took the mail; whether it then landed in the inbox or in spam cannot be seen from here. The mail server log covers about the last month.",
+          "helpText": "One entry per time Brygge emailed this invoice and what happened to it. Sends through Amazon SES show the delivery report SES received; older sends come from the club mail server's log, which covers about the last month. \"Accepted\" means the recipient's server took the mail; whether it then landed in the inbox or in spam cannot be seen from here.",
           "noSends": "Brygge has not emailed this invoice. It may have been sent by the previous system.",
           "kind": {
             "sent": "First send",
@@ -809,7 +809,14 @@
             "no_record": "No delivery record",
             "pending": "Just sent",
             "beyond_retention": "Older than the mail log",
-            "unavailable": "Log unavailable"
+            "unavailable": "Log unavailable",
+            "sending": "Sending",
+            "submitted": "Handed to the mail service",
+            "failed": "Not sent",
+            "unknown": "Outcome unknown",
+            "rejected_temporary": "Gave up after retries",
+            "suppressed": "Blocked: on the suppression list",
+            "complaint": "Marked as spam"
           },
           "statusHelp": {
             "deferred": "The recipient's server asked to try again later (greylisting, for example). The mail server retries on its own.",
@@ -817,9 +824,37 @@
             "no_record": "The mail server has no record of this send, so the mail probably never left it. Resend the invoice, and report it if it happens again.",
             "pending": "Sent a few minutes ago; the mail server log may not show it yet.",
             "beyond_retention": "The mail server log only covers about the last month.",
-            "unavailable": "The mail server log cannot be read on this server."
+            "unavailable": "The mail server log cannot be read on this server.",
+            "sending": "Brygge is handing the mail to the mail service. If this stays for more than a few minutes, the send was interrupted: ask the recipient before resending.",
+            "submitted": "The mail service has the message; its delivery report usually follows within minutes.",
+            "failed": "The mail service refused the message before taking it, so nothing was sent. Resend the invoice.",
+            "unknown": "The connection broke while the message was being handed over, so it may or may not have gone out. Ask the recipient before resending, to avoid a duplicate.",
+            "rejected_temporary": "The recipient's server kept asking to try later until Amazon SES gave up. Check the address and resend later.",
+            "suppressed": "Amazon SES did not send this mail: the address bounced hard earlier (or the recipient reported spam), so it is on the club's suppression list. If the address is right and the bounce will not repeat (a full mailbox that has been emptied, or a fault on the club's side), remove it from the list and resend the invoice.",
+            "complaint": "The recipient marked the mail as spam. Do not resend, and do not remove the address from the suppression list; contact the member another way."
           },
-          "nextRetry": "Next attempt {time}"
+          "nextRetry": "Next attempt {time}",
+          "eventType": {
+            "send": "Accepted by Amazon SES",
+            "delivery": "Delivered to the recipient's server",
+            "delivery_delay": "Delivery delayed",
+            "bounce": "Bounced",
+            "complaint": "Marked as spam",
+            "reject": "Rejected by Amazon SES",
+            "rendering_failure": "Could not build the message"
+          },
+          "sentTo": "To {email}",
+          "hardBounceHint": "A hard bounce also puts the address on the suppression list, so later mail to it is blocked. Correct the address if it is wrong; if it was right, remove it from the list before resending.",
+          "badgeTitle": "Last email: {status}",
+          "unsuppress": {
+            "button": "Remove from suppression list",
+            "confirmTitle": "Remove {email} from the suppression list?",
+            "confirmBody": "Amazon SES will send to this address again. Only do this if the address is correct and the bounce will not happen again, never after the recipient marked mail as spam. Then resend the invoice.",
+            "confirm": "Remove",
+            "done": "Removed from the suppression list. Resend the invoice to deliver it.",
+            "notListed": "The address was not on the suppression list. You can resend the invoice.",
+            "failed": "Could not remove the address: {error}"
+          }
         },
         "lastReminder": "Last reminder"
       },
