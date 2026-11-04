@@ -1,35 +1,31 @@
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
+import FilterSelect, { type FilterSelectOption } from '@/components/admin/FilterSelect.vue'
 
 export type SpotFilterValue = '' | 'permanent' | 'seasonal' | 'none'
 
-const props = defineProps<{
+withDefaults(defineProps<{
   modelValue: SpotFilterValue
   id?: string
-}>()
+}>(), { id: 'spot-filter' })
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: SpotFilterValue): void
 }>()
 
-const { t } = useI18n()
-const inputId = props.id ?? 'spot-filter'
+const options: FilterSelectOption<SpotFilterValue>[] = [
+  { value: '', labelKey: 'admin.users.spotFilterAll' },
+  { value: 'permanent', labelKey: 'admin.users.spotPermanent' },
+  { value: 'seasonal', labelKey: 'admin.users.spotSeasonal' },
+  { value: 'none', labelKey: 'admin.users.spotNone' },
+]
 </script>
 
 <template>
-  <div class="inline-flex items-center">
-    <label class="sr-only" :for="inputId">{{ t('admin.users.spotFilterLabel') }}</label>
-    <select
-      :id="inputId"
-      :value="modelValue"
-      class="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm"
-      :title="t('admin.users.spotFilterLabel')"
-      @change="emit('update:modelValue', ($event.target as HTMLSelectElement).value as SpotFilterValue)"
-    >
-      <option value="">{{ t('admin.users.spotFilterLabel') }}: {{ t('admin.users.spotFilterAll') }}</option>
-      <option value="permanent">{{ t('admin.users.spotFilterLabel') }}: {{ t('admin.users.spotPermanent') }}</option>
-      <option value="seasonal">{{ t('admin.users.spotFilterLabel') }}: {{ t('admin.users.spotSeasonal') }}</option>
-      <option value="none">{{ t('admin.users.spotFilterLabel') }}: {{ t('admin.users.spotNone') }}</option>
-    </select>
-  </div>
+  <FilterSelect
+    :id="id"
+    :model-value="modelValue"
+    :options="options"
+    label-key="admin.users.spotFilterLabel"
+    @update:model-value="emit('update:modelValue', $event)"
+  />
 </template>
