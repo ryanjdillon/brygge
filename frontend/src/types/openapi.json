@@ -6908,65 +6908,6 @@
         ]
       }
     },
-    "/api/v1/admin/slips/{slipID}/assign": {
-      "post": {
-        "operationId": "admin-assign-slip",
-        "parameters": [
-          {
-            "description": "Slip UUID",
-            "in": "path",
-            "name": "slipID",
-            "required": true,
-            "schema": {
-              "description": "Slip UUID",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": {},
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StatusResponse"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "default": {
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorModel"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Assign slip to member",
-        "tags": [
-          "Admin"
-        ]
-      }
-    },
     "/api/v1/admin/slips/{slipID}/release": {
       "post": {
         "operationId": "admin-release-slip",
