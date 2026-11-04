@@ -556,8 +556,9 @@ func TestIntegration_BookingsFullFlow(t *testing.T) {
 }
 
 // GET /bookings/{id} carries the guest's email and phone, so only the
-// booking's owner and the club's booking staff may read it; anyone else,
-// including staff of another club, gets the same 404 as a missing booking.
+// booking's owner and the club's admin viewers (every board role and
+// admin, as on /admin/bookings) may read it; anyone else, including staff
+// of another club, gets the same 404 body as a missing booking.
 func TestIntegration_GetBookingOwnershipAndClubScope(t *testing.T) {
 	t.Parallel()
 	env := setupIntegrationEnv(t)
@@ -613,6 +614,10 @@ func TestIntegration_GetBookingOwnershipAndClubScope(t *testing.T) {
 	}
 
 	staffID, _ := testutil.SeedUser(t, env.db, env.clubID, []string{"member"})
+	missingBooking := "00000000-0000-4000-8000-000000000000"
+	missing := get(missingBooking, env.generateToken(otherID, []string{"member"}))
+	assertStatus(t, missing, http.StatusNotFound)
+
 	cases := []struct {
 		name      string
 		bookingID string
@@ -622,8 +627,11 @@ func TestIntegration_GetBookingOwnershipAndClubScope(t *testing.T) {
 		{"owner reads own booking", memberBooking, env.generateToken(ownerID, []string{"member"}), http.StatusOK},
 		{"other member", memberBooking, env.generateToken(otherID, []string{"member"}), http.StatusNotFound},
 		{"other member on guest booking", guestBooking, env.generateToken(otherID, []string{"member"}), http.StatusNotFound},
-		{"board role without booking duty", memberBooking, env.generateToken(treasurerID, []string{"treasurer"}), http.StatusNotFound},
+		{"owner of another booking on guest booking", guestBooking, env.generateToken(ownerID, []string{"member"}), http.StatusNotFound},
 		{"other club's board", memberBooking, generateTestToken(otherClubBoardID, otherClubID, []string{"board"}), http.StatusNotFound},
+		{"other club's admin on guest booking", guestBooking, generateTestToken(otherClubBoardID, otherClubID, []string{"admin"}), http.StatusNotFound},
+		{"treasurer, as on the admin booking list", memberBooking, env.generateToken(treasurerID, []string{"treasurer"}), http.StatusOK},
+		{"chair on guest booking", guestBooking, env.generateToken(staffID, []string{"chair"}), http.StatusOK},
 		{"board", memberBooking, env.generateToken(staffID, []string{"board"}), http.StatusOK},
 		{"harbor master on guest booking", guestBooking, env.generateToken(staffID, []string{"harbor_master"}), http.StatusOK},
 		{"admin", guestBooking, env.generateToken(staffID, []string{"admin"}), http.StatusOK},
@@ -633,14 +641,18 @@ func TestIntegration_GetBookingOwnershipAndClubScope(t *testing.T) {
 			rec := get(tc.bookingID, tc.token)
 			assertStatus(t, rec, tc.want)
 			if tc.want != http.StatusOK {
-				if strings.Contains(rec.Body.String(), "guest@example.invalid") {
-					t.Fatalf("refused response leaked the guest email: %s", rec.Body.String())
+				if rec.Body.String() != missing.Body.String() {
+					t.Fatalf("refusal differs from a missing booking: got %q, missing gives %q",
+						rec.Body.String(), missing.Body.String())
 				}
 				return
 			}
 			got := decodeJSON[booking](t, rec)
 			if got.ID != tc.bookingID {
 				t.Fatalf("expected booking %s, got %s", tc.bookingID, got.ID)
+			}
+			if got.GuestEmail == nil || *got.GuestEmail != "guest@example.invalid" {
+				t.Fatalf("expected the guest email for an allowed reader, got %v", got.GuestEmail)
 			}
 		})
 	}

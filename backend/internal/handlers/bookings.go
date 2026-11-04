@@ -19,6 +19,7 @@ import (
 	"github.com/brygge-klubb/brygge/internal/auth"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/middleware"
+	"github.com/brygge-klubb/brygge/internal/roles"
 	"github.com/brygge-klubb/brygge/internal/shared"
 )
 
@@ -913,21 +914,16 @@ func (h *BookingsHandler) findAvailableUnit(ctx context.Context, resourceID stri
 	return &unitID, nil
 }
 
-// bookingReaderRoles may read any booking of their club by id. The
-// owner may always read their own; everyone else gets 404, so a booking
-// id does not reveal that the booking exists or whose guest it holds.
-var bookingReaderRoles = []string{"board", "harbor_master", "admin"}
-
+// canReadBooking admits the booking's owner and every admin viewer of
+// the club (roles.CanViewAdmin), the same set that reads every booking,
+// guest contact included, on GET /admin/bookings (BRY-372). Everyone else
+// gets 404, so a booking id does not reveal that the booking exists or
+// whose guest it holds.
 func canReadBooking(b *booking, claims *auth.Claims) bool {
 	if b.UserID != nil && *b.UserID == claims.UserID {
 		return true
 	}
-	for _, role := range bookingReaderRoles {
-		if hasRole(claims.Roles, role) {
-			return true
-		}
-	}
-	return false
+	return roles.CanViewAdmin(claims.Roles)
 }
 
 func (h *BookingsHandler) HandleGetBooking(w http.ResponseWriter, r *http.Request) {
@@ -1228,8 +1224,8 @@ func (h *BookingsHandler) HandleListBookingsAdmin(w http.ResponseWriter, r *http
 	JSON(w, http.StatusOK, shared.NewPaginatedResponse(bookings, len(bookings), pg))
 }
 
-func hasRole(roles []string, target string) bool {
-	for _, r := range roles {
+func hasRole(userRoles []string, target string) bool {
+	for _, r := range userRoles {
 		if r == target {
 			return true
 		}

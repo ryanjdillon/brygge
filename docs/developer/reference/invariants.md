@@ -494,7 +494,7 @@ A payer with one matching open faktura (`member_invoice`) is never reclassified 
 
 ### A booking is read by its owner and its club's booking staff only
 
-**Rule (BRY-551):** `GET /bookings/{id}` loads the booking scoped to `claims.ClubID` and returns it only to its owner (`bookings.user_id`) or to a caller holding board, harbor_master or admin (`bookingReaderRoles`, `canReadBooking`). Every other caller, including staff of another club, gets the same 404 as a missing booking. A guest booking (`user_id` NULL) has no owner, so only staff read it. A guest flow that needs its booking back uses its own token path, never this route. `TestIntegration_GetBookingOwnershipAndClubScope` pins each case.
+**Rule (BRY-551):** `GET /bookings/{id}` loads the booking scoped to `claims.ClubID` and returns it only to its owner (`bookings.user_id`) or to an admin viewer of that club (`roles.CanViewAdmin`: every board role and admin, the set that reads every booking with its guest contact on `GET /admin/bookings`, BRY-372; `canReadBooking`). Every other caller, including staff of another club, gets the same 404 body as a missing booking, after the same single scoped query. A guest booking (`user_id` NULL) has no owner, so only admin viewers read it. A guest flow that needs its booking back uses its own token path, never this route. `TestIntegration_GetBookingOwnershipAndClubScope` pins each case.
 
 **Failure mode:** the handler was scoped only by the process's club slug and checked no owner, so any logged-in member holding a booking id read the guest's name, email and phone.
 
