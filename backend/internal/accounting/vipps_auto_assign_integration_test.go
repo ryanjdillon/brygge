@@ -2,6 +2,7 @@ package accounting
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -305,5 +306,29 @@ func TestAutoAssignVippsMemberGuards(t *testing.T) {
 		if rowEntry(t, f.club, row) != "" {
 			t.Errorf("%s faktura: charge was booked", name)
 		}
+	}
+}
+
+// A belastning row with neither booking_date nor tx_at is reported as skipped
+// and counted for review; it must not abort the pass, and a dated charge in
+// the same queue is still booked.
+func TestAutoAssignVippsSkipsADatelessCharge(t *testing.T) {
+	f := newAutoAssignFixture(t)
+	payer := f.namedMember(t, "Payerdated")
+	f.club.NewInvoice(t, fin.InvoiceOpts{Member: &payer, Cents: 45000, Lines: []fin.Line{{Category: "membership", Cents: 45000}}})
+	f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000, CustomerName: "Synthetic Payerdated"})
+	dateless := f.club.NewVippsRow(t, fin.VippsRowOpts{Cents: 12300, CustomerName: "Synthetic Nodate"})
+	f.exec(t, `UPDATE vipps_import_rows SET booking_date = NULL, tx_at = NULL WHERE id = $1`, dateless)
+
+	res := f.run(t)
+	if len(res.Assigned) != 1 || res.NeedsReview != 1 {
+		t.Fatalf("result = %+v, want the dated charge booked and one left for review", res)
+	}
+	if len(res.SkippedDetails) != 1 || !strings.Contains(res.SkippedDetails[0].Ref, dateless) ||
+		res.SkippedDetails[0].Reason != "mangler dato" {
+		t.Errorf("skipped = %+v, want the dateless row %s reported as mangler dato", res.SkippedDetails, dateless)
+	}
+	if rowEntry(t, f.club, dateless) != "" {
+		t.Errorf("the dateless charge was booked")
 	}
 }

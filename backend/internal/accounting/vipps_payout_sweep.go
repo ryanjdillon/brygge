@@ -169,13 +169,22 @@ func (s *Service) payoutsWithoutOpenDeposit(ctx context.Context, clubID string, 
 		msn, settlement string
 		amount          float64
 		booking         time.Time
+		noDate          bool
 	}
 	var open []openPayout
 	for prows.Next() {
 		var p openPayout
-		if err := prows.Scan(&p.msn, &p.settlement, &p.amount, &p.booking); err != nil {
+		// booking_date is nullable; a payout row without one is reported
+		// below instead of failing the scan and aborting the whole sweep.
+		var booking *time.Time
+		if err := prows.Scan(&p.msn, &p.settlement, &p.amount, &booking); err != nil {
 			prows.Close()
 			return nil, fmt.Errorf("scanning open vipps payout: %w", err)
+		}
+		if booking == nil {
+			p.noDate = true
+		} else {
+			p.booking = *booking
 		}
 		open = append(open, p)
 	}
@@ -188,6 +197,10 @@ func (s *Service) payoutsWithoutOpenDeposit(ctx context.Context, clubID string, 
 	for _, p := range open {
 		key := p.msn + "/" + p.settlement
 		if seen[key] || booked[key] {
+			continue
+		}
+		if p.noDate {
+			out = append(out, VippsPayoutSweepItem{SettlementNumber: p.settlement, MSN: p.msn, Reason: "mangler dato"})
 			continue
 		}
 		reason := fmt.Sprintf("ingen bankinnbetaling med «Utb. %s Vippsnr %s»", p.settlement, p.msn)
