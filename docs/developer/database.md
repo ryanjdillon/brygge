@@ -565,7 +565,7 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   gets a `broadcast_deliveries` row the background worker drains (`status`,
   `attempts`, `error`, `sent_at`). Enqueued by the inbox send path when a
   send fans out to a group/BCC; see `backend/internal/broadcast/`.
-- `email_sends`, `mail_delivery_events` (migration 000130, BRY-588) — the
+- `email_sends`, `mail_delivery_events` (migration 000132, BRY-588) — the
   outgoing-mail log and Amazon SES's delivery events for it. One
   `email_sends` row per message sent (`kind`, `recipient`, lower-cased
   `recipient_domain`, optional `related_type`/`related_id` such as
@@ -577,7 +577,7 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   `(ses_message_id, event_type, event_at, recipient)` with `NULLS NOT
   DISTINCT` because SQS delivers at least once; `send_id` is NULL when the
   event has no tag or names no known send. Status and event vocabularies:
-  [enums.md](reference/enums.md#email_sendsstatus-check-since-migration-000130).
+  [enums.md](reference/enums.md#email_sendsstatus-check-since-migration-000132).
   Both tables hold recipient addresses (personal data): `club_id` and
   `user_id` cascade on delete, events cascade from their send, member
   erasure deletes them (`accounting.DeleteMemberMailLog`), and rows are kept
