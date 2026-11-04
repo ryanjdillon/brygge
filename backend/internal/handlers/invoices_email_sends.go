@@ -26,7 +26,7 @@ import (
 // went through Stalwart.
 
 // Statuses the table path adds to the delivery log, beside the journal
-// path's. They are email_sends.status values (migration 000130).
+// path's. They are email_sends.status values (migration 000132).
 const (
 	deliverySending           = "sending"            // the row is written, the relay has not answered yet
 	deliverySubmitted         = "submitted"          // the relay took the message, no event yet
