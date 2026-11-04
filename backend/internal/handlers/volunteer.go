@@ -12,6 +12,7 @@ import (
 
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/middleware"
+	"github.com/brygge-klubb/brygge/internal/roles"
 )
 
 type VolunteerHandler struct {
@@ -168,7 +169,35 @@ func (h *VolunteerHandler) HandleLeaveTask(w http.ResponseWriter, r *http.Reques
 	JSON(w, http.StatusOK, map[string]string{"status": "left"})
 }
 
-// HandleListTaskParticipants returns participants for a task.
+// taskParticipantsQuery lists a task's participants. $1 is the task id, $2 the
+// caller's club, $3 whether the caller may see every name (board or admin), $4
+// the caller's user id and $5 the board role set.
+//
+// Other members see a participant's name unless the participant set
+// hide_in_directory; then the name is empty. The caller's own row and a
+// participant holding a board role keep the name (BRD-12: the board's names are
+// in the directory whatever the setting, so naming them here leaks nothing
+// new). Only a privileged caller gets the email fallback for a nameless row.
+// The response never carries the hide flag.
+const taskParticipantsQuery = `SELECT tp.task_id, tp.user_id, tp.role, tp.hours, tp.joined_at,
+	        CASE
+	          WHEN $3::bool THEN COALESCE(NULLIF(btrim(u.first_name || ' ' || u.last_name), ''), u.email)
+	          WHEN NOT u.hide_in_directory
+	            OR u.id::text = $4
+	            OR EXISTS (SELECT 1 FROM user_roles ur
+	                        WHERE ur.user_id = u.id AND ur.club_id = t.club_id
+	                          AND ur.role::text = ANY($5::text[]))
+	            THEN COALESCE(btrim(u.first_name || ' ' || u.last_name), '')
+	          ELSE ''
+	        END AS name
+	 FROM task_participants tp
+	 JOIN tasks t ON t.id = tp.task_id
+	 JOIN users u ON u.id = tp.user_id
+	 WHERE t.id::text = $1 AND t.club_id = $2
+	 ORDER BY tp.joined_at`
+
+// HandleListTaskParticipants returns participants for one of the caller's
+// club's tasks; another club's task is a 404, as if it did not exist.
 func (h *VolunteerHandler) HandleListTaskParticipants(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -179,14 +208,22 @@ func (h *VolunteerHandler) HandleListTaskParticipants(w http.ResponseWriter, r *
 
 	taskID := chi.URLParam(r, "taskID")
 
-	rows, err := h.db.Query(ctx,
-		`SELECT tp.task_id, tp.user_id, tp.role, tp.hours, tp.joined_at,
-		        COALESCE(u.first_name || ' ' || u.last_name, u.email) AS name
-		 FROM task_participants tp
-		 JOIN users u ON u.id = tp.user_id
-		 WHERE tp.task_id = $1
-		 ORDER BY tp.joined_at`,
-		taskID,
+	var taskInClub bool
+	if err := h.db.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM tasks WHERE id::text = $1 AND club_id = $2)`,
+		taskID, claims.ClubID,
+	).Scan(&taskInClub); err != nil {
+		h.log.Error().Err(err).Msg("failed to look up task for participants")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if !taskInClub {
+		Error(w, http.StatusNotFound, "task not found")
+		return
+	}
+
+	rows, err := h.db.Query(ctx, taskParticipantsQuery,
+		taskID, claims.ClubID, roles.CanViewAdmin(claims.Roles), claims.UserID, roles.Board,
 	)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to list participants")

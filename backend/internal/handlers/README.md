@@ -134,7 +134,7 @@ A club's automatic-booking actor (ACC-13) is a `users` row with `kind = 'system'
 
 ## Lists of members seen by other members
 
-A handler that shows a member's contact details to other members honours `users.hide_in_directory`, with one exception: members who hold a board role (`roles.Board`) keep their name and email in the directory (BRD-12), and only their phone follows the setting. Reuse `roles.Board`; do not write a second list. Keep deactivated members and `accounting.ErasedEmailSuffix` addresses out. The harbour map occupant is not part of the exception. The response must not carry the hide flag. `directoryQuery` in `members.go` is the model.
+A handler that shows a member's contact details to other members honours `users.hide_in_directory`, with one exception: members who hold a board role (`roles.Board`) keep their name and email in the directory (BRD-12), and only their phone follows the setting. Reuse `roles.Board`; do not write a second list. Keep deactivated members and `accounting.ErasedEmailSuffix` addresses out. The harbour map occupant is not part of the exception. The response must not carry the hide flag. `directoryQuery` in `members.go` is the model. A list that shows names only (not contact details) may keep a hidden member's row and blank the name instead, as `taskParticipantsQuery` in `volunteer.go` does for non-board callers; it applies the same board exception and never falls back to the email. Filter on the caller's club through the parent row (`tasks.club_id`), never on the child table's foreign key alone, and answer another club's id with 404.
 
 ## Payment providers
 
