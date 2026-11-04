@@ -18,6 +18,9 @@ type Service struct {
 	db    *pgxpool.Pool
 	audit *audit.Service
 	log   zerolog.Logger
+	// systemActorInsert replaces the SystemActor INSERT in tests, so a losing
+	// concurrent first call can be reproduced deterministically.
+	systemActorInsert func(ctx context.Context, clubID string) error
 	// stripeSync serialises the Stripe balance ingest per club across the
 	// nightly job, the sync endpoint and the payout webhook.
 	stripeSync clubSlot

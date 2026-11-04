@@ -27,12 +27,11 @@ const SystemActorEmail = "automatikk@system.invalid"
 // the conflict clause: no system row exists then, so the INSERT's error is
 // returned instead of an empty id.
 func (s *Service) SystemActor(ctx context.Context, clubID string) (string, error) {
-	_, insertErr := s.db.Exec(ctx,
-		`INSERT INTO users (club_id, email, first_name, last_name, kind)
-		 VALUES ($1, $2, 'Automatisk', 'bokføring', 'system')
-		 ON CONFLICT (club_id) WHERE kind = 'system' DO NOTHING`,
-		clubID, SystemActorEmail,
-	)
+	insert := s.insertSystemActor
+	if s.systemActorInsert != nil {
+		insert = s.systemActorInsert
+	}
+	insertErr := insert(ctx, clubID)
 	var id string
 	err := s.db.QueryRow(ctx,
 		`SELECT id::text FROM users WHERE club_id = $1 AND kind = 'system'`,
@@ -54,4 +53,14 @@ func (s *Service) SystemActor(ctx context.Context, clubID string) (string, error
 	default:
 		return "", fmt.Errorf("read system actor: %w", err)
 	}
+}
+
+func (s *Service) insertSystemActor(ctx context.Context, clubID string) error {
+	_, err := s.db.Exec(ctx,
+		`INSERT INTO users (club_id, email, first_name, last_name, kind)
+		 VALUES ($1, $2, 'Automatisk', 'bokføring', 'system')
+		 ON CONFLICT (club_id) WHERE kind = 'system' DO NOTHING`,
+		clubID, SystemActorEmail,
+	)
+	return err
 }
