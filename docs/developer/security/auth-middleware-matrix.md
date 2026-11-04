@@ -148,7 +148,7 @@ reads admit any admin viewer (see *Board read access* above).
 | **Waiting list** (`/admin/waiting-list`) † | board | — for reads (the list carries name, email and phone) |
 | `POST /waiting-list/enroll`, `/{entryID}/offer`, `PUT /{entryID}/position` | board | ✅ (BRY-477) |
 | **Slips** (`/admin/slips`) † | board, harbor_master, admin | — for reads |
-| create, update, **delete**, assign, assignment-type, release | (same) | ✅ |
+| create, update, **delete**, assignment-type, release | (same) | ✅ |
 | `/admin/settings/general` | board, admin | — |
 | `GET /admin/settings/site` † | treasurer, admin | — |
 | `GET /admin/settings/economy/faktura-logo`, `/exemptions` † | treasurer, admin | — |

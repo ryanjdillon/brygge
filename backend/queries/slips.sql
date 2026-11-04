@@ -23,14 +23,6 @@ UPDATE slips SET
 WHERE id = $1 AND club_id = $2
 RETURNING *;
 
--- name: AssignSlip :one
-INSERT INTO slip_assignments (
-    slip_id, user_id, club_id, harbor_membership_amount, harbor_membership_paid_at
-) VALUES (
-    $1, $2, $3, $4, $5
-)
-RETURNING *;
-
 -- name: ReleaseSlip :one
 UPDATE slip_assignments SET
     released_at = now()
