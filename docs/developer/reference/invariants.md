@@ -845,9 +845,9 @@ A new group is created just before the faktura built-in and the positions are re
 
 ### Removing an address from the SES suppression list is per send, never after a complaint
 
-**Rule (BRY-590):** `POST /admin/financials/invoices/{id}/email-sends/{sendID}/unsuppress` takes the address from the `email_sends` row (club- and faktura-scoped), never from the request, and only for an SES send whose status is `suppressed` or `rejected` with a `Permanent` bounce event (`canUnsuppress`, `handlers/invoices_email_sends.go`). A send in `complaint` never qualifies. The server sends the same decision as `can_unsuppress`; the SPA does not re-derive it. Removal does not resend.
+**Rule (BRY-590):** `POST /admin/financials/invoices/{id}/email-sends/{sendID}/unsuppress` takes the address from the `email_sends` row (club- and faktura-scoped), never from the request, and only for an SES send whose status is `suppressed` or `rejected` with a `Permanent` bounce event (`canUnsuppress`, `handlers/invoices_email_sends.go`). An address that complained never qualifies, on any of its sends: a `suppressed` send does not say why SES listed the address, so the check is per address — any `email_sends` row of the club to it in `complaint` (`unsuppressFactsSQL`), and SES's own list reason `COMPLAINT` read with `GetSuppressedDestination` before the delete (`sesevents.ErrComplaintSuppressed`). The server sends the same decision as `can_unsuppress`; the SPA does not re-derive it. Removal does not resend.
 
-**Failure mode:** an endpoint that takes an address lets any treasurer clear arbitrary addresses (including ones that complained) from the account-wide list; sending again to a complainer or to a dead mailbox raises the bounce/complaint rate SES pauses accounts on.
+**Failure mode:** an endpoint that takes an address lets any treasurer clear arbitrary addresses (including ones that complained) from the account-wide list, and a per-send status check alone lets a complainer's later `suppressed` send clear the complaint's listing; sending again to a complainer or to a dead mailbox raises the bounce/complaint rate SES pauses accounts on.
 
 ---
 

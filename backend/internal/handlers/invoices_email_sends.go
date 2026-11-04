@@ -15,6 +15,7 @@ import (
 	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/email"
 	"github.com/brygge-klubb/brygge/internal/middleware"
+	"github.com/brygge-klubb/brygge/internal/sesevents"
 )
 
 // The delivery log's table path (BRY-590): every faktura mail since the send
@@ -52,14 +53,28 @@ type tableSend struct {
 	errMsg                                *string
 	createdAt                             time.Time
 	hardBounced                           bool
+	complained                            bool
 }
+
+// unsuppressFactsSQL selects, for the email_sends row s, whether it
+// hard-bounced and whether its address ever complained in this club (any
+// mail, not just this faktura's).
+const unsuppressFactsSQL = `
+	EXISTS (SELECT 1 FROM mail_delivery_events e
+	         WHERE e.send_id = s.id AND e.event_type = 'bounce'
+	           AND e.bounce_type = 'Permanent'),
+	EXISTS (SELECT 1 FROM email_sends c
+	         WHERE c.club_id = s.club_id AND c.status = 'complaint'
+	           AND lower(c.recipient) = lower(s.recipient))`
 
 // canUnsuppress reports whether a send was stopped by, or put its address on,
 // the suppression list: SES refused it as suppressed, or it hard-bounced (SES
-// adds the address on a hard bounce). A complaint ranks above both, so a
-// send the recipient reported as spam never offers the action.
-func canUnsuppress(provider, status string, hardBounced bool) bool {
-	if provider != string(email.ProviderSES) {
+// adds the address on a hard bounce). A suppressed send does not say why the
+// address was listed, so an address that complained about any mail never
+// offers the action; SES's own list reason is checked again on removal
+// (sesevents.ErrComplaintSuppressed).
+func canUnsuppress(provider, status string, hardBounced, complained bool) bool {
+	if provider != string(email.ProviderSES) || complained {
 		return false
 	}
 	return status == deliverySuppressed || (status == deliveryRejected && hardBounced)
@@ -69,10 +84,7 @@ func canUnsuppress(provider, status string, hardBounced bool) bool {
 // their SES events.
 func (h *InvoiceHandler) loadTableSends(ctx context.Context, clubID, invoiceID string) ([]tableSend, map[string][]deliveryLogEvent, error) {
 	rows, err := h.db.Query(ctx,
-		`SELECT s.id::text, s.kind, s.recipient, s.provider, s.status, s.error, s.created_at,
-		        EXISTS (SELECT 1 FROM mail_delivery_events e
-		                 WHERE e.send_id = s.id AND e.event_type = 'bounce'
-		                   AND e.bounce_type = 'Permanent')
+		`SELECT s.id::text, s.kind, s.recipient, s.provider, s.status, s.error, s.created_at,`+unsuppressFactsSQL+`
 		   FROM email_sends s
 		  WHERE s.club_id = $1 AND s.related_type = 'invoice' AND s.related_id = $2
 		  ORDER BY s.created_at, s.id`,
@@ -85,7 +97,7 @@ func (h *InvoiceHandler) loadTableSends(ctx context.Context, clubID, invoiceID s
 	var ids []string
 	for rows.Next() {
 		var s tableSend
-		if err := rows.Scan(&s.id, &s.kind, &s.recipient, &s.provider, &s.status, &s.errMsg, &s.createdAt, &s.hardBounced); err != nil {
+		if err := rows.Scan(&s.id, &s.kind, &s.recipient, &s.provider, &s.status, &s.errMsg, &s.createdAt, &s.hardBounced, &s.complained); err != nil {
 			return nil, nil, err
 		}
 		s.createdAt = s.createdAt.UTC()
@@ -216,7 +228,7 @@ func fromTableSend(s tableSend, events []deliveryLogEvent, kind string) (out del
 		out.Details = e.Details
 		break
 	}
-	out.CanUnsuppress = canUnsuppress(s.provider, s.status, s.hardBounced)
+	out.CanUnsuppress = canUnsuppress(s.provider, s.status, s.hardBounced, s.complained)
 	return out, false
 }
 
@@ -268,11 +280,14 @@ func (h *InvoiceHandler) HandleGetDeliveryStatuses(w http.ResponseWriter, r *htt
 	JSON(w, http.StatusOK, map[string]any{"statuses": statuses})
 }
 
+const complaintRefusal = "the recipient reported mail from the club as spam; the address stays on the suppression list"
+
 // HandleUnsuppressRecipient takes the recipient of one faktura send off the
 // SES account-level suppression list, so a resend can reach it. The send id
 // names the address: the client never posts one, and only a send of this
 // faktura in the caller's club that SES suppressed or that hard-bounced
-// qualifies.
+// qualifies. An address that complained is refused (409) whether the club's
+// own rows or SES's list reason says so.
 // https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_DeleteSuppressedDestination.html
 func (h *InvoiceHandler) HandleUnsuppressRecipient(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -297,17 +312,14 @@ func (h *InvoiceHandler) HandleUnsuppressRecipient(w http.ResponseWriter, r *htt
 	}
 
 	var recipient, provider, status string
-	var hardBounced bool
+	var hardBounced, complained bool
 	err := h.db.QueryRow(ctx,
-		`SELECT s.recipient, s.provider, s.status,
-		        EXISTS (SELECT 1 FROM mail_delivery_events e
-		                 WHERE e.send_id = s.id AND e.event_type = 'bounce'
-		                   AND e.bounce_type = 'Permanent')
+		`SELECT s.recipient, s.provider, s.status,`+unsuppressFactsSQL+`
 		   FROM email_sends s
 		  WHERE s.id = $1 AND s.club_id = $2
 		    AND s.related_type = 'invoice' AND s.related_id = $3`,
 		sendID, claims.ClubID, invoiceID,
-	).Scan(&recipient, &provider, &status, &hardBounced)
+	).Scan(&recipient, &provider, &status, &hardBounced, &complained)
 	if errors.Is(err, pgx.ErrNoRows) {
 		Error(w, http.StatusNotFound, "send not found")
 		return
@@ -317,12 +329,21 @@ func (h *InvoiceHandler) HandleUnsuppressRecipient(w http.ResponseWriter, r *htt
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	if !canUnsuppress(provider, status, hardBounced) {
+	if complained {
+		Error(w, http.StatusConflict, complaintRefusal)
+		return
+	}
+	if !canUnsuppress(provider, status, hardBounced, complained) {
 		Error(w, http.StatusConflict, "this send was not stopped by the suppression list")
 		return
 	}
 
 	removed, err := h.suppression.Remove(ctx, recipient)
+	if errors.Is(err, sesevents.ErrComplaintSuppressed) {
+		h.log.Warn().Str("send_id", sendID).Msg("suppression removal refused: SES lists the address for a complaint")
+		Error(w, http.StatusConflict, complaintRefusal)
+		return
+	}
 	if err != nil {
 		h.log.Error().Err(err).Str("send_id", sendID).Msg("remove address from SES suppression list")
 		Error(w, http.StatusBadGateway, "Amazon SES did not remove the address; try again later")

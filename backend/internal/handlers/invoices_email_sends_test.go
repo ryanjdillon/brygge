@@ -13,6 +13,7 @@ import (
 
 	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/finance"
+	"github.com/brygge-klubb/brygge/internal/sesevents"
 	"github.com/brygge-klubb/brygge/internal/testutil"
 )
 
@@ -78,18 +79,20 @@ func TestCanUnsuppress(t *testing.T) {
 	cases := []struct {
 		provider, status string
 		hardBounced      bool
+		complained       bool
 		want             bool
 	}{
-		{"ses", "suppressed", false, true},
-		{"ses", "rejected", true, true},
-		{"ses", "rejected", false, false}, // an SES reject, not a bounce
-		{"ses", "complaint", true, false}, // the recipient reported spam
-		{"ses", "accepted", false, false},
-		{"stalwart", "suppressed", false, false},
+		{"ses", "suppressed", false, false, true},
+		{"ses", "rejected", true, false, true},
+		{"ses", "rejected", false, false, false},  // an SES reject, not a bounce
+		{"ses", "complaint", true, true, false},   // the recipient reported spam
+		{"ses", "suppressed", false, true, false}, // listed after a complaint about another mail
+		{"ses", "accepted", false, false, false},
+		{"stalwart", "suppressed", false, false, false},
 	}
 	for _, c := range cases {
-		if got := canUnsuppress(c.provider, c.status, c.hardBounced); got != c.want {
-			t.Errorf("canUnsuppress(%s, %s, %v) = %v, want %v", c.provider, c.status, c.hardBounced, got, c.want)
+		if got := canUnsuppress(c.provider, c.status, c.hardBounced, c.complained); got != c.want {
+			t.Errorf("canUnsuppress(%s, %s, %v, %v) = %v, want %v", c.provider, c.status, c.hardBounced, c.complained, got, c.want)
 		}
 	}
 }
@@ -309,5 +312,29 @@ func TestIntegration_UnsuppressRecipient(t *testing.T) {
 	assertStatus(t, rec, http.StatusNotFound)
 	if len(fake.calls) != 2 {
 		t.Fatalf("SES calls = %v, want 2", fake.calls)
+	}
+
+	// SES lists the address for a complaint the club's rows do not show
+	// (e.g. one older than the retention): refused, nothing audited.
+	fake.err = sesevents.ErrComplaintSuppressed
+	rec = e.do(t, http.MethodPost, pattern, path(suppressedID), h.HandleUnsuppressRecipient, "")
+	assertStatus(t, rec, http.StatusConflict)
+
+	// The same address complained about another mail of the club: the
+	// suppressed send no longer qualifies and SES is not called.
+	fake.err = nil
+	seedEmailSend(t, e, invoiceID, "invoice", "ses", "complaint", now.Add(-2*time.Hour))
+	rec = e.do(t, http.MethodPost, pattern, path(suppressedID), h.HandleUnsuppressRecipient, "")
+	assertStatus(t, rec, http.StatusConflict)
+	if len(fake.calls) != 3 {
+		t.Fatalf("SES calls = %v, want 3", fake.calls)
+	}
+	if err := e.db.QueryRow(ctx,
+		`SELECT count(*) FROM audit_log WHERE club_id = $1 AND action = $2`,
+		e.clubID, audit.ActionInvoiceRecipientUnsuppressed).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("audit rows = %d, want 1", n)
 	}
 }

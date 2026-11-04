@@ -192,15 +192,21 @@ the delivery log offers **Fjern fra blokkeringsliste** on an SES send whose
 status is `suppressed`, or `rejected` with a `Permanent` bounce event. It calls
 `POST …/invoices/{id}/email-sends/{sendID}/unsuppress` (treasurer/admin, fresh
 TOTP), which reads the address from the send row (the client never posts an
-address) and calls SESv2
+address), reads the list entry with SESv2
+[`GetSuppressedDestination`](https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_GetSuppressedDestination.html)
+and then calls
 [`DeleteSuppressedDestination`](https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_DeleteSuppressedDestination.html)
-with the app user's key; the IAM policy above grants it. `NotFoundException`
-(already off the list) counts as success. Without `SES_REGION` the route
-answers 503. It never resends; the treasurer resends the faktura afterwards.
-Each call is audited as `invoice.recipient_unsuppressed`.
+with the app user's key; the IAM policy above grants both. `NotFoundException`
+on either (already off the list) counts as success. Without `SES_REGION` the
+route answers 503. It never resends; the treasurer resends the faktura
+afterwards. Each removal is audited as `invoice.recipient_unsuppressed`.
 
-Never remove an address that complained (status `complaint`, which the action
-refuses): sending to it again is what gets an SES account paused.
+Never remove an address that complained: sending to it again is what gets an
+SES account paused. A `suppressed` send does not say why the address was
+listed, so the action refuses (409, no SES delete, no audit row) when any
+`email_sends` row of the club to that address has status `complaint`, and
+again when SES's list entry has reason `COMPLAINT` (a complaint the club's
+rows no longer hold, e.g. past the 13-month retention).
 
 To do the same by hand (for an address that is not on a faktura send):
 

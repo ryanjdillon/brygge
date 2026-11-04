@@ -343,7 +343,7 @@ Use it when the address is correct and the bounce will not repeat:
 
 Do **not** use it:
 
-- after **Marked as spam**: the member asked not to get the mail, and sending again risks the club's account. The button is not shown for those sends;
+- after **Marked as spam**: the member asked not to get the mail, and sending again risks the club's account. Brygge does not offer the button for any send to an address that was marked as spam, and refuses the removal if Amazon SES says the address is blocked because of a spam report;
 - when the address itself is wrong: correct the address on the member or the faktura instead, then resend;
 - repeatedly for the same address: if it bounces again it goes straight back on the list, and every hard bounce counts against the club with SES.
 
