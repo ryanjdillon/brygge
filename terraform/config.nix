@@ -4,8 +4,8 @@
     ./backend.nix
     ./variables.nix
     ./outputs.nix
-    ./server.nix
-    ./dns.nix
-    ./ses.nix
+    ./hetzner/server.nix
+    ./hetzner/dns.nix
+    ./aws/ses.nix
   ];
 }

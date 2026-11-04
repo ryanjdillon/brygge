@@ -246,7 +246,7 @@ Example (made-up tokens). A dialog row with Name `abcd1234efgh5678ijkl9012mnop34
 ```
 
 - **Enter only the token.** Not the whole name (`<token>._domainkey`), not the value, and no trailing dot. The variable validation refuses a token containing `._domainkey` or anything other than lower-case letters and digits, and a verification value with quotes or without the `stripe-verification=` prefix.
-- **The target of each CNAME is built from the token** as `<token>.dkim.custom-email-domain.stripe.com.`. Check one row's Value in the dialog: if Stripe's pattern ever differs, change `terraform/dns.nix`, not the tokens.
+- **The target of each CNAME is built from the token** as `<token>.dkim.custom-email-domain.stripe.com.`. Check one row's Value in the dialog: if Stripe's pattern ever differs, change `terraform/hetzner/dns.nix`, not the tokens.
 - **Nothing else is entered.** The `bounce` CNAME (`custom-email-domain.stripe.com.`) is the same for every club, so `dns.nix` publishes it automatically whenever either value is set. Don't add a `bounce` key to tfvars. Skip the dialog's `_dmarc` row: the club's existing DMARC record applies (MAIL-1).
 - **Apply and verify.** `nix run .#tf-plan` should list only additions (six `<token>._domainkey` CNAMEs, `bounce`) and the apex TXT updated in place. Then `nix run .#tf-apply` and **Try verifying now** in Stripe. "You have set up your DNS records" turns green at once; the domain check itself can take up to 72 hours.
 

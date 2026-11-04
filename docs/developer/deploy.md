@@ -418,7 +418,7 @@ All point to the brygge server's IPv4:
 | CNAME ×3 | `<token>._domainkey` | Amazon SES Easy DKIM (only with `ses_enabled`) |
 | MX, TXT | `send`             | Amazon SES custom MAIL FROM (only with `ses_enabled`); see [mail/ses.md](mail/ses.md#dns-records) |
 
-The server also has a PTR (rDNS) record pointing at `mail.<domain>`, managed via `hcloud_rdns` in `terraform/server.nix`.
+The server also has a PTR (rDNS) record pointing at `mail.<domain>`, managed via `hcloud_rdns` in `terraform/hetzner/server.nix`.
 
 Mail-specific DNS setup is covered in [mail/setup.md](mail/setup.md).
 

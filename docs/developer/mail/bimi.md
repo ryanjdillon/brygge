@@ -12,10 +12,10 @@ These are the deliverability foundations BIMI rides on. Each is set up automatic
 
 | Mechanism | Where it lives                                              |
 |-----------|-------------------------------------------------------------|
-| SPF       | `terraform/dns.nix` → `root_spf` (`v=spf1 mx -all`)         |
-| DKIM      | `terraform/dns.nix` → `mail_dkim` at `mail._domainkey`      |
-| DMARC     | `terraform/dns.nix` → `dmarc` (`p=quarantine` or stronger)  |
-| PTR/rDNS  | `terraform/server.nix` → `hcloud_rdns.brygge_ipv4`          |
+| SPF       | `terraform/hetzner/dns.nix` → `root_spf` (`v=spf1 mx -all`)         |
+| DKIM      | `terraform/hetzner/dns.nix` → `mail_dkim` at `mail._domainkey`      |
+| DMARC     | `terraform/hetzner/dns.nix` → `dmarc` (`p=quarantine` or stronger)  |
+| PTR/rDNS  | `terraform/hetzner/server.nix` → `hcloud_rdns.brygge_ipv4`          |
 
 BIMI requires DMARC to be `p=quarantine` or `p=reject` with `pct=100` (the default when `pct` is omitted). Less-strict policies — `p=none` or `pct<100` — disqualify the domain regardless of how clean the SVG is.
 
@@ -72,7 +72,7 @@ If the file is still over 32 KiB after step 1:
 
 ## DNS
 
-The BIMI record is published by `terraform/dns.nix`:
+The BIMI record is published by `terraform/hetzner/dns.nix`:
 
 ```nix
 bimi = {
@@ -180,12 +180,12 @@ The PEM file is hosted on the same server at any path you like; nothing else cha
 
 Without a DKIM signature that is both selected for signing and published in DNS, Stalwart sends outbound mail unsigned (or signed with a selector receivers can't verify). Gmail / Yahoo / Apple then pass DMARC only via SPF (the weaker leg), and inbox placement plus BIMI eligibility both suffer.
 
-The fix pins a single fixed signature with selector `mail`, whose public key is published at `mail._domainkey.<domain>` (wired in `terraform/dns.nix`), and selects it for signing with `auth.dkim.sign` in `nix/host.nix`. Creating the signature alone is not enough: with `auth.dkim.sign` unset, Stalwart 0.15 looks for signatures named `rsa-<domain>` / `ed25519-<domain>`, logs `DKIM signer not found`, and sends unsigned. The TOML setting shadows the same key in Stalwart's DB, so it can't be overridden from the admin UI — see [setup.md § How signing is selected](setup.md#how-signing-is-selected).
+The fix pins a single fixed signature with selector `mail`, whose public key is published at `mail._domainkey.<domain>` (wired in `terraform/hetzner/dns.nix`), and selects it for signing with `auth.dkim.sign` in `nix/host.nix`. Creating the signature alone is not enough: with `auth.dkim.sign` unset, Stalwart 0.15 looks for signatures named `rsa-<domain>` / `ed25519-<domain>`, logs `DKIM signer not found`, and sends unsigned. The TOML setting shadows the same key in Stalwart's DB, so it can't be overridden from the admin UI — see [setup.md § How signing is selected](setup.md#how-signing-is-selected).
 
 Under **Stalwart 0.15.x** the 0.15 CLI has no way to import an externally-managed private key — `stalwart-cli dkim create` always generates and stores a fresh keypair internally. So the data flow inverts from a typical IaC pattern:
 
 - **Stalwart owns the keypair.** `nix/host.nix` → `systemd.services.stalwart-dkim-config` runs after every boot and idempotently calls `stalwart-cli dkim create rsa <domain> mail mail`. The "already exists" failure on subsequent boots is swallowed.
-- **DNS mirrors the public half.** The operator copies the generated public key out of Stalwart and pastes it into `tfvars.dkim_public_value`, which `terraform/dns.nix` publishes at `mail._domainkey.<domain>`.
+- **DNS mirrors the public half.** The operator copies the generated public key out of Stalwart and pastes it into `tfvars.dkim_public_value`, which `terraform/hetzner/dns.nix` publishes at `mail._domainkey.<domain>`.
 
 ### One-time operator setup per club
 
@@ -251,6 +251,6 @@ If the service fails on first run, the most likely causes (in rough order of lik
 - Stalwart 0.15 protocol quirks: [stalwart-internals.md](stalwart-internals.md)
 - Role-gated shared inbox: [inbox.md](inbox.md)
 - Backend route: `backend/cmd/api/main.go` — `r.Get("/club/logo.svg", …)`
-- DNS record: `terraform/dns.nix` — `bimi`
+- DNS record: `terraform/hetzner/dns.nix` — `bimi`
 - DKIM systemd unit: `nix/host.nix` — `systemd.services.stalwart-dkim-config`
 - SVG storage column: migration `000032_split_club_logos`

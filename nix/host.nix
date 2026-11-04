@@ -607,7 +607,7 @@ in
 
   # Provision a fixed-selector DKIM signature in Stalwart so outbound
   # mail signs with the `mail._domainkey.<domain>` key whose public
-  # part is published by terraform/dns.nix. Without this, Stalwart's
+  # part is published by terraform/hetzner/dns.nix. Without this, Stalwart's
   # default behaviour can rotate keys under selectors DNS doesn't know
   # about, so receivers see DKIM=permerror and DMARC passes only on
   # the weaker SPF leg — disqualifying the message from BIMI rendering
@@ -1277,7 +1277,7 @@ in
     # Faktura delivery log: the helper socket defined above.
     MAIL_LOG_SOCKET = "/run/brygge-mail-log.sock";
   } // lib.optionalAttrs clubConfig.sesEnabled {
-    # Amazon SES (terraform/ses.nix builds the same names from the slug).
+    # Amazon SES (terraform/aws/ses.nix builds the same names from the slug).
     # The worker resolves the queue URLs itself; its AWS_ACCESS_KEY_ID /
     # AWS_SECRET_ACCESS_KEY are secrets and live in /etc/brygge/env.
     SES_REGION            = clubConfig.awsRegion;

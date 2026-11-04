@@ -110,7 +110,7 @@ Without a DKIM signature whose selector is published in DNS — and a signing ru
 The fix is a single fixed signature with selector `mail`, selected for outbound signing, with its public key published at `mail._domainkey.<domain>`. The flow under Stalwart **0.15.x** is:
 
 - **Stalwart side**: `nix/host.nix` → `systemd.services.stalwart-dkim-config` runs after every boot and idempotently calls `stalwart-cli dkim create rsa <domain> mail mail`. Stalwart **generates and owns the keypair internally** — there is no way to import an externally-managed private key via the 0.15 CLI. The signature is stored as DB keys `signature.mail.*`; the command does not touch the signing rule (see [How signing is selected](#how-signing-is-selected)).
-- **DNS side**: `terraform/dns.nix` → `mail_dkim` publishes the public key at `mail._domainkey.<domain>`, sourced from `tfvars.dkim_public_value`. The operator copies the public half out of Stalwart and pastes it into tfvars.
+- **DNS side**: `terraform/hetzner/dns.nix` → `mail_dkim` publishes the public key at `mail._domainkey.<domain>`, sourced from `tfvars.dkim_public_value`. The operator copies the public half out of Stalwart and pastes it into tfvars.
 
 Operator one-time setup per club:
 
@@ -499,7 +499,7 @@ Use [mail-tester.com](https://mail-tester.com) to get a spam score — aim for 9
 
 ### DMARC policy
 
-Every club publishes one `_dmarc` record, built by `terraform/dns.nix` from the `dmarc_policy` tfvars value: `v=DMARC1; p=<policy>; rua=mailto:postmaster@<domain>; fo=1`. The default and the recommended value is `quarantine`; the reasoning and the rule for when to tighten to `reject` are in [adr/mail.md](../../adr/mail.md) (MAIL-1).
+Every club publishes one `_dmarc` record, built by `terraform/hetzner/dns.nix` from the `dmarc_policy` tfvars value: `v=DMARC1; p=<policy>; rua=mailto:postmaster@<domain>; fo=1`. The default and the recommended value is `quarantine`; the reasoning and the rule for when to tighten to `reject` are in [adr/mail.md](../../adr/mail.md) (MAIL-1).
 
 - **One record only.** A domain can't carry two `_dmarc` records. When a service asks for "your DMARC policy" (Stripe's custom email domain dialog does), the existing record is the answer; don't add one.
 - **Changing the policy:** set `dmarc_policy` in `terraform.tfvars.json` to `none`, `quarantine` or `reject`, run `nix run .#tf-apply`, and check `dig TXT _dmarc.<domain> +short`.
@@ -512,7 +512,7 @@ Stripe can send its payment and refund receipts from the club's domain instead o
 1. In Stripe: Settings → Custom email domain → **Connect your domain**.
 2. Copy into `terraform.tfvars.json`:
    - `stripe_email_verification`: the full `stripe-verification=…` value, without quotes;
-   - `stripe_email_dkim_tokens`: the six DKIM tokens, the part of each name before `._domainkey`. Check one row's value: it should be `<token>.dkim.custom-email-domain.stripe.com`, which is what `terraform/dns.nix` publishes. Exactly what to copy, with an example: [payments.md](../payments.md#receipts-from-the-clubs-domain-stripe-custom-email-domain).
+   - `stripe_email_dkim_tokens`: the six DKIM tokens, the part of each name before `._domainkey`. Check one row's value: it should be `<token>.dkim.custom-email-domain.stripe.com`, which is what `terraform/hetzner/dns.nix` publishes. Exactly what to copy, with an example: [payments.md](../payments.md#receipts-from-the-clubs-domain-stripe-custom-email-domain).
 3. `nix run .#tf-apply`, then **Try verifying now** in Stripe. Verification can take up to 72 hours.
 
 Skip the dialog's `_dmarc` row: Stripe's DKIM (`d=<domain>`) and SPF (`MAIL FROM bounce.<domain>`) both align under the existing relaxed DMARC policy. The Stripe selectors don't touch the mail server's `mail._domainkey`.
@@ -533,7 +533,7 @@ Hetzner allocates a /64 IPv6 prefix per server, but NixOS's default DHCP doesn't
 
 ### rDNS
 
-`46.225.99.41 → mail.<domain>` PTR is set via `hcloud_rdns` in `terraform/server.nix`. If you change server IP or domain, terraform will update the PTR on next `tf-apply`. Gmail/Outlook heavily penalize unmatched rDNS.
+`46.225.99.41 → mail.<domain>` PTR is set via `hcloud_rdns` in `terraform/hetzner/server.nix`. If you change server IP or domain, terraform will update the PTR on next `tf-apply`. Gmail/Outlook heavily penalize unmatched rDNS.
 
 ---
 

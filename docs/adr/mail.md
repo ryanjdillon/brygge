@@ -1,11 +1,11 @@
 # Mail decisions
 
-See [README.md](README.md) for the format. How the mail stack is set up and operated: [developer/mail/setup.md](../developer/mail/setup.md). DNS records: `terraform/dns.nix`.
+See [README.md](README.md) for the format. How the mail stack is set up and operated: [developer/mail/setup.md](../developer/mail/setup.md). DNS records: `terraform/hetzner/dns.nix`.
 
 ### MAIL-1: DMARC policy is `quarantine`, with aggregate reports to `postmaster@`
 
 - **Status:** accepted · 2026-10-30 · BRY-500, BRY-502
-- **Decision:** each club publishes one `_dmarc` TXT record with `p=quarantine`, `rua=mailto:postmaster@<domain>` and `fo=1`. The policy is the `dmarc_policy` tfvars value (default `quarantine`) and is published by `terraform/dns.nix`.
+- **Decision:** each club publishes one `_dmarc` TXT record with `p=quarantine`, `rua=mailto:postmaster@<domain>` and `fo=1`. The policy is the `dmarc_policy` tfvars value (default `quarantine`) and is published by `terraform/hetzner/dns.nix`.
 - **Why:** `quarantine` stops spoofed mail from reaching inboxes while a legitimate message that fails authentication is still delivered to spam rather than lost. The club's own mail was briefly unsigned in October 2026 (BRY-399, BRY-400), which a `reject` policy would have turned into lost invoices and login links. `none` protects nothing.
 - **Consequences:**
   - Tighten to `reject` only after several weeks of aggregate reports with no DKIM or SPF failures from the club's own IPs. Change `dmarc_policy`, run `tf-apply`, and watch the next reports.
