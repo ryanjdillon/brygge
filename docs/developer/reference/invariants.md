@@ -523,6 +523,12 @@ A payer with one matching open faktura (`member_invoice`) is never reclassified 
 
 **Failure mode:** a board member who ticked "hide me" vanished from the directory, so members had nobody to contact; the opposite slip, a second hand-written role list, drops a role such as vice chair or deputy from the directory or lists a former board member's contact details.
 
+### Task participants are the club's own and follow the hide setting
+
+**Rule (BRY-550):** `GET /tasks/{taskID}/participants` (`HandleListTaskParticipants`, `taskParticipantsQuery`) answers 404 for a task outside the caller's club, an unknown id and a malformed one alike. Board and admin callers (`roles.CanViewAdmin`) see every participant's name, with the email as fallback for a nameless row. Other members see an empty name for a participant who set `hide_in_directory`, except their own row and a participant holding a role in `roles.Board` (the BRD-12 exception: those names are in the directory anyway); they never get the email fallback. The response carries no hide flag.
+
+**Failure mode:** the query filtered on the task id alone, so any session that knew a task UUID read another club's participants, and every member saw the full name of members who had asked to be hidden.
+
 ### Board viewing never widens a write
 
 **Rule (BRY-372):** every board role and admin (`roles.CanViewAdmin`) may read every admin page except Developer and Site. Reads open through `middleware.RequireRoleOrBoardRead(<write roles>)`, which admits viewers only on `GET`/`HEAD` and applies `RequireRole(<write roles>)` to every other method, so a surface's write roles are the ones it had before. A handler mounted on `GET` behind it must not write, mint a credential or send anything; such a `GET` keeps its own `RequireRole` (the pay-link endpoints do). In the SPA, write controls on viewable pages hide behind `useCan()`.

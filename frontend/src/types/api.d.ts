@@ -5545,7 +5545,7 @@ export interface components {
              * @description Join timestamp
              */
             joined_at: string;
-            /** @description Participant name */
+            /** @description Participant name. Empty for a member who hides from the directory, unless the caller is board or admin, the participant holds a board role, or it is the caller's own row */
             name: string;
             /** @description Participant role */
             role: string;

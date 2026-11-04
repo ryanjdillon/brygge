@@ -741,7 +741,7 @@ type TaskParticipant struct {
 	Role     string    `json:"role" doc:"Participant role"`
 	Hours    *float64  `json:"hours" doc:"Hours contributed"`
 	JoinedAt time.Time `json:"joined_at" doc:"Join timestamp"`
-	Name     string    `json:"name" doc:"Participant name"`
+	Name     string    `json:"name" doc:"Participant name. Empty for a member who hides from the directory, unless the caller is board or admin, the participant holds a board role, or it is the caller's own row"`
 }
 
 type VolunteerHoursSummary struct {
