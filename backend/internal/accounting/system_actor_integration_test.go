@@ -79,9 +79,8 @@ func TestIntegration_SystemActorCreatesOnceAndIsIdempotent(t *testing.T) {
 // Many first calls at once leave one row and every caller gets its id. The
 // unique-violation fallback in SystemActor (a loser failing on the
 // (club_id, email) index before the conflict clause sees the winner, then
-// reading the winner's row) is NOT reached by this test: 70 runs of 20 callers
-// never produced that failure. It is a guard for a narrow race this test cannot
-// provoke, so it has no test of its own.
+// reading the winner's row) is not reached here: 70 runs of 20 callers never
+// produced it, so TestIntegration_SystemActorLosingInsertReadsWinnersRow forces it.
 func TestIntegration_SystemActorConcurrentFirstCalls(t *testing.T) {
 	svc, pool, clubID := systemActorFixture(t)
 
@@ -111,6 +110,40 @@ func TestIntegration_SystemActorConcurrentFirstCalls(t *testing.T) {
 	}
 	if n := countSystemUsers(t, pool, clubID); n != 1 {
 		t.Errorf("system users after %d concurrent calls = %d, want 1", callers, n)
+	}
+}
+
+// A loser whose INSERT fails on the (club_id, email) unique index, because the
+// winner's row landed after its conflict check, returns the winner's id. The
+// seam commits the winner's row and then runs the INSERT without the conflict
+// clause, which fails with a real unique violation.
+func TestIntegration_SystemActorLosingInsertReadsWinnersRow(t *testing.T) {
+	svc, pool, clubID := systemActorFixture(t)
+	ctx := context.Background()
+
+	var winnerID string
+	svc.systemActorInsert = func(ctx context.Context, clubID string) error {
+		const insert = `INSERT INTO users (club_id, email, first_name, last_name, kind)
+			VALUES ($1, $2, 'Automatisk', 'bokføring', 'system')`
+		if err := pool.QueryRow(ctx, insert+" RETURNING id::text", clubID, SystemActorEmail).Scan(&winnerID); err != nil {
+			t.Errorf("winner insert: %v", err)
+		}
+		_, err := pool.Exec(ctx, insert, clubID, SystemActorEmail)
+		if !isUniqueViolation(err) {
+			t.Errorf("loser insert = %v, want a unique violation", err)
+		}
+		return err
+	}
+
+	id, err := svc.SystemActor(ctx, clubID)
+	if err != nil {
+		t.Fatalf("SystemActor: %v", err)
+	}
+	if id == "" || id != winnerID {
+		t.Errorf("SystemActor = %q, want the winner's %q", id, winnerID)
+	}
+	if n := countSystemUsers(t, pool, clubID); n != 1 {
+		t.Errorf("system users = %d, want 1", n)
 	}
 }
 
