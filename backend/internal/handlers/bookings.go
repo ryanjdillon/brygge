@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
@@ -926,6 +927,14 @@ func canReadBooking(b *booking, claims *auth.Claims) bool {
 	return roles.CanViewAdmin(claims.Roles)
 }
 
+// validBookingID reports whether id can name a booking at all. A
+// malformed id answers the same 404 as a missing booking instead of
+// reaching Postgres, which rejects it as an invalid uuid (a 500).
+func validBookingID(id string) bool {
+	_, err := uuid.Parse(id)
+	return err == nil
+}
+
 func (h *BookingsHandler) HandleGetBooking(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -935,8 +944,8 @@ func (h *BookingsHandler) HandleGetBooking(w http.ResponseWriter, r *http.Reques
 	}
 
 	bookingID := chi.URLParam(r, "bookingID")
-	if bookingID == "" {
-		Error(w, http.StatusBadRequest, "missing booking ID")
+	if !validBookingID(bookingID) {
+		Error(w, http.StatusNotFound, "booking not found")
 		return
 	}
 
@@ -1016,8 +1025,8 @@ func (h *BookingsHandler) HandleCancelBooking(w http.ResponseWriter, r *http.Req
 	}
 
 	bookingID := chi.URLParam(r, "bookingID")
-	if bookingID == "" {
-		Error(w, http.StatusBadRequest, "missing booking ID")
+	if !validBookingID(bookingID) {
+		Error(w, http.StatusNotFound, "booking not found")
 		return
 	}
 
@@ -1027,7 +1036,7 @@ func (h *BookingsHandler) HandleCancelBooking(w http.ResponseWriter, r *http.Req
 		 FROM bookings WHERE id = $1 AND club_id = $2`,
 		bookingID, claims.ClubID,
 	), &b)
-	if err == pgx.ErrNoRows {
+	if err == pgx.ErrNoRows || (err == nil && !canReadBooking(&b, claims)) {
 		Error(w, http.StatusNotFound, "booking not found")
 		return
 	}
@@ -1037,6 +1046,8 @@ func (h *BookingsHandler) HandleCancelBooking(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Only a caller who may already read the booking reaches this 403, so
+	// it reveals nothing GET /bookings/{id} would not.
 	isOwner := b.UserID != nil && *b.UserID == claims.UserID
 	isStyre := hasRole(claims.Roles, "board") || hasRole(claims.Roles, "harbor_master")
 	if !isOwner && !isStyre {
@@ -1052,9 +1063,9 @@ func (h *BookingsHandler) HandleCancelBooking(w http.ResponseWriter, r *http.Req
 	oldStatus := b.Status
 	err = scanBooking(h.db.QueryRow(ctx,
 		`UPDATE bookings SET status = 'cancelled', updated_at = now()
-		 WHERE id = $1
+		 WHERE id = $1 AND club_id = $2
 		 RETURNING `+bookingColumns,
-		bookingID,
+		bookingID, claims.ClubID,
 	), &b)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to cancel booking")
@@ -1081,8 +1092,8 @@ func (h *BookingsHandler) HandleConfirmBooking(w http.ResponseWriter, r *http.Re
 	}
 
 	bookingID := chi.URLParam(r, "bookingID")
-	if bookingID == "" {
-		Error(w, http.StatusBadRequest, "missing booking ID")
+	if !validBookingID(bookingID) {
+		Error(w, http.StatusNotFound, "booking not found")
 		return
 	}
 
@@ -1109,9 +1120,9 @@ func (h *BookingsHandler) HandleConfirmBooking(w http.ResponseWriter, r *http.Re
 	var b booking
 	err = scanBooking(h.db.QueryRow(ctx,
 		`UPDATE bookings SET status = 'confirmed', updated_at = now()
-		 WHERE id = $1
+		 WHERE id = $1 AND club_id = $2
 		 RETURNING `+bookingColumns,
-		bookingID,
+		bookingID, claims.ClubID,
 	), &b)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to confirm booking")
