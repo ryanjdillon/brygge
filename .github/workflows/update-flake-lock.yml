@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # A PR opened with GITHUB_TOKEN doesn't trigger other workflows, so ci.yml's
-      # nix-build would never validate the bump. An App token does, and unlike a
+      # nix-check would never validate the bump. An App token does, and unlike a
       # PAT it doesn't expire. Setup: docs/developer/deploy.md#automated-flakelock-updates.
       - uses: actions/create-github-app-token@v3
         id: app-token

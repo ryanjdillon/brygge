@@ -37,6 +37,9 @@ let
       "-w"
     ];
     env.CGO_ENABLED = "0";
+    # The Go tests run in CI's test-go job, against Postgres; the default
+    # checkPhase would compile the packages a second time to rerun them.
+    doCheck = false;
     # The embed target must exist even for binaries that never serve the
     # SPA, so the //go:embed directive resolves whenever internal/web is
     # pulled into the build graph.
