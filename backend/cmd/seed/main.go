@@ -406,7 +406,7 @@ func main() {
 		}
 	}
 
-	// Assign slip A1 to Kari Sjømann (slip-member) with harbor membership.
+	// Assign slip A1 to Kari Sjømann (slip-member), a harbor share owner.
 	// The BEFORE INSERT trigger sync_slip_assignment_user overwrites user_id
 	// from the boat's owner, so we pass Kari's own boat (owner = slip-member).
 	slipA1 := slipIDs["A1"]
@@ -422,15 +422,36 @@ func main() {
 
 		now := time.Now()
 		_, err = db.Exec(ctx, `
-			INSERT INTO slip_assignments (slip_id, user_id, boat_id, club_id, harbor_membership_amount, harbor_membership_paid_at, assigned_at, assignment_type)
-			VALUES ($1, $2, $3, $4, 50000, $5, $5, 'permanent')
+			INSERT INTO slip_assignments (slip_id, user_id, boat_id, club_id, assigned_at, assignment_type)
+			VALUES ($1, $2, $3, $4, $5, 'permanent')
 		`, slipA1, slipMemberID, kariBoatID, clubID, now)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  failed to assign slip to Kari: %v\n", err)
 		} else {
-			fmt.Println("  slip A1 assigned to Kari Sjømann (harbor membership paid, boat Sjøsprøyt linked)")
+			fmt.Println("  slip A1 assigned to Kari Sjømann (boat Sjøsprøyt linked)")
 		}
 	}
+
+	// Harbor share owners (BRD-14). Kari owns one with a known paid date and
+	// holds slip A1; Per owns one with an unknown date (a pre-2026 buy-in) and
+	// has no slip; Medlem Hansen is not an owner. That puts a row on each side
+	// of the admin owner and "owners without a slip" filters.
+	for _, hs := range []struct {
+		email  string
+		paidOn string // "" = date unknown
+	}{
+		{"slip-member@brygge.local", "2026-03-15"},
+		{"wl-member@brygge.local", ""},
+	} {
+		if uid := userIDs[hs.email]; uid != "" {
+			if _, err := db.Exec(ctx,
+				`UPDATE users SET harbor_share_owner = true, harbor_share_paid_on = NULLIF($1, '')::date WHERE id = $2`,
+				hs.paidOn, uid); err != nil {
+				fmt.Fprintf(os.Stderr, "  failed to set harbor share for %s: %v\n", hs.email, err)
+			}
+		}
+	}
+	fmt.Println("  harbor share owners: Kari Sjømann (paid 2026-03-15, slip A1), Per Venansen (date unknown, no slip)")
 
 	// Assign slip B2 as a seasonal rental to Medlem Hansen so the harbor map
 	// demo includes a second occupied slip with a different color (permanent
@@ -669,7 +690,7 @@ func main() {
 
 	fmt.Println("\ndone! you can now log in with:")
 	fmt.Println("  admin:          admin@brygge.local / admin123")
-	fmt.Println("  member (slip):  slip-member@brygge.local / member123  (Kari Sjømann, has harbor membership + slip A1)")
+	fmt.Println("  member (slip):  slip-member@brygge.local / member123  (Kari Sjømann, harbor share owner + slip A1)")
 	fmt.Println("  member (wl):    wl-member@brygge.local / member123  (Per Venansen, on waiting list #2)")
 	fmt.Println("  member:         member@brygge.local / member123  (Medlem Hansen, on waiting list #7)")
 	fmt.Println("\n  or via Vipps mock with corresponding test users")

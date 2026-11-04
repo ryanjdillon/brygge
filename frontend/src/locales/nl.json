@@ -780,7 +780,17 @@
       "showing": "Tonen {from}–{to} van {total}",
       "searchPlaceholder": "Zoeken op naam of e-mail…",
       "dockFilterLabel": "Steiger",
-      "dockFilterAll": "Alle"
+      "dockFilterAll": "Alle",
+      "harborShareFilterLabel": "Havenaandeel",
+      "harborShareFilterAll": "Alle",
+      "harborShareFilterOwner": "Eigenaren",
+      "harborShareFilterNotOwner": "Geen eigenaren",
+      "harborShareYesPaid": "Ja ({date})",
+      "harborShareYesUnknownDate": "Ja (datum onbekend)",
+      "harborShareOwner": "Eigenaar havenaandeel",
+      "harborSharePaidOn": "Havenaandeel betaald op",
+      "harborSharePaidOnHint": "leeg laten indien onbekend",
+      "harborShareClearDate": "Datum wissen"
     },
     "waitingList": {
       "loadError": "Kon wachtlijst niet laden",
@@ -1695,6 +1705,9 @@
           "generic": "Kon geen nieuwe factuur uitgeven. Probeer het opnieuw."
         }
       }
+    },
+    "columns": {
+      "harborShare": "Havenaandeel"
     }
   },
   "projects": {

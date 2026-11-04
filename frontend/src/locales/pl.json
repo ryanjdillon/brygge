@@ -770,7 +770,17 @@
       "showing": "Wyświetlanie {from}–{to} z {total}",
       "searchPlaceholder": "Szukaj po nazwisku lub e-mailu…",
       "dockFilterLabel": "Pomost",
-      "dockFilterAll": "Wszystkie"
+      "dockFilterAll": "Wszystkie",
+      "harborShareFilterLabel": "Udział w porcie",
+      "harborShareFilterAll": "Wszyscy",
+      "harborShareFilterOwner": "Właściciele",
+      "harborShareFilterNotOwner": "Nie właściciele",
+      "harborShareYesPaid": "Tak ({date})",
+      "harborShareYesUnknownDate": "Tak (data nieznana)",
+      "harborShareOwner": "Właściciel udziału w porcie",
+      "harborSharePaidOn": "Udział w porcie opłacony",
+      "harborSharePaidOnHint": "zostaw puste, jeśli nieznana",
+      "harborShareClearDate": "Wyczyść datę"
     },
     "waitingList": {
       "loadError": "Nie udało się załadować listy oczekujących",
@@ -1666,6 +1676,9 @@
           "generic": "Nie udało się wystawić nowej faktury. Spróbuj ponownie."
         }
       }
+    },
+    "columns": {
+      "harborShare": "Udział w porcie"
     }
   },
   "projects": {

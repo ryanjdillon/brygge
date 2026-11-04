@@ -10,6 +10,7 @@ import { sortBySlip } from '@/lib/slipSort'
 import DockFilter from '@/components/admin/DockFilter.vue'
 import SpotFilter, { type SpotFilterValue } from '@/components/admin/SpotFilter.vue'
 import NotesFilter, { type NotesFilterValue } from '@/components/admin/NotesFilter.vue'
+import HarborShareFilter, { type HarborShareFilterValue } from '@/components/admin/HarborShareFilter.vue'
 import SortableTh from '@/components/admin/SortableTh.vue'
 import SlipCell from '@/components/admin/SlipCell.vue'
 import ColumnSelector, { type ColumnDef } from '@/components/admin/ColumnSelector.vue'
@@ -20,7 +21,7 @@ import BoatCard from '@/components/boats/BoatCard.vue'
 import BulkInvoicesModal from '@/components/admin/BulkInvoicesModal.vue'
 import { Receipt } from 'lucide-vue-next'
 import type { components } from '@/types/api'
-import { formatName } from '@/lib/format'
+import { formatName, formatDate } from '@/lib/format'
 import { useRangeSelect } from '@/composables/useRangeSelect'
 import { useAuthStore } from '@/stores/auth'
 import { useFreshTotp } from '@/composables/useFreshTotp'
@@ -31,6 +32,7 @@ import Input from '@/components/ui/form/Input.vue'
 import Textarea from '@/components/ui/form/Textarea.vue'
 import Checkbox from '@/components/ui/form/Checkbox.vue'
 import Select from '@/components/ui/form/Select.vue'
+import DateInput from '@/components/ui/form/DateInput.vue'
 import FileInput from '@/components/ui/form/FileInput.vue'
 
 type User = components['schemas']['AdminUser'] & { deactivated_at?: string | null }
@@ -38,7 +40,7 @@ type CreateBody = components['schemas']['AdminUserCreate']
 type UpdateBody = components['schemas']['AdminUserUpdate']
 type ImportRow = components['schemas']['ImportUsersResultRow']
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const client = useApiClient()
 const queryClient = useQueryClient()
 const auth = useAuthStore()
@@ -58,7 +60,7 @@ async function copyUserPayLink(userId: string) {
   }
 }
 
-type SortField = 'first_name' | 'last_name' | 'email' | 'phone' | 'slip' | 'membership' | 'slip_fee'
+type SortField = 'first_name' | 'last_name' | 'email' | 'phone' | 'slip' | 'membership' | 'slip_fee' | 'harbor_share'
 const sortField = ref<SortField>('last_name')
 const sortDir = ref<'asc' | 'desc'>('asc')
 const sortParam = computed(() => (sortDir.value === 'desc' ? '-' : '') + sortField.value)
@@ -66,6 +68,7 @@ const sortParam = computed(() => (sortDir.value === 'desc' ? '-' : '') + sortFie
 const spotFilter = ref<SpotFilterValue>('')
 const dockFilter = ref<string>('')
 const notesFilter = ref<NotesFilterValue>('')
+const harborShareFilter = ref<HarborShareFilterValue>('')
 const statusFilter = ref<'' | 'deactivated' | 'all'>('')
 
 // Member-table column visibility. Persisted per-browser in localStorage
@@ -81,6 +84,7 @@ const ALL_COLUMNS: ColumnDef[] = [
   { key: 'boat',       labelKey: 'admin.columns.boat' },
   { key: 'membership', labelKey: 'admin.columns.membership' },
   { key: 'slip_fee',   labelKey: 'admin.columns.slipFee' },
+  { key: 'harbor_share', labelKey: 'admin.columns.harborShare' },
   { key: 'notes',      labelKey: 'admin.columns.notes' },
   { key: 'roles',      labelKey: 'admin.users.roles' },
 ]
@@ -124,7 +128,7 @@ function onSearchInput() {
 }
 
 const { data: usersResponse, isLoading, isError } = useQuery({
-  queryKey: ['admin', 'users', sortParam, spotFilter, dockFilter, notesFilter, statusFilter, searchQuery, offset],
+  queryKey: ['admin', 'users', sortParam, spotFilter, dockFilter, notesFilter, harborShareFilter, statusFilter, searchQuery, offset],
   queryFn: async () =>
     unwrap(
       await client.GET('/api/v1/admin/users', {
@@ -136,9 +140,10 @@ const { data: usersResponse, isLoading, isError } = useQuery({
             ...(spotFilter.value ? { spot: spotFilter.value } : {}),
             ...(dockFilter.value ? { dock: dockFilter.value } : {}),
             ...(notesFilter.value ? { notes: notesFilter.value } : {}),
+            ...(harborShareFilter.value ? { harbor_share: harborShareFilter.value } : {}),
             status: statusFilter.value || undefined,
             ...(searchQuery.value ? { q: searchQuery.value } : {}),
-          } as any,
+          },
         },
       }),
     ),
@@ -157,6 +162,10 @@ function onDockFilterChange() {
 }
 
 function onNotesFilterChange() {
+  offset.value = 0
+}
+
+function onHarborShareFilterChange() {
   offset.value = 0
 }
 
@@ -304,13 +313,13 @@ async function selectAllFiltered() {
         ...(spotFilter.value ? { spot: spotFilter.value } : {}),
         ...(dockFilter.value ? { dock: dockFilter.value } : {}),
         ...(notesFilter.value ? { notes: notesFilter.value } : {}),
+        ...(harborShareFilter.value ? { harbor_share: harborShareFilter.value } : {}),
         status: statusFilter.value || undefined,
         ...(searchQuery.value ? { q: searchQuery.value } : {}),
-      } as any,
+      },
     },
   })
-  const data = result.data as any
-  const all = (data?.users ?? []) as { id: string }[]
+  const all = result.data?.users ?? []
   const next = new Set(selectedIds.value)
   for (const u of all) next.add(u.id)
   selectedIds.value = next
@@ -356,6 +365,15 @@ function roleBadgeClass(role: string): string {
   if (role === 'admin') return 'bg-[#04142a] text-white'
   if (officerRoles.has(role)) return 'bg-brand-100 text-brand-800'
   return 'bg-gray-100 text-gray-700'
+}
+
+// Harbor share (moloandel, BRD-14): ownership is the flag; the paid date is
+// optional because buy-ins before 2026 have no known date.
+function harborShareLabel(u: User): string {
+  if (!u.harbor_share_owner) return ''
+  return u.harbor_share_paid_on
+    ? t('admin.users.harborShareYesPaid', { date: formatDate(u.harbor_share_paid_on, locale.value) })
+    : t('admin.users.harborShareYesUnknownDate')
 }
 
 function toggleRole(userId: string, role: string) {
@@ -605,6 +623,8 @@ async function startDetailEdit() {
     city: u.city ?? '',
     is_local: !!u.is_local,
     admin_notes: u.admin_notes ?? '',
+    harbor_share_owner: !!u.harbor_share_owner,
+    harbor_share_paid_on: u.harbor_share_paid_on ?? '',
   })
   editRoles.value = [...(u.roles ?? [])]
   // Build per-boat slip map keyed by boat_id from the user.slips
@@ -644,6 +664,12 @@ async function openEditDirect(user: User) {
   if (!canManage(user)) return
   openDetail(user)
   await startDetailEdit()
+}
+
+// The paid date needs an owner (DB CHECK), so unticking ownership clears it.
+function setEditHarborShareOwner(owner: boolean) {
+  editForm.harbor_share_owner = owner
+  if (!owner) editForm.harbor_share_paid_on = ''
 }
 
 function toggleEditRole(role: string) {
@@ -909,6 +935,11 @@ async function submitImport() {
           v-model="spotFilter"
           @update:model-value="onSpotFilterChange"
         />
+        <HarborShareFilter
+          id="member-harbor-share-filter"
+          v-model="harborShareFilter"
+          @update:model-value="onHarborShareFilterChange"
+        />
         <NotesFilter
           v-if="auth.hasRole('admin')"
           id="member-notes-filter"
@@ -1013,6 +1044,7 @@ async function submitImport() {
             <th v-if="visible.has('boat')" scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.columns.boat') }}</th>
             <SortableTh v-if="visible.has('membership')" :active="sortField === 'membership'" :dir="sortDir" @click="setSort('membership')">{{ t('admin.columns.membership') }}</SortableTh>
             <SortableTh v-if="visible.has('slip_fee')" :active="sortField === 'slip_fee'" :dir="sortDir" @click="setSort('slip_fee')">{{ t('admin.columns.slipFee') }}</SortableTh>
+            <SortableTh v-if="visible.has('harbor_share')" :active="sortField === 'harbor_share'" :dir="sortDir" @click="setSort('harbor_share')">{{ t('admin.columns.harborShare') }}</SortableTh>
             <th v-if="visible.has('notes')" scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.columns.notes') }}</th>
             <th v-if="visible.has('roles')" scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.users.roles') }}</th>
             <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('common.actions') }}</th>
@@ -1090,6 +1122,9 @@ async function submitImport() {
                 :state="((user as any).slip_fee_status ?? '') as InvoiceState"
                 :label="t('admin.columns.slipFee')"
               />
+            </td>
+            <td v-if="visible.has('harbor_share')" class="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
+              {{ harborShareLabel(user) || '—' }}
             </td>
             <td v-if="visible.has('notes')" class="px-4 py-3 text-sm text-gray-700">
               <span
@@ -1215,6 +1250,8 @@ async function submitImport() {
             <dd class="col-span-2 text-gray-900">{{ detailUser.city || '—' }}</dd>
             <dt class="text-xs font-medium text-gray-500">{{ t('admin.users.isLocal') }}</dt>
             <dd class="col-span-2 text-gray-900">{{ detailUser.is_local ? t('common.yes') : t('common.no') }}</dd>
+            <dt class="text-xs font-medium text-gray-500">{{ t('admin.columns.harborShare') }}</dt>
+            <dd class="col-span-2 text-gray-900">{{ harborShareLabel(detailUser) || t('common.no') }}</dd>
             <template v-if="detailUser.admin_notes">
               <dt class="text-xs font-medium text-gray-500">{{ t('admin.users.adminNotes') }}</dt>
               <dd class="col-span-2 whitespace-pre-wrap rounded-md bg-amber-50 px-2 py-1 text-gray-900">{{ detailUser.admin_notes }}</dd>
@@ -1331,6 +1368,34 @@ async function submitImport() {
               <label class="block text-xs font-medium text-gray-700" for="ed-city">{{ t('admin.users.city') }}</label>
               <div class="mt-1">
                 <Input id="ed-city" v-model="editForm.city" type="text" />
+              </div>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 gap-2 md:grid-cols-2">
+            <div class="flex min-h-11 items-end pb-1 md:min-h-0">
+              <Checkbox
+                :model-value="!!editForm.harbor_share_owner"
+                @update:model-value="setEditHarborShareOwner"
+              >{{ t('admin.users.harborShareOwner') }}</Checkbox>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-700" for="ed-harbor-share-paid-on">
+                {{ t('admin.users.harborSharePaidOn') }}
+                <span class="ml-1 font-normal text-gray-400">({{ t('admin.users.harborSharePaidOnHint') }})</span>
+              </label>
+              <div class="mt-1 flex items-start gap-2">
+                <DateInput
+                  id="ed-harbor-share-paid-on"
+                  v-model="editForm.harbor_share_paid_on"
+                  class="flex-1"
+                  :disabled="!editForm.harbor_share_owner"
+                />
+                <button
+                  type="button"
+                  class="min-h-11 rounded-md px-2 text-xs text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 md:min-h-0 md:py-1.5"
+                  :disabled="!editForm.harbor_share_owner || !editForm.harbor_share_paid_on"
+                  @click="editForm.harbor_share_paid_on = ''"
+                >{{ t('admin.users.harborShareClearDate') }}</button>
               </div>
             </div>
           </div>

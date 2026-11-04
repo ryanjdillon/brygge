@@ -800,6 +800,22 @@ type AdminUser struct {
 	SlipSection        string                `json:"slip_section" doc:"Active slip section (empty when unassigned)"`
 	SlipAssignmentType string                `json:"slip_assignment_type" doc:"permanent | seasonal | '' when unassigned"`
 	CreatedAt          time.Time             `json:"created_at" doc:"Creation timestamp"`
+	HarborShareOwner   bool                  `json:"harbor_share_owner" doc:"Owns a paid-up harbor share (moloandel). The only is-owner predicate (BRD-14)."`
+	HarborSharePaidOn  *string               `json:"harbor_share_paid_on" format:"date" doc:"Date the harbor share was paid (YYYY-MM-DD); null when not an owner or the date is unknown"`
+}
+
+// AdminUsersListParams are the query parameters of GET /api/v1/admin/users.
+// Unknown filter values are ignored and return the unfiltered set.
+type AdminUsersListParams struct {
+	Limit       int    `query:"limit" minimum:"1" maximum:"500" default:"100" doc:"Items per page"`
+	Offset      int    `query:"offset" minimum:"0" default:"0" doc:"Number of items to skip"`
+	Sort        string `query:"sort" doc:"Sort key, '-' prefix for descending: first_name, last_name (default), email, phone, created_at, slip, membership, slip_fee, harbor_share"`
+	Spot        string `query:"spot" enum:"permanent,seasonal,none" doc:"Members with an active slip of this type, or with none"`
+	Dock        string `query:"dock" doc:"Members with an active slip in this section"`
+	Notes       string `query:"notes" enum:"with,without" doc:"Members with or without admin notes"`
+	Status      string `query:"status" enum:"deactivated,all" doc:"Account lifecycle; omitted hides deactivated members"`
+	Q           string `query:"q" doc:"Space-separated tokens, each matched against first name, last name and email"`
+	HarborShare string `query:"harbor_share" enum:"owner,not_owner" doc:"Harbor share owners or non-owners; combines with spot (owner + none = owners without an active slip)"`
 }
 
 // AdminUserSlipDetail is one row of AdminUser.Slips — the read-side
@@ -841,15 +857,17 @@ type AdminUserSlipsUpdate struct {
 // All fields optional — only supplied keys are written. Roles are managed
 // via a separate endpoint.
 type AdminUserUpdate struct {
-	Email       *string `json:"email,omitempty" doc:"Email address (must remain unique per club)"`
-	FirstName   *string `json:"first_name,omitempty" doc:"Given name"`
-	LastName    *string `json:"last_name,omitempty" doc:"Family name"`
-	Phone       *string `json:"phone,omitempty" doc:"Phone number"`
-	AddressLine *string `json:"address_line,omitempty" doc:"Street address"`
-	PostalCode  *string `json:"postal_code,omitempty" doc:"Postal code"`
-	City        *string `json:"city,omitempty" doc:"City"`
-	IsLocal     *bool   `json:"is_local,omitempty" doc:"Local-resident rate eligible"`
-	AdminNotes  *string `json:"admin_notes,omitempty" doc:"Free-text admin notes (admin-only, never returned to the member themselves)"`
+	Email             *string `json:"email,omitempty" doc:"Email address (must remain unique per club)"`
+	FirstName         *string `json:"first_name,omitempty" doc:"Given name"`
+	LastName          *string `json:"last_name,omitempty" doc:"Family name"`
+	Phone             *string `json:"phone,omitempty" doc:"Phone number"`
+	AddressLine       *string `json:"address_line,omitempty" doc:"Street address"`
+	PostalCode        *string `json:"postal_code,omitempty" doc:"Postal code"`
+	City              *string `json:"city,omitempty" doc:"City"`
+	IsLocal           *bool   `json:"is_local,omitempty" doc:"Local-resident rate eligible"`
+	AdminNotes        *string `json:"admin_notes,omitempty" doc:"Free-text admin notes (admin-only, never returned to the member themselves)"`
+	HarborShareOwner  *bool   `json:"harbor_share_owner,omitempty" doc:"Harbor share owner; false also clears harbor_share_paid_on"`
+	HarborSharePaidOn *string `json:"harbor_share_paid_on,omitempty" doc:"Paid date YYYY-MM-DD, or empty string to clear (date unknown). A date for a non-owner is a 400."`
 }
 
 type AdminUsersResponse struct {

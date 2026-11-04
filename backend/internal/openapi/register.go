@@ -1292,7 +1292,7 @@ func registerAdminOps(api huma.API) {
 		Tags:        []string{"Admin"},
 		Summary:     "List all users",
 		Security:    BearerSecurity,
-	}, stub[struct{ PaginationParams }, struct {
+	}, stub[struct{ AdminUsersListParams }, struct {
 		Body AdminUsersResponse
 	}]())
 

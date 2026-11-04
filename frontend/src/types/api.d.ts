@@ -2768,6 +2768,13 @@ export interface components {
             first_name: string;
             /** @description Computed: first_name + ' ' + last_name (kept for backwards compat — DIL-230 will drop) */
             full_name: string;
+            /** @description Owns a paid-up harbor share (moloandel). The only is-owner predicate (BRD-14). */
+            harbor_share_owner: boolean;
+            /**
+             * Format: date
+             * @description Date the harbor share was paid (YYYY-MM-DD); null when not an owner or the date is unknown
+             */
+            harbor_share_paid_on: string | null;
             /** @description User UUID */
             id: string;
             /** @description Local-resident rate eligible */
@@ -2894,6 +2901,10 @@ export interface components {
             email?: string;
             /** @description Given name */
             first_name?: string;
+            /** @description Harbor share owner; false also clears harbor_share_paid_on */
+            harbor_share_owner?: boolean;
+            /** @description Paid date YYYY-MM-DD, or empty string to clear (date unknown). A date for a non-owner is a 400. */
+            harbor_share_paid_on?: string;
             /** @description Local-resident rate eligible */
             is_local?: boolean;
             /** @description Family name */
@@ -7906,6 +7917,20 @@ export interface operations {
                 limit?: number;
                 /** @description Number of items to skip */
                 offset?: number;
+                /** @description Sort key, '-' prefix for descending: first_name, last_name (default), email, phone, created_at, slip, membership, slip_fee, harbor_share */
+                sort?: string;
+                /** @description Members with an active slip of this type, or with none */
+                spot?: "permanent" | "seasonal" | "none";
+                /** @description Members with an active slip in this section */
+                dock?: string;
+                /** @description Members with or without admin notes */
+                notes?: "with" | "without";
+                /** @description Account lifecycle; omitted hides deactivated members */
+                status?: "deactivated" | "all";
+                /** @description Space-separated tokens, each matched against first name, last name and email */
+                q?: string;
+                /** @description Harbor share owners or non-owners; combines with spot (owner + none = owners without an active slip) */
+                harbor_share?: "owner" | "not_owner";
             };
             header?: never;
             path?: never;

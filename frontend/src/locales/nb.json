@@ -1312,7 +1312,8 @@
       "boat": "Båt",
       "notes": "Notater",
       "membership": "Medlemskap",
-      "slipFee": "Plassleie"
+      "slipFee": "Plassleie",
+      "harborShare": "Moloandel"
     },
     "invoiceStatus": {
       "draft": "Kladd",
@@ -1413,7 +1414,17 @@
       "generateFakturas": "Generer fakturaer",
       "searchPlaceholder": "Søk etter navn eller e-post…",
       "dockFilterLabel": "Brygge",
-      "dockFilterAll": "Alle"
+      "dockFilterAll": "Alle",
+      "harborShareFilterLabel": "Moloandel",
+      "harborShareFilterAll": "Alle",
+      "harborShareFilterOwner": "Eiere",
+      "harborShareFilterNotOwner": "Ikke eiere",
+      "harborShareYesPaid": "Ja ({date})",
+      "harborShareYesUnknownDate": "Ja (dato ukjent)",
+      "harborShareOwner": "Eier moloandel",
+      "harborSharePaidOn": "Moloandel betalt",
+      "harborSharePaidOnHint": "la stå tom hvis ukjent",
+      "harborShareClearDate": "Fjern dato"
     },
     "waitingList": {
       "loadError": "Kunne ikke hente ventelisten",

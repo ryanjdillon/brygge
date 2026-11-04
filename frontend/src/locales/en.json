@@ -1316,7 +1316,8 @@
       "boat": "Boat",
       "notes": "Notes",
       "membership": "Membership",
-      "slipFee": "Slip rental"
+      "slipFee": "Slip rental",
+      "harborShare": "Harbor share"
     },
     "invoiceStatus": {
       "draft": "Draft",
@@ -1417,7 +1418,17 @@
       "generateFakturas": "Generate fakturas",
       "searchPlaceholder": "Search by name or email…",
       "dockFilterLabel": "Dock",
-      "dockFilterAll": "All"
+      "dockFilterAll": "All",
+      "harborShareFilterLabel": "Harbor share",
+      "harborShareFilterAll": "All",
+      "harborShareFilterOwner": "Owners",
+      "harborShareFilterNotOwner": "Not owners",
+      "harborShareYesPaid": "Yes ({date})",
+      "harborShareYesUnknownDate": "Yes (date unknown)",
+      "harborShareOwner": "Harbor share owner",
+      "harborSharePaidOn": "Harbor share paid on",
+      "harborSharePaidOnHint": "leave empty if unknown",
+      "harborShareClearDate": "Clear date"
     },
     "waitingList": {
       "loadError": "Could not load the waiting list",
