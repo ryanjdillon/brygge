@@ -516,6 +516,8 @@ You do not need to clear the daily Vipps payout (the **Utb. … Vippsnr …** de
 
 ### Angre on a payment in a settlement that is already cleared
 
+A reversing bilag (the one Brygge posts when a bilag is annulled or a Vipps payment is moved to another account, named *Reversering av bilag #N*) cannot be annulled itself: that would bring the original bilag back. The message names the original bilag. Post a new correcting bilag instead.
+
 Once a Vipps payout is cleared, **Angre** on one of its payments is refused with a message naming the settlement (for example *Utb. 1234567 Vippsnr 123456*). The same goes for **Annuller** on that payment's bilag in the journal. The fee and the deposit are booked against the payment, so taking it back on its own would leave the Vipps clearing account (2900) with their amounts and no payment against them.
 
 The message has an **Angre innbetalingen** button. After you confirm, it:

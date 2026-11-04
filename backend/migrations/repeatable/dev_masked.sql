@@ -236,7 +236,7 @@ SELECT
     status, source, source_id, source_table,
     NULL::text AS attachment_url,
     created_by, posted_by, posted_at, voided_by, voided_at,
-    created_at, updated_at,
+    created_at, updated_at, reverses_entry_id,
     substring(description from '[0-9]{6,}') AS description_kid,
     length(description)                     AS description_length,
     (attachment_url IS NOT NULL)            AS has_attachment
