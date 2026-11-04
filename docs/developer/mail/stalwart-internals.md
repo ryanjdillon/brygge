@@ -307,6 +307,8 @@ Side effects of enabling analysis:
 
 ## Faktura delivery log
 
+Since the SES send log (BRY-590) this journal path only answers for faktura sends from before the faktura's first `email_sends` row and for rows sent through Stalwart; SES sends come from `mail_delivery_events` ([ses.md § Leveringslogg](ses.md#leveringslogg-and-the-suppression-list)). It is read-only legacy and goes away with the `brygge-mail-log` units 35 days after the SES cutover (BRY-594).
+
 The delivery log on a sent faktura (Leveringslogg) reads the same journal through `brygge-mail-log`, a socket-activated helper in `nix/host.nix`: the API writes one recipient address, and `nix/mail-log-helper.sh` (a dynamic user in `systemd-journal`) answers with that recipient's delivery events as JSON lines, then `{"__end":true}`. The API has no journal access ([invariants § The API never reads the system journal](../reference/invariants.md#the-api-never-reads-the-system-journal-the-faktura-delivery-log-asks-a-one-recipient-helper)).
 
 What the journal tracer gives, and what the log relies on:

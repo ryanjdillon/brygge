@@ -309,22 +309,56 @@ The audit log records every regenerate with the `prior_pdf_bytes` field so the t
 
 ## Did the faktura reach the member?
 
-Open **Leveringslogg** (the envelope-with-magnifier icon in the row's actions on the Sent tab; it asks for your authenticator code). It lists every time Brygge emailed the faktura — the first send, each resend and each reminder — with what happened to it:
+Open **Leveringslogg** (the envelope-with-magnifier icon in the row's actions on the Sent tab; it asks for your authenticator code). It lists every time Brygge emailed the faktura — the first send, each resend and each reminder — with what happened to it. On the Sent tab, a faktura whose latest email needs a look (rejected, blocked, not sent, outcome unknown, delayed, marked as spam) also carries a small coloured badge under the member's email address.
+
+Since the club sends faktura mail through Amazon SES, each send carries the delivery report SES received back:
 
 | Status | Meaning | What to do |
 |---|---|---|
 | Accepted by recipient's server | The member's mail server took the mail. Whether it then went to the inbox or to spam can't be seen from the club's side. | Nothing. If the member can't find it, ask them to check spam. |
-| Delayed, will retry | The member's server asked to try later (greylisting is common the first time a sender writes). The club's mail server retries on its own; the next attempt time is shown. | Wait and check again later. |
-| Rejected | The member's server refused it (a 5xx answer, e.g. no such mailbox). A bounce also arrives in the bounce mailbox. | Check the address, correct it, and resend. |
-| Queued, no answer yet | Handed to the club's mail server, no delivery attempt finished yet. | Check again in a few minutes. |
+| Handed to the mail service | SES has the mail; its delivery report usually arrives within minutes. | Check again shortly. |
+| Queued, no answer yet | SES has started delivering, no answer from the member's server yet. | Check again in a few minutes. |
+| Delayed, will retry | The member's server asked to try later. SES retries on its own. | Wait and check again later. |
+| Gave up after retries | The member's server kept asking to try later until SES gave up. | Check the address and resend later. |
+| Rejected | The member's server refused it (for example no such mailbox), or SES refused the message. | Check the address, correct it, and resend. If it was a hard bounce of a correct address, see *Blocked* below. |
+| Blocked: on the suppression list | SES did not send the mail at all: the address bounced hard before (or the member reported spam), so it is on the club's suppression list. | See below. |
+| Marked as spam | The member clicked "this is spam" on the mail. SES puts the address on the suppression list. | Do **not** resend and do **not** remove the block. Contact the member another way. |
+| Not sent | The mail service refused the message before taking it. Nothing went out. | Resend. |
+| Outcome unknown | The connection broke while the mail was being handed over; it may or may not have gone out. | Ask the member before resending, so they don't get it twice. |
+| Sending | Brygge is handing the mail over right now. If it stays like this, the send was interrupted. | Treat as *Outcome unknown* after a few minutes. |
+
+Each send lists the events behind its status (accepted by SES, delivered, bounced with its type, the member's server and its answer) so a technical reader can see exactly what happened. A send that went to a different address than the faktura's current one shows that address.
+
+### Blocked sends and "Remove from suppression list"
+
+SES keeps one suppression list for the club. After a hard bounce (the member's server said the mailbox does not exist) or a spam complaint, SES adds the address and refuses every later mail to it, so a wrong or dead address does not damage the club's sending reputation ([how the list works](https://docs.aws.amazon.com/ses/latest/dg/sending-email-suppression-list.html)).
+
+A blocked send, and a send that hard-bounced, shows **Fjern fra blokkeringsliste** (Remove from suppression list). It asks for your authenticator code, then for confirmation, and then removes the address from the list. It does not resend: resend the faktura afterwards.
+
+Use it when the address is correct and the bounce will not repeat:
+
+- the member's mailbox was full or disabled and has been fixed;
+- the bounce was caused by a fault on the club's side (for example a mail that was malformed);
+- the member's provider had a temporary fault that it reported as permanent.
+
+Do **not** use it:
+
+- after **Marked as spam**: the member asked not to get the mail, and sending again risks the club's account. The button is not shown for those sends;
+- when the address itself is wrong: correct the address on the member or the faktura instead, then resend;
+- repeatedly for the same address: if it bounces again it goes straight back on the list, and every hard bounce counts against the club with SES.
+
+### Sends from before Amazon SES
+
+Sends from before the switch are matched against the club mail server's own log, which covers about the last month, and can show these statuses as well:
+
+| Status | Meaning | What to do |
+|---|---|---|
 | No delivery record | Brygge recorded the send, but the club's mail server has no trace of it ten minutes later. The mail probably never left. | Resend, and report it — this is how earlier mail faults looked. |
 | Just sent | Sent in the last ten minutes; the log may not show it yet. | Check again shortly. |
 | Older than the mail log | The mail server's log covers about the last month. | — |
 | Log unavailable | This server can't read the mail server's log (or the read failed). | Report it. |
 
-Each send also lists the mail server's events (attempt started, the remote server's answer with its SMTP code, rescheduling) so a technical reader can see exactly what happened.
-
-The mail server's log names the address and the time, not the faktura, so each send is matched to the mail handed over within three minutes of it, to the faktura's current address. Two fakturas mailed to the same member in the same minute can therefore show each other's record (their outcomes are almost always the same), and sends made before the address was changed show as **No delivery record**.
+The mail server's log names the address and the time, not the faktura, so each of these sends is matched to the mail handed over within three minutes of it, to the faktura's current address. Two fakturas mailed to the same member in the same minute can therefore show each other's record, and sends made before the address was changed show as **No delivery record**. These older sends disappear from the log about a month after the switch.
 
 ## What can go wrong — and how to spot it
 

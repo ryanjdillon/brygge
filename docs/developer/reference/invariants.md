@@ -843,6 +843,14 @@ A new group is created just before the faktura built-in and the positions are re
 
 ---
 
+### Removing an address from the SES suppression list is per send, never after a complaint
+
+**Rule (BRY-590):** `POST /admin/financials/invoices/{id}/email-sends/{sendID}/unsuppress` takes the address from the `email_sends` row (club- and faktura-scoped), never from the request, and only for an SES send whose status is `suppressed` or `rejected` with a `Permanent` bounce event (`canUnsuppress`, `handlers/invoices_email_sends.go`). A send in `complaint` never qualifies. The server sends the same decision as `can_unsuppress`; the SPA does not re-derive it. Removal does not resend.
+
+**Failure mode:** an endpoint that takes an address lets any treasurer clear arbitrary addresses (including ones that complained) from the account-wide list; sending again to a complainer or to a dead mailbox raises the bounce/complaint rate SES pauses accounts on.
+
+---
+
 ### The mail log names people and lives 13 months
 
 **Rule (BRY-588):** `email_sends` and `mail_delivery_events` hold recipient addresses, which are personal data with no bookkeeping obligation (the faktura is the record; the log only shows whether it arrived). Rows are deleted 13 months after `email_sends.created_at` / `mail_delivery_events.received_at`. Every path that erases a member's identity (`HandleDeleteUser`, `HandleProcessDeletion` in both outcomes, the purge sweep's `purgeOneMember`) calls `accounting.DeleteMemberMailLog` in its transaction **before** the address is overwritten, because it matches sends by `user_id` or by the member's address in their club, and unmatched events (`send_id IS NULL`) by address. The dev-query role sees only masked views: addresses NULL, address-like tokens in `error` / `diagnostic` replaced, `raw` withheld.

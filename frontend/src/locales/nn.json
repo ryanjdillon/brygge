@@ -786,7 +786,7 @@
         "deliveryLog": {
           "title": "Leveringslogg",
           "noRecipient": "Fakturaen har ingen registrert mottakar-e-post.",
-          "helpText": "Éi oppføring for kvar gong Brygge sende fakturaen på e-post: kva e-postserveren til klubben gjorde med han, og kva e-postserveren til mottakaren svara. «Motteken» tyder at serveren til mottakaren tok imot e-posten; om han hamna i innboksen eller i søppelpost, kan ikkje sjåast herifrå. Loggen frå e-postserveren dekkjer om lag den siste månaden.",
+          "helpText": "Éi oppføring for kvar gong Brygge sende fakturaen på e-post, og kva som skjedde med han. Utsendingar via Amazon SES viser leveringsrapporten SES fekk; eldre utsendingar kjem frå loggen til e-postserveren til klubben, som dekkjer om lag den siste månaden. «Motteken» tyder at serveren til mottakaren tok imot e-posten; om han hamna i innboksen eller i søppelpost, kan ikkje sjåast herifrå.",
           "noSends": "Brygge har ikkje sendt denne fakturaen på e-post. Han kan ha vorte sendt frå det førre systemet.",
           "kind": {
             "sent": "Første utsending",
@@ -801,7 +801,14 @@
             "no_record": "Ingen leveringslogg",
             "pending": "Nett sendt",
             "beyond_retention": "Eldre enn e-postloggen",
-            "unavailable": "Loggen er utilgjengeleg"
+            "unavailable": "Loggen er utilgjengeleg",
+            "sending": "Vert send",
+            "submitted": "Levert til e-posttenesta",
+            "failed": "Ikkje sendt",
+            "unknown": "Ukjent utfall",
+            "rejected_temporary": "Gav opp etter nye forsøk",
+            "suppressed": "Blokkert: på blokkeringslista",
+            "complaint": "Merkt som søppelpost"
           },
           "statusHelp": {
             "deferred": "Serveren til mottakaren bad om eit nytt forsøk seinare (til dømes grålisting). E-postserveren prøver igjen av seg sjølv.",
@@ -809,9 +816,37 @@
             "no_record": "E-postserveren har ingen spor av denne utsendinga, så e-posten forlét han truleg aldri. Send fakturaen på nytt, og meld frå om det skjer igjen.",
             "pending": "Sendt for nokre minutt sidan; loggen viser han kanskje ikkje enno.",
             "beyond_retention": "Loggen frå e-postserveren dekkjer berre om lag den siste månaden.",
-            "unavailable": "Loggen frå e-postserveren kan ikkje lesast på denne serveren."
+            "unavailable": "Loggen frå e-postserveren kan ikkje lesast på denne serveren.",
+            "sending": "Brygge leverer e-posten til e-posttenesta. Står han slik i meir enn nokre minutt, vart utsendinga avbroten: spør mottakaren før du sender på nytt.",
+            "submitted": "E-posttenesta har teke imot meldinga; leveringsrapporten kjem vanlegvis innan nokre minutt.",
+            "failed": "E-posttenesta avviste meldinga før ho tok imot ho, så ingenting vart sendt. Send fakturaen på nytt.",
+            "unknown": "Sambandet brot medan meldinga vart levert, så ho kan ha gått ut eller ikkje. Spør mottakaren før du sender på nytt, så ho ikkje kjem to gonger.",
+            "rejected_temporary": "Serveren til mottakaren bad om nye forsøk heilt til Amazon SES gav opp. Sjekk adressa og send på nytt seinare.",
+            "suppressed": "Amazon SES sende ikkje denne e-posten: adressa gav ein hard retur tidlegare (eller mottakaren melde søppelpost), så ho står på blokkeringslista til klubben. Er adressa rett og returen ikkje vil gjenta seg (ein full innboks som er tømd, eller ein feil hos klubben), fjern ho frå lista og send fakturaen på nytt.",
+            "complaint": "Mottakaren merkte e-posten som søppelpost. Ikkje send på nytt, og ikkje fjern adressa frå blokkeringslista; kontakt medlemen på ein annan måte."
           },
-          "nextRetry": "Neste forsøk {time}"
+          "nextRetry": "Neste forsøk {time}",
+          "eventType": {
+            "send": "Motteken av Amazon SES",
+            "delivery": "Levert til serveren til mottakaren",
+            "delivery_delay": "Levering forseinka",
+            "bounce": "Retur",
+            "complaint": "Merkt som søppelpost",
+            "reject": "Avvist av Amazon SES",
+            "rendering_failure": "Kunne ikkje lage meldinga"
+          },
+          "sentTo": "Til {email}",
+          "hardBounceHint": "Ein hard retur set òg adressa på blokkeringslista, så seinare e-post til ho vert blokkert. Rett adressa om ho er feil; var ho rett, fjern ho frå lista før du sender på nytt.",
+          "badgeTitle": "Siste e-post: {status}",
+          "unsuppress": {
+            "button": "Fjern frå blokkeringslista",
+            "confirmTitle": "Fjerne {email} frå blokkeringslista?",
+            "confirmBody": "Amazon SES sender til denne adressa igjen. Gjer dette berre om adressa er rett og returen ikkje vil skje igjen, aldri etter at mottakaren har merkt e-post som søppelpost. Send så fakturaen på nytt.",
+            "confirm": "Fjern",
+            "done": "Fjerna frå blokkeringslista. Send fakturaen på nytt for å levere han.",
+            "notListed": "Adressa stod ikkje på blokkeringslista. Du kan sende fakturaen på nytt.",
+            "failed": "Kunne ikkje fjerne adressa: {error}"
+          }
         },
         "lastReminder": "Sist purring"
       },

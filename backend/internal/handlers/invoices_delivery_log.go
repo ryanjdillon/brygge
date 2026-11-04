@@ -42,16 +42,25 @@ const (
 
 type deliveryLogEvent struct {
 	Timestamp time.Time `json:"timestamp"`
-	Message   string    `json:"message"`
-	Hostname  string    `json:"hostname,omitempty"`
-	SMTPCode  int       `json:"smtp_code,omitempty"`
-	Details   string    `json:"details,omitempty"`
+	// Type is the SES event type (send, delivery, bounce, ...); empty for a
+	// journal event, whose Message is Stalwart's own description.
+	Type     string `json:"type,omitempty"`
+	Subtype  string `json:"subtype,omitempty"`
+	Message  string `json:"message"`
+	Hostname string `json:"hostname,omitempty"`
+	SMTPCode int    `json:"smtp_code,omitempty"`
+	Details  string `json:"details,omitempty"`
 }
 
 // deliveryLogSend is one time Brygge mailed the faktura (first send, resend
 // or reminder) and what the mail server did with it.
 type deliveryLogSend struct {
-	Kind        string             `json:"kind"` // sent | resent | reminder
+	// ID is the email_sends row; empty for a send known only from the
+	// faktura and the audit log (before the send log existed).
+	ID          string             `json:"id,omitempty"`
+	Kind        string             `json:"kind"`                // sent | resent | reminder
+	Provider    string             `json:"provider,omitempty"`  // ses | stalwart, when ID is set
+	Recipient   string             `json:"recipient,omitempty"` // the address this send went to, when ID is set
 	At          time.Time          `json:"at"`
 	Status      string             `json:"status"`
 	QueueID     string             `json:"queue_id,omitempty"`
@@ -61,13 +70,24 @@ type deliveryLogSend struct {
 	OutcomeAt   *time.Time         `json:"outcome_at,omitempty"`
 	NextRetryAt *time.Time         `json:"next_retry_at,omitempty"`
 	Events      []deliveryLogEvent `json:"events"`
+	// CanUnsuppress offers "remove from suppression list" for this send.
+	CanUnsuppress bool `json:"can_unsuppress,omitempty"`
 }
 
 // HandleGetDeliveryLog lists each time the faktura was mailed and what the
-// recipient's mail server answered, read from the mail server's journal
-// through the host's mail-log helper. A send with no matching submission in
-// the journal is reported as no_record, so a mail that never left the host
-// is visible instead of looking like an empty log.
+// recipient's mail server answered.
+//
+// Sends with an email_sends row come from that table: an SES send carries
+// the outcome from its delivery events, a Stalwart send is matched against
+// the mail server's journal. Sends from before the faktura's first row are
+// known only from sent_at and the audit log and are matched against the
+// journal through the host's mail-log helper. A journal send with no
+// matching submission is reported as no_record, so a mail that never left
+// the host is visible instead of looking like an empty log.
+//
+// The journal path is read-only legacy: it goes away with the brygge-mail-log
+// units once every faktura send it could cover is older than the journal
+// keeps (BRY-594).
 func (h *InvoiceHandler) HandleGetDeliveryLog(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -108,27 +128,44 @@ func (h *InvoiceHandler) HandleGetDeliveryLog(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	sends, err := h.invoiceSends(r, invoiceID, claims.ClubID, sentAt)
+	legacy, err := h.invoiceSends(r, invoiceID, claims.ClubID, sentAt)
 	if err != nil {
 		h.log.Error().Err(err).Msg("load invoice sends")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-
-	available := h.mailJournal != nil
-	var events []mailEvent
-	if available {
-		events, err = h.mailJournal.Events(ctx, recipient)
-		if err != nil {
-			h.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("read mail delivery events")
-			available = false
-		}
+	rows, rowEvents, err := h.loadTableSends(ctx, claims.ClubID, invoiceID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("load invoice email sends")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
 	}
-	if available {
-		matchSends(sends, groupSubmissions(events), time.Now())
-	} else {
-		for i := range sends {
-			sends[i].Status = deliveryUnavailable
+	sends, journalIdx := mergeSends(legacy, rows, rowEvents)
+
+	available := true
+	var events []mailEvent
+	if len(journalIdx) > 0 {
+		available = h.mailJournal != nil
+		if available {
+			events, err = h.mailJournal.Events(ctx, recipient)
+			if err != nil {
+				h.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("read mail delivery events")
+				available = false
+			}
+		}
+		journalSends := make([]deliveryLogSend, len(journalIdx))
+		for k, i := range journalIdx {
+			journalSends[k] = sends[i]
+		}
+		if available {
+			matchSends(journalSends, groupSubmissions(events), time.Now())
+		} else {
+			for k := range journalSends {
+				journalSends[k].Status = deliveryUnavailable
+			}
+		}
+		for k, i := range journalIdx {
+			sends[i] = journalSends[k]
 		}
 	}
 
@@ -138,6 +175,7 @@ func (h *InvoiceHandler) HandleGetDeliveryLog(w http.ResponseWriter, r *http.Req
 			map[string]any{
 				"recipient_email":  recipient,
 				"matches_returned": len(events),
+				"logged_sends":     len(rows),
 			})
 	}
 
@@ -178,6 +216,52 @@ func (h *InvoiceHandler) invoiceSends(r *http.Request, invoiceID, clubID string,
 		sends = append(sends, s)
 	}
 	return sends, rows.Err()
+}
+
+// mergeSends joins the journal-era sends (sent_at and audit rows) with the
+// faktura's email_sends rows into one list and returns the indexes of the
+// entries the journal must decide.
+//
+// Once a faktura has rows, the send paths that write them also stamp sent_at
+// and the audit log, so a journal-era send at or after the first row (less
+// the match window, since sent_at can be stamped a moment before the row) is
+// the same mail as a row and is dropped. A Stalwart row (EMAIL_PROVIDER=smtp
+// or the magic-link fallback) is still matched against the journal; an SES
+// row is not.
+func mergeSends(legacy []deliveryLogSend, rows []tableSend, rowEvents map[string][]deliveryLogEvent) ([]deliveryLogSend, []int) {
+	var kept []deliveryLogSend
+	if len(rows) == 0 {
+		kept = legacy
+	} else {
+		cutover := rows[0].createdAt.Add(-sendMatchWindow)
+		for _, s := range legacy {
+			if s.At.Before(cutover) {
+				kept = append(kept, s)
+			}
+		}
+	}
+	var journalIdx []int
+	sends := make([]deliveryLogSend, 0, len(kept)+len(rows))
+	firstSent := false
+	for _, s := range kept {
+		if s.Kind != "reminder" {
+			firstSent = true
+		}
+		journalIdx = append(journalIdx, len(sends))
+		sends = append(sends, s)
+	}
+	for _, row := range rows {
+		kind := deliveryKind(row.kind, !firstSent)
+		if kind != "reminder" {
+			firstSent = true
+		}
+		s, needsJournal := fromTableSend(row, rowEvents[row.id], kind)
+		if needsJournal {
+			journalIdx = append(journalIdx, len(sends))
+		}
+		sends = append(sends, s)
+	}
+	return sends, journalIdx
 }
 
 // matchSends pairs each send with the closest unclaimed submission within

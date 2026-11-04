@@ -52,7 +52,7 @@ keep `moneyGate` (treasurer/admin + fresh step-up).
   every board role can enrol and step up to reach the admin area at all.
 - **Still narrower on read.** `GET /financials/invoices/{id}/pay-link`,
   `GET /financials/users/{id}/pay-link`, `GET …/credit-candidates`,
-  `GET …/delivery-log` (treasurer, admin), `GET /users/export.csv`
+  `GET …/delivery-log`, `GET …/delivery-statuses` (treasurer, admin), `GET /users/export.csv`
   (admin), `GET /financials/export` (treasurer, board, admin; a full payer
   list with names and emails), `GET /audit` (board, admin; actor IPs and
   security events), and every Developer and Site route keep their own
@@ -134,6 +134,8 @@ reads admit any admin viewer (see *Board read access* above).
 | `/admin/broadcast*` † | board, admin | — |
 | **Financials** (`/admin/financials`) † | treasurer, board, admin | — for reads |
 | `POST /financials/invoices/full`, `/bulk`, send, resend, void, **delete**, bulk-reminder, bulk-regenerate-pdf, import/uni24, delivery-log | treasurer, **admin** | ✅ |
+| `POST /financials/invoices/{id}/email-sends/{sendID}/unsuppress` (SES suppression list) | treasurer, **admin** | ✅ |
+| `GET /financials/invoices/delivery-statuses` (list badge; statuses only, no addresses) | treasurer, **admin** | — |
 | **Users** (`/admin/users`) † | board, admin | — for reads |
 | `export.csv` | admin | — |
 | `POST import` (CSV) | admin | ✅ |

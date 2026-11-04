@@ -171,6 +171,44 @@ flags, so the AWS side can be created and verified before any mail moves.
 Stalwart at once. The event worker keeps running while `ses_enabled` is on,
 so events for mail already sent through SES still arrive.
 
+## Leveringslogg and the suppression list
+
+The faktura delivery log (`GET /api/v1/admin/financials/invoices/{id}/delivery-log`)
+reads the faktura's `email_sends` rows (`related_type = 'invoice'`, which covers
+the faktura mail, its resends, reminders and a credit note's own mail) and
+their `mail_delivery_events`. Sends from before the faktura's first row come
+from `sent_at` and the audit log and are matched against the Stalwart journal,
+as are rows with `provider = 'stalwart'`. That journal path is read-only legacy
+and goes away with the `brygge-mail-log` units 35 days after the cutover
+(BRY-594). The list badge (`GET …/invoices/delivery-statuses`) is the latest
+row per faktura, one query for the club, tables only.
+
+SES puts an address on the account-level suppression list after a hard bounce
+or a complaint and then refuses every send to it; the event is a `Bounce` with
+subtype `OnAccountSuppressionList`, stored as status `suppressed`
+([suppression list](https://docs.aws.amazon.com/ses/latest/dg/sending-email-suppression-list.html)).
+A hard bounce caused by our own fault (BRY-586) suppresses a good address, so
+the delivery log offers **Fjern fra blokkeringsliste** on an SES send whose
+status is `suppressed`, or `rejected` with a `Permanent` bounce event. It calls
+`POST …/invoices/{id}/email-sends/{sendID}/unsuppress` (treasurer/admin, fresh
+TOTP), which reads the address from the send row (the client never posts an
+address) and calls SESv2
+[`DeleteSuppressedDestination`](https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_DeleteSuppressedDestination.html)
+with the app user's key; the IAM policy above grants it. `NotFoundException`
+(already off the list) counts as success. Without `SES_REGION` the route
+answers 503. It never resends; the treasurer resends the faktura afterwards.
+Each call is audited as `invoice.recipient_unsuppressed`.
+
+Never remove an address that complained (status `complaint`, which the action
+refuses): sending to it again is what gets an SES account paused.
+
+To do the same by hand (for an address that is not on a faktura send):
+
+```bash
+aws sesv2 get-suppressed-destination --email-address <address> --region eu-north-1
+aws sesv2 delete-suppressed-destination --email-address <address> --region eu-north-1
+```
+
 ## Delivery-event worker
 
 See [backend/internal/sesevents/README.md](../../../backend/internal/sesevents/README.md).

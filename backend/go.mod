@@ -8,6 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.47.5
 	github.com/aws/aws-sdk-go-v2/config v1.33.13
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.20.5
+	github.com/aws/aws-sdk-go-v2/service/sesv2 v1.79.5
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.52.8
 	github.com/boombuler/barcode v1.0.1
 	github.com/danielgtaylor/huma/v2 v2.38.0

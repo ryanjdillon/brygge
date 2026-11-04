@@ -9,6 +9,7 @@ Consumes the delivery events Amazon SES publishes for app mail and records them 
 | `event.go` | SES event-publishing JSON types and `Parse`, which turns one SQS body into per-recipient `Record`s (one per `mail_delivery_events` row). |
 | `status.go` | Event → `email_sends.status` mapping, the rank rule, and the recipient domain class used as a metric attribute. |
 | `store.go` | `Store.Apply` (one transaction per SES event) and `Store.PurgeExpired` (13-month retention). |
+| `suppression.go` | `SuppressionList.Remove`: SESv2 `DeleteSuppressedDestination` for the delivery log's "remove from suppression list" action ([API](https://docs.aws.amazon.com/ses/latest/APIReference-V2/API_DeleteSuppressedDestination.html)); `NotFoundException` is success. `SuppressionAPI` is the interface the tests fake. |
 | `worker.go` | `Worker.Run`: SQS long-poll loop, delete-after-commit, backoff, pause while the store is down, DLQ depth sampling. `SQSAPI` and `EventStore` are the small interfaces the tests fake. |
 | `metrics.go` | `brygge.email.delivery`, `brygge.ses.events.received`, `brygge.ses.dlq.messages`. |
 | `testdata/` | Event bodies modelled on the [documented SES examples](https://docs.aws.amazon.com/ses/latest/dg/event-publishing-retrieving-sns-examples.html), with synthetic addresses and the `send_id` / `kind` tags. |
