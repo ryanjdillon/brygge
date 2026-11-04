@@ -101,7 +101,7 @@ The row's id is the SES `send_id` message tag, so delivery events find it direct
 
 ## Invariants
 
-- Sender lifecycle: stamp DB first (e.g. `sent_at`), then send. If send fails, roll back — unless the error is `ErrDeliveryAmbiguous`, where the recipient may have the mail and the stamp stays (the faktura send endpoint answers 502 "email delivery outcome unknown"). The reverse order leaves the recipient with an email and the DB thinking it never went out.
+- Sender lifecycle: stamp DB first (e.g. `sent_at`), then send. If send fails, roll back — unless the error is `ErrDeliveryAmbiguous`, where the recipient may have the mail and the stamp stays: the faktura send endpoint then audits and books the faktura as issued and answers 502 "email delivery outcome unknown"; the resend endpoint answers the same message instead of "failed to send email". The reverse order leaves the recipient with an email and the DB thinking it never went out.
 - The `email_sends` row is written before the relay is contacted (before `DATA`), so a crash mid-send leaves a `sending` row rather than no trace.
 - **`ErrDeliveryAmbiguous` is never retried automatically.** The relay may hold the message, so a retry can deliver it twice. `broadcast.Worker` fails such a delivery at once instead of returning it to `pending`; the magic-link fallback does not fire on it. A person decides (Leveringslogg / requeue), knowing the first copy may arrive.
 - A definite SMTP reply to the end of DATA (4xx/5xx) is a refusal, not ambiguity: SES rejects unverified senders and sandbox recipients there, and that is exactly when the magic-link fallback must fire.
