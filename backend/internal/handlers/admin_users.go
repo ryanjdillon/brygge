@@ -1378,7 +1378,8 @@ type csvImportRow struct {
 // backwards compat). Optional: last_name, phone, address_line,
 // postal_code, city, is_local, roles (semicolon-separated, e.g.
 // "member;board"). Each row commits in its own transaction so a single
-// bad row doesn't poison the batch.
+// bad row doesn't poison the batch. The file must be UTF-8, with ',' or
+// ';' between columns (readCSVUpload).
 func (h *AdminUsersHandler) HandleImportUsersCSV(w http.ResponseWriter, r *http.Request) { //nolint:cyclop // per-row CSV validation in one pass; split tracked in BRY-424
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -1399,37 +1400,20 @@ func (h *AdminUsersHandler) HandleImportUsersCSV(w http.ResponseWriter, r *http.
 	}
 	defer file.Close()
 
-	reader := csv.NewReader(file)
-	reader.TrimLeadingSpace = true
-	reader.FieldsPerRecord = -1
-
-	header, err := reader.Read()
+	reader, err := readCSVUpload(file)
 	if err != nil {
-		Error(w, http.StatusBadRequest, "empty CSV or unreadable header")
+		Error(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	idx := map[string]int{}
-	for i, name := range header {
-		idx[strings.ToLower(strings.TrimSpace(name))] = i
-	}
-	if _, ok := idx["email"]; !ok {
+	if !reader.has("email") {
 		Error(w, http.StatusBadRequest, `missing required column "email"`)
 		return
 	}
-	_, hasFirst := idx["first_name"]
-	_, hasFull := idx["full_name"]
-	if !hasFirst && !hasFull {
+	if !reader.has("first_name") && !reader.has("full_name") {
 		Error(w, http.StatusBadRequest, `missing required column "first_name" (or legacy "full_name")`)
 		return
 	}
-
-	get := func(record []string, col string) string {
-		i, ok := idx[col]
-		if !ok || i >= len(record) {
-			return ""
-		}
-		return strings.TrimSpace(record[i])
-	}
+	get := reader.get
 
 	results := []csvImportRow{}
 	created := 0
