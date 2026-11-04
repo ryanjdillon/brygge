@@ -340,14 +340,20 @@ func (h *VolunteerHandler) HandleAdjustHours(w http.ResponseWriter, r *http.Requ
 	}
 	defer tx.Rollback(ctx)
 
-	_, err = tx.Exec(ctx,
+	// The participant updates below name the task by id alone, so the task
+	// update doubles as the club check: no row means another club's task.
+	tag, err := tx.Exec(ctx,
 		`UPDATE tasks SET actual_hours = $1, updated_at = now()
-		 WHERE id = $2 AND club_id = $3`,
+		 WHERE id::text = $2 AND club_id = $3`,
 		req.ActualHours, taskID, claims.ClubID,
 	)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to set actual hours")
 		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		Error(w, http.StatusNotFound, "task not found")
 		return
 	}
 
