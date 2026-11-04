@@ -47,7 +47,9 @@ func (u *csvUpload) get(record []string, col string) string {
 // is parsed. A leading BOM is dropped: Excel's "CSV UTF-8" writes one, and
 // left in place it becomes part of the first column's name, so that column is
 // never found. The delimiter is ',' or ';', whichever the header line uses
-// more: spreadsheets in locales with a decimal comma save with ';'.
+// more: spreadsheets in locales with a decimal comma save with ';'. Lone CR
+// line endings (classic Mac, some Numbers exports) become LF, since
+// encoding/csv only ends a record on LF and would read the file as one row.
 func readCSVUpload(r io.Reader) (*csvUpload, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
@@ -57,15 +59,11 @@ func readCSVUpload(r io.Reader) (*csvUpload, error) {
 	if !utf8.Valid(data) {
 		return nil, errCSVNotUTF8
 	}
+	data = bytes.ReplaceAll(data, []byte("\r\n"), []byte("\n"))
+	data = bytes.ReplaceAll(data, []byte("\r"), []byte("\n"))
 
-	firstLine := data
-	if i := bytes.IndexByte(data, '\n'); i >= 0 {
-		firstLine = data[:i]
-	}
 	reader := csv.NewReader(bytes.NewReader(data))
-	if bytes.Count(firstLine, []byte{';'}) > bytes.Count(firstLine, []byte{','}) {
-		reader.Comma = ';'
-	}
+	reader.Comma = sniffCSVDelimiter(data)
 	reader.TrimLeadingSpace = true
 	reader.FieldsPerRecord = -1
 
@@ -78,4 +76,31 @@ func readCSVUpload(r io.Reader) (*csvUpload, error) {
 		cols[strings.ToLower(strings.TrimSpace(name))] = i
 	}
 	return &csvUpload{Reader: reader, cols: cols}, nil
+}
+
+// sniffCSVDelimiter picks ';' when the header record holds more semicolons
+// than commas outside quoted fields, else ','. Quoted text is skipped so a
+// column name like "Navn, etternavn" does not outvote the real delimiter, and
+// the header ends at the first newline outside quotes.
+func sniffCSVDelimiter(data []byte) rune {
+	inQuotes := false
+	commas, semicolons := 0, 0
+scan:
+	for _, b := range data {
+		switch {
+		case b == '"':
+			inQuotes = !inQuotes
+		case inQuotes:
+		case b == '\n':
+			break scan
+		case b == ',':
+			commas++
+		case b == ';':
+			semicolons++
+		}
+	}
+	if semicolons > commas {
+		return ';'
+	}
+	return ','
 }
