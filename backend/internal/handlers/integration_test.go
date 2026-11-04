@@ -658,6 +658,102 @@ func TestIntegration_GetBookingOwnershipAndClubScope(t *testing.T) {
 	}
 }
 
+// POST /bookings/{id}/cancel answers a caller who may not read the
+// booking (another member, another club's staff) with the same 404 body
+// as a missing booking, and leaves the booking as it was. A caller who
+// reads the booking but may not cancel it still gets 403.
+func TestIntegration_CancelBookingOwnershipAndClubScope(t *testing.T) {
+	t.Parallel()
+	env := setupIntegrationEnv(t)
+	bh := env.bookingsHandler()
+	ctx := context.Background()
+
+	ownerID, _ := testutil.SeedUser(t, env.db, env.clubID, []string{"member"})
+	otherID, _ := testutil.SeedUser(t, env.db, env.clubID, []string{"member"})
+	treasurerID, _ := testutil.SeedUser(t, env.db, env.clubID, []string{"treasurer"})
+
+	otherClubID := testutil.SeedClub(t, env.db)
+	otherClubBoardID, _ := testutil.SeedUser(t, env.db, otherClubID, []string{"board"})
+
+	var resourceID string
+	if err := env.db.QueryRow(ctx,
+		`INSERT INTO resources (club_id, type, name, description, capacity, price_per_unit, unit)
+		 VALUES ($1, 'guest_slip', 'Guest Slip A', '', 1, 250, 'night')
+		 RETURNING id`,
+		env.clubID,
+	).Scan(&resourceID); err != nil {
+		t.Fatalf("seeding resource: %v", err)
+	}
+
+	var bookingID string
+	if err := env.db.QueryRow(ctx,
+		`INSERT INTO bookings (resource_id, user_id, club_id, start_date, end_date)
+		 VALUES ($1, $2, $3, now() + interval '7 days', now() + interval '9 days')
+		 RETURNING id`,
+		resourceID, ownerID, env.clubID,
+	).Scan(&bookingID); err != nil {
+		t.Fatalf("seeding booking: %v", err)
+	}
+
+	r := chi.NewRouter()
+	r.Group(func(r chi.Router) {
+		r.Use(testAuthMiddleware)
+		r.Post("/bookings/{bookingID}/cancel", bh.HandleCancelBooking)
+	})
+
+	cancel := func(id, token string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/bookings/"+id+"/cancel", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		r.ServeHTTP(rec, req)
+		return rec
+	}
+	status := func(t *testing.T) string {
+		t.Helper()
+		var s string
+		if err := env.db.QueryRow(ctx, `SELECT status FROM bookings WHERE id = $1`, bookingID).Scan(&s); err != nil {
+			t.Fatalf("reading booking status: %v", err)
+		}
+		return s
+	}
+
+	missing := cancel("00000000-0000-4000-8000-000000000000", env.generateToken(otherID, []string{"member"}))
+	assertStatus(t, missing, http.StatusNotFound)
+
+	for _, tc := range []struct {
+		name  string
+		token string
+	}{
+		{"other member", env.generateToken(otherID, []string{"member"})},
+		{"other club's board", generateTestToken(otherClubBoardID, otherClubID, []string{"board"})},
+		{"other club's admin", generateTestToken(otherClubBoardID, otherClubID, []string{"admin"})},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := cancel(bookingID, tc.token)
+			assertStatus(t, rec, http.StatusNotFound)
+			if rec.Body.String() != missing.Body.String() {
+				t.Fatalf("refusal differs from a missing booking: got %q, missing gives %q",
+					rec.Body.String(), missing.Body.String())
+			}
+			if got := status(t); got == "cancelled" {
+				t.Fatal("a refused cancel changed the booking")
+			}
+		})
+	}
+
+	rec := cancel(bookingID, env.generateToken(treasurerID, []string{"treasurer"}))
+	assertStatus(t, rec, http.StatusForbidden)
+	if got := status(t); got == "cancelled" {
+		t.Fatal("a refused cancel changed the booking")
+	}
+
+	rec = cancel(bookingID, env.generateToken(ownerID, []string{"member"}))
+	assertStatus(t, rec, http.StatusOK)
+	if got := status(t); got != "cancelled" {
+		t.Fatalf("expected the owner's cancel to stick, status %q", got)
+	}
+}
+
 // ---------- Test 9: Accounting — Seed Kontoplan + CRUD ----------
 
 func (e *integrationEnv) accountingHandler() *AccountingHandler {

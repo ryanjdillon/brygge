@@ -140,3 +140,43 @@ func TestHandleConfirmBookingRequiresStyre(t *testing.T) {
 		t.Errorf("expected insufficient permissions error, got %q", resp.Error)
 	}
 }
+
+// A booking id that is not a uuid answers the same 404 as a missing
+// booking on every /bookings/{bookingID} route, not the 500 Postgres's
+// uuid cast would give.
+func TestHandleBookingMalformedIDNotFound(t *testing.T) {
+	h := newTestBookingsHandler(t)
+
+	r := chi.NewRouter()
+	r.Group(func(r chi.Router) {
+		r.Use(testAuthMiddleware)
+		r.Get("/bookings/{bookingID}", h.HandleGetBooking)
+		r.Post("/bookings/{bookingID}/cancel", h.HandleCancelBooking)
+		r.Post("/bookings/{bookingID}/confirm", h.HandleConfirmBooking)
+	})
+
+	token := generateTestToken("user-1", "club-1", []string{"board"})
+	for _, tc := range []struct{ method, path string }{
+		{http.MethodGet, "/bookings/not-a-uuid"},
+		{http.MethodPost, "/bookings/not-a-uuid/cancel"},
+		{http.MethodPost, "/bookings/not-a-uuid/confirm"},
+	} {
+		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, nil)
+			req.Header.Set("Authorization", authHeader(token))
+			rec := httptest.NewRecorder()
+			r.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusNotFound {
+				t.Fatalf("expected status %d, got %d; body: %s", http.StatusNotFound, rec.Code, rec.Body.String())
+			}
+			var resp errorResponse
+			if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+				t.Fatalf("failed to decode response: %v", err)
+			}
+			if resp.Error != "booking not found" {
+				t.Errorf("expected the missing-booking body, got %q", resp.Error)
+			}
+		})
+	}
+}

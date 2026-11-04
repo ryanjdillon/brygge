@@ -107,7 +107,11 @@ live in the handlers.
 and the club's admin viewers, every board role and admin, as on
 `/admin/bookings` (`canReadBooking`); everyone else, other clubs
 included, gets 404, because the row carries the guest's
-email and phone (BRY-551).
+email and phone (BRY-551). `POST /bookings/{id}/cancel` answers the
+same 404 to everyone `GET` refuses; of the callers who may read the
+booking, only its owner, board and harbor_master may cancel it, and the
+rest get 403 (BRY-596). A booking id that is not a uuid is 404 on every
+`/bookings/{id}` route.
 
 ## Role-gated, non-admin (`AuthenticateSession` + `RequireRole`)
 
