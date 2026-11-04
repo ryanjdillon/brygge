@@ -76,8 +76,11 @@ jobs:
           -c "ALTER SYSTEM SET synchronous_commit = off"
           -c "ALTER SYSTEM SET full_page_writes = off"
           -c "SELECT pg_reload_conf()"
+      # covermode=set (the default without -race): atomic counters only matter
+      # under the race detector, and the summary below reports statement
+      # coverage, which set gives exactly.
       - name: Run tests with coverage
-        run: cd backend && go test -timeout 20m -coverprofile=coverage.out -covermode=atomic ./...
+        run: cd backend && go test -timeout 20m -coverprofile=coverage.out -covermode=set ./...
       - name: Coverage summary
         run: |
           cd backend
