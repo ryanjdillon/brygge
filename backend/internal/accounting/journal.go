@@ -376,7 +376,8 @@ func (s *Service) VoidJournalEntry(ctx context.Context, clubID, entryID, voidedB
 // refused with ErrBankLinkedEntry for the same reason: the row would stay
 // booked against a voided entry, its faktura paid and the payout cleared,
 // so it is undone from Tildel. A Vipps settlement's fee or payout entry is
-// refused with VippsSettlementEntryError. Vipps charge entries are refused
+// refused with VippsSettlementEntryError. A reversal bilag (one whose
+// reverses_entry_id is set) is refused with ReversalEntryError. Vipps charge entries are refused
 // only once the charge's settlement is cleared
 // (ErrVippsChargeInClearedSettlement): an order-booked Vipps charge is
 // otherwise undone by voiding its bilag here (UnassignVippsCharge refuses it),
@@ -421,18 +422,19 @@ func (s *Service) VoidLedgerEntry(ctx context.Context, clubID, entryID, voidedBy
 	}
 
 	var sourceTable, status string
+	var reversesID *string
 	err = tx.QueryRow(ctx,
-		`SELECT COALESCE(source_table, ''), status FROM journal_entries WHERE id = $1 AND club_id = $2 FOR UPDATE`,
+		`SELECT COALESCE(source_table, ''), status, reverses_entry_id::text FROM journal_entries WHERE id = $1 AND club_id = $2 FOR UPDATE`,
 		entryID, clubID,
-	).Scan(&sourceTable, &status)
+	).Scan(&sourceTable, &status, &reversesID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrEntryNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("getting entry: %w", err)
 	}
-	if sourceTable == "stripe_balance_transactions" {
-		return nil, ErrStripeSourcedEntry
+	if err := refuseReversalOrStripeEntryTx(ctx, tx, clubID, sourceTable, reversesID); err != nil {
+		return nil, err
 	}
 	var bankLinked bool
 	if err := tx.QueryRow(ctx,
@@ -467,6 +469,48 @@ func (s *Service) VoidLedgerEntry(ctx context.Context, clubID, entryID, voidedBy
 		return nil, fmt.Errorf("committing transaction: %w", err)
 	}
 	return reversal, nil
+}
+
+// ReversalEntryError is a ledger void of a reversal bilag, the entry a void
+// or a reclassification posted to cancel another. Voiding it would re-instate
+// the original booking and leave a void of a void with no explicit link, so a
+// correction is a new entry instead. The handlers answer 409 reversal_entry.
+// Its text is a full Norwegian sentence.
+type ReversalEntryError struct {
+	// OriginalID and OriginalNumber identify the entry the reversal cancels.
+	OriginalID     string
+	OriginalNumber int
+}
+
+func (e *ReversalEntryError) Error() string {
+	return fmt.Sprintf("Bilaget er reverseringen av bilag #%d og kan ikke annulleres. "+
+		"Annullering ville gjeninnsatt det opprinnelige bilaget; bokfør i stedet et nytt korrigerende bilag.",
+		e.OriginalNumber)
+}
+
+// Is makes errors.Is(err, ErrReversalEntry) hold.
+func (e *ReversalEntryError) Is(target error) bool { return target == ErrReversalEntry }
+
+// ErrReversalEntry matches a *ReversalEntryError.
+var ErrReversalEntry = errors.New("the entry reverses another entry")
+
+// refuseReversalOrStripeEntryTx applies the two refusals that read the
+// entry's own columns: a reversal bilag (reversesID set) and an entry that
+// books a Stripe balance transaction.
+func refuseReversalOrStripeEntryTx(ctx context.Context, tx pgx.Tx, clubID, sourceTable string, reversesID *string) error {
+	if reversesID != nil {
+		e := &ReversalEntryError{OriginalID: *reversesID}
+		if err := tx.QueryRow(ctx,
+			`SELECT entry_number FROM journal_entries WHERE id = $1 AND club_id = $2`, e.OriginalID, clubID,
+		).Scan(&e.OriginalNumber); err != nil {
+			return fmt.Errorf("reading the reversed entry: %w", err)
+		}
+		return e
+	}
+	if sourceTable == "stripe_balance_transactions" {
+		return ErrStripeSourcedEntry
+	}
+	return nil
 }
 
 // voidJournalEntryTx is VoidJournalEntry inside the caller's transaction, so
@@ -551,12 +595,12 @@ func voidJournalEntryTx(ctx context.Context, tx pgx.Tx, clubID, entryID, voidedB
 	var reversal JournalEntry
 	err = insertWithNextEntryNumber(ctx, tx, entry.ClubID, entry.FiscalPeriodID, func(nextNumber int) error {
 		return tx.QueryRow(ctx,
-			`INSERT INTO journal_entries (club_id, fiscal_period_id, entry_number, entry_date, description, status, source, created_by, posted_by, posted_at)
-			 VALUES ($1, $2, $3, $4, $5, 'posted', 'manual', $6, $6, now())
+			`INSERT INTO journal_entries (club_id, fiscal_period_id, entry_number, entry_date, description, status, source, created_by, posted_by, posted_at, reverses_entry_id)
+			 VALUES ($1, $2, $3, $4, $5, 'posted', 'manual', $6, $6, now(), $7)
 			 RETURNING id, club_id, fiscal_period_id, entry_number, entry_date::text, description, status, source, created_by, posted_by, posted_at, created_at, `+automaticEntrySQL,
 			entry.ClubID, entry.FiscalPeriodID, nextNumber, entry.EntryDate,
 			fmt.Sprintf("Reversering av bilag #%d: %s", entry.EntryNumber, entry.Description),
-			voidedBy,
+			voidedBy, entryID,
 		).Scan(
 			&reversal.ID, &reversal.ClubID, &reversal.FiscalPeriodID, &reversal.EntryNumber,
 			&reversal.EntryDate, &reversal.Description, &reversal.Status, &reversal.Source,

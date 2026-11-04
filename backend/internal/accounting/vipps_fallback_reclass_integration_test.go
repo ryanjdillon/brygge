@@ -202,6 +202,20 @@ func TestFallbackReclassMovesRevenueInClearedSettlement(t *testing.T) {
 	if l := f.entryLines(t, repl); len(l) != 2 || l[vippsClearingAccountCode] != 800 || l["3200"] != -800 {
 		t.Errorf("replacement lines = %v, want DR 2900 / CR 3200 for 800", l)
 	}
+	// The reclassification's reversal cannot be voided from the ledger: that
+	// would re-instate the 3900 booking beside the replacement.
+	var reversalID string
+	if err := f.club.Pool.QueryRow(ctx,
+		`SELECT id::text FROM journal_entries WHERE club_id = $1 AND reverses_entry_id = $2`, f.club.ID, guestOld,
+	).Scan(&reversalID); err != nil {
+		t.Fatalf("reversal of the reclassified bilag: %v", err)
+	}
+	if _, err := f.svc.VoidLedgerEntry(ctx, f.club.ID, reversalID, f.club.Treasurer.ID); !errors.Is(err, ErrReversalEntry) {
+		t.Errorf("ledger void of the reclassification's reversal = %v, want ErrReversalEntry", err)
+	}
+	if f.entryStatus(t, guestOld) != "voided" {
+		t.Errorf("original is %s after the refused void, want voided", f.entryStatus(t, guestOld))
+	}
 	var desc string
 	var rule *string
 	if err := f.club.Pool.QueryRow(ctx,

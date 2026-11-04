@@ -499,6 +499,13 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   who, when and which fields, not the values. Rows already in the new form and
   rows whose details are not an object are left alone, so it is idempotent; its
   down is a no-op.
+- **Reversal link.** 000131 (BRY-558) adds `journal_entries.reverses_entry_id`
+  (nullable, self-referencing, partial index), set on the reversal bilag a void
+  posts (`voidJournalEntryTx`, so the reclassifications' reversals too). The
+  ledger void refuses an entry that carries it. The backfill links a reversal
+  only when its description names exactly one voided entry of the same club and
+  period; older reversals that do not match stay unlinked. Exposed in the
+  `dev_masked.journal_entries` view (an id, not free text).
 - **Automatic booking schema.** 000129 (BRY-554, BRY-563, ACC-13) carries all of
   the automatic-booking schema, so later changes need no migration.
   `users.kind` (`person` | `system`, default `person`, CHECK `users_kind_check`)

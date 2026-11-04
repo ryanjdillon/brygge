@@ -612,6 +612,15 @@ func (h *AccountingHandler) HandleVoidJournalEntry(w http.ResponseWriter, r *htt
 				"reason": "Bilaget er bokført fra en bankrad. Angre det i Bank og Vipps → Tildel → Angre, " +
 					"så legges raden tilbake i køen og fakturaen eller utbetalingen åpnes igjen.",
 			})
+		case errors.Is(err, accounting.ErrReversalEntry):
+			h.log.Info().Err(err).Str("entry_id", entryID).Msg("journal void refused: reversal entry")
+			body := map[string]any{"error": err.Error(), "code": "reversal_entry"}
+			var rev *accounting.ReversalEntryError
+			if errors.As(err, &rev) {
+				body["original_entry_id"] = rev.OriginalID
+				body["original_entry_number"] = rev.OriginalNumber
+			}
+			JSON(w, http.StatusConflict, body)
 		case errors.Is(err, accounting.ErrVippsSettlementEntry):
 			h.log.Info().Err(err).Str("entry_id", entryID).Msg("journal void refused: vipps settlement entry")
 			JSON(w, http.StatusConflict, map[string]string{"error": err.Error(), "code": "vipps_settlement_entry"})
