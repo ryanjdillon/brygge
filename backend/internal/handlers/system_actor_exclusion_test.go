@@ -558,7 +558,7 @@ func TestIntegration_SystemActorMagicLinkVerifyIssuesNoSession(t *testing.T) {
 
 // Every place that takes a user id from the request and stores it: the system
 // actor and a user of another club are both refused with 404, and nothing is
-// written. Each case but the slip one ends with a control showing a person of the club is accepted.
+// written. Each case ends with a control showing a person of the club is accepted.
 func TestIntegration_AssigneeIDsMustBePeopleOfTheClub(t *testing.T) {
 	t.Parallel()
 	e := newSystemActorEnv(t)
@@ -578,13 +578,18 @@ func TestIntegration_AssigneeIDsMustBePeopleOfTheClub(t *testing.T) {
 	}
 
 	t.Run("slip assignment", func(t *testing.T) {
-		h := NewAdminSlipsHandler(e.db, e.cfg, zerolog.Nop())
-		var slipID string
+		h := NewAdminUsersHandler(e.db, e.cfg, zerolog.Nop())
+		var slipID, boatID string
 		if err := e.db.QueryRow(ctx, `INSERT INTO slips (club_id, number) VALUES ($1, 'A1') RETURNING id`, e.clubID).Scan(&slipID); err != nil {
 			t.Fatalf("seed slip: %v", err)
 		}
+		if err := e.db.QueryRow(ctx, `INSERT INTO boats (user_id, club_id, name) VALUES ($1, $2, 'Synthetic') RETURNING id`, person, e.clubID).Scan(&boatID); err != nil {
+			t.Fatalf("seed boat: %v", err)
+		}
+		const pattern = "/users/{userID}/boats/{boatID}/slip"
+		body := `{"slip_id":"` + slipID + `"}`
 		for _, r := range refused {
-			rec := e.do(t, http.MethodPost, "/slips/{slipID}/assign", "/slips/"+slipID+"/assign", h.HandleAssignSlip, `{"user_id":"`+r.id+`"}`)
+			rec := e.do(t, http.MethodPut, pattern, "/users/"+r.id+"/boats/"+boatID+"/slip", h.HandleSetUserBoatSlip, body)
 			if rec.Code != http.StatusNotFound {
 				t.Errorf("%s: assign = %d, want 404; body: %s", r.name, rec.Code, rec.Body.String())
 			}
@@ -595,9 +600,9 @@ func TestIntegration_AssigneeIDsMustBePeopleOfTheClub(t *testing.T) {
 		if n := count(`SELECT count(*) FROM slips WHERE id = $1 AND status = 'vacant'`, slipID); n != 1 {
 			t.Errorf("the slip left the vacant state")
 		}
-		// No control for a person here: since migration 000020 an active
-		// assignment needs a boat_id (CHECK active_assignment_has_boat) and this
-		// handler inserts none, so it answers 500 for everyone it accepts.
+		if rec := e.do(t, http.MethodPut, pattern, "/users/"+person+"/boats/"+boatID+"/slip", h.HandleSetUserBoatSlip, body); rec.Code != http.StatusOK {
+			t.Errorf("person: assign = %d, want 200; body: %s", rec.Code, rec.Body.String())
+		}
 	})
 
 	var projectID, taskID, foreignTaskID string

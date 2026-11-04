@@ -1126,7 +1126,6 @@ func main() {
 						r.Post("/", adminSlipsHandler.HandleCreateSlip)
 						r.Put("/{slipID}", adminSlipsHandler.HandleUpdateSlip)
 						r.Delete("/{slipID}", adminSlipsHandler.HandleDeleteSlip)
-						r.Post("/{slipID}/assign", adminSlipsHandler.HandleAssignSlip)
 						r.Put("/{slipID}/assignment-type", adminSlipsHandler.HandleSetSlipAssignmentType)
 						r.Post("/{slipID}/release", adminSlipsHandler.HandleReleaseSlip)
 					})
