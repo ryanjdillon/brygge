@@ -25,7 +25,7 @@ const inputId = props.id ?? 'dock-filter'
     <select
       :id="inputId"
       :value="modelValue"
-      class="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm"
+      class="min-h-11 rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm md:min-h-0"
       :title="t('common.dock')"
       @change="emit('update:modelValue', ($event.target as HTMLSelectElement).value)"
     >

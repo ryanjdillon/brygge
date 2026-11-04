@@ -949,7 +949,7 @@ async function submitImport() {
         <select
           id="member-status-filter"
           v-model="statusFilter"
-          class="rounded-md border-gray-300 py-1.5 text-sm text-gray-700 focus:border-brand-500 focus:ring-brand-500"
+          class="min-h-11 rounded-md border-gray-300 py-1.5 text-sm text-gray-700 focus:border-brand-500 focus:ring-brand-500 md:min-h-0"
           @change="onStatusFilterChange"
         >
           <option value="">{{ t('admin.users.statusActive') }}</option>
