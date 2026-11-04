@@ -35,9 +35,15 @@ export function formatNOK(
 // formatDateMedium — date with short month (e.g. 17. jun. 2026)
 // formatDateTime — date + time          (e.g. 17.06.2026, 14:30)
 
-function parseDate(iso: string | null | undefined): Date | null {
+const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/
+
+// A bare YYYY-MM-DD is a calendar date, but `new Date('YYYY-MM-DD')` reads it
+// as UTC midnight, which renders as the previous day west of UTC. Build it in
+// local time instead; full timestamps keep the native parser.
+export function parseDate(iso: string | null | undefined): Date | null {
   if (!iso) return null
-  const d = new Date(iso)
+  const m = DATE_ONLY.exec(iso)
+  const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(iso)
   return Number.isNaN(d.getTime()) ? null : d
 }
 
