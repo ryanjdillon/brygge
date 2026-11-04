@@ -131,27 +131,49 @@ async function send(dryRun: boolean): Promise<Response | null> {
   return totpAwareFetch('/api/v1/admin/users/harbor-shares/import', { method: 'POST', credentials: 'include', body: fd })
 }
 
-async function readError(res: Response) {
+async function readBody(res: Response): Promise<{ error?: string; code?: string } | null> {
+  return res.json().catch(() => null)
+}
+
+function errorText(res: Response, body: { error?: string } | null) {
   // totpAwareFetch already re-prompted on a stale step-up; a lingering 403
   // means the prompt was dismissed.
   if (res.status === 403) return t('admin.users.importFreshRequired')
-  const body = await res.json().catch(() => null)
   return body?.error ?? t('admin.users.importError')
 }
 
-async function runPreview() {
+// A row the server now matches by itself ignores its pick on a dry run and
+// refuses it on apply, so the pick is forgotten here.
+function dropIgnoredResolutions(result: Result) {
+  const dropped = (result.rows ?? []).filter((r) => r.resolution_dropped).map((r) => r.row)
+  if (dropped.length === 0) return
+  const nextResolutions = { ...resolutions.value }
+  const nextPicks = { ...searchPicks.value }
+  for (const row of dropped) {
+    delete nextResolutions[row]
+    delete nextPicks[row]
+  }
+  resolutions.value = nextResolutions
+  searchPicks.value = nextPicks
+}
+
+async function runPreview(): Promise<boolean> {
   error.value = null
   busy.value = true
   try {
     const res = await send(true)
-    if (!res) return
+    if (!res) return false
     if (!res.ok) {
-      error.value = await readError(res)
-      return
+      error.value = errorText(res, await readBody(res))
+      return false
     }
-    preview.value = (await res.json()) as Result
+    const result = (await res.json()) as Result
+    dropIgnoredResolutions(result)
+    preview.value = result
+    return true
   } catch {
     error.value = t('admin.users.importError')
+    return false
   } finally {
     busy.value = false
   }
@@ -165,17 +187,15 @@ async function apply() {
   try {
     const res = await send(false)
     if (!res) return
-    if (res.status === 409) {
-      const body = await res.json().catch(() => null)
-      if (body?.code === 'plan_changed') {
+    if (!res.ok) {
+      const body = await readBody(res)
+      if (res.status === 409 && body?.code === 'plan_changed') {
         notice.value = t('admin.users.harborShareImport.planChanged')
         busy.value = false
         await runPreview()
         return
       }
-    }
-    if (!res.ok) {
-      error.value = await readError(res)
+      error.value = errorText(res, body)
       return
     }
     applied.value = (await res.json()) as Result
@@ -187,21 +207,28 @@ async function apply() {
   }
 }
 
-async function resolve(row: number, userId: string | null) {
+// Each pick re-runs the preview. A pick the server refuses is reverted, so it
+// does not ride along on every later preview and apply.
+async function resolve(row: number, userId: string | null, hit: MemberHit | null = null) {
+  const prevResolutions = resolutions.value
+  const prevPicks = searchPicks.value
   const next = { ...resolutions.value }
   if (userId) next[row] = userId
   else delete next[row]
   resolutions.value = next
-  await runPreview()
+  searchPicks.value = { ...searchPicks.value, [row]: hit }
+  if (!(await runPreview())) {
+    resolutions.value = prevResolutions
+    searchPicks.value = prevPicks
+  }
 }
 
 async function onSearchPick(row: number, hit: MemberHit | null) {
-  searchPicks.value = { ...searchPicks.value, [row]: hit }
-  if (hit) await resolve(row, hit.id)
+  if (hit) await resolve(row, hit.id, hit)
+  else searchPicks.value = { ...searchPicks.value, [row]: null }
 }
 
 async function undoResolution(row: number) {
-  searchPicks.value = { ...searchPicks.value, [row]: null }
   await resolve(row, null)
 }
 
@@ -303,6 +330,7 @@ Kari Nordmann;kari@example.com;ja;15.03.2026</pre>
                     v-else-if="r.outcome === 'unmatched'"
                     :model-value="searchPicks[r.row] ?? null"
                     :placeholder="t('admin.users.harborShareImport.searchMember')"
+                    status="all"
                     @update:model-value="(m: MemberHit | null) => onSearchPick(r.row, m)"
                   />
                   <button
@@ -356,6 +384,7 @@ Kari Nordmann;kari@example.com;ja;15.03.2026</pre>
                 class="mt-2"
                 :model-value="searchPicks[r.row] ?? null"
                 :placeholder="t('admin.users.harborShareImport.searchMember')"
+                status="all"
                 @update:model-value="(m: MemberHit | null) => onSearchPick(r.row, m)"
               />
               <button

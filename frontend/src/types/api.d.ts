@@ -912,7 +912,7 @@ export interface paths {
         put?: never;
         /**
          * Import harbor share (moloandel) ownership for existing members from a CSV
-         * @description multipart/form-data: `file` (UTF-8 CSV, ',' or ';', 8 MB cap; columns harbor_share_owner, optional harbor_share_paid_on, and email and/or name or first_name + last_name), `dry_run` (default true), `resolutions` (JSON {row: user_id} for ambiguous or unmatched rows) and, to apply, the dry run's `plan_token`. Never overwrites or clears. 409 with code plan_changed when members changed since the preview. Site-admin role and a fresh TOTP step-up required.
+         * @description multipart/form-data: `file` (UTF-8 CSV, ',' or ';', 8 MB cap; columns harbor_share_owner, optional harbor_share_paid_on, and email and/or name or first_name + last_name), `dry_run` (default true), `resolutions` (JSON {row: user_id} for ambiguous or unmatched rows) and, to apply, the dry run's `plan_token`. At most 5,000 data rows. A resolution for an error row is a 400; one for a row that matches by itself is a 400 on apply and flagged resolution_dropped on a dry run. Never overwrites or clears. 409 with code plan_changed when members changed since the preview. Site-admin role and a fresh TOTP step-up required.
          */
         post: operations["admin-import-harbor-shares"];
         delete?: never;
@@ -4108,7 +4108,7 @@ export interface components {
             deactivated: boolean;
             /** @description Email as uploaded */
             email?: string;
-            /** @description Reason for error and duplicate rows */
+            /** @description Reason for error and duplicate rows, or a dropped resolution */
             message?: string;
             /** @description Name as uploaded */
             name?: string;
@@ -4116,6 +4116,8 @@ export interface components {
             outcome: "set" | "date_added" | "unchanged" | "conflict" | "not_owner_but_set" | "duplicate" | "skipped" | "unmatched" | "ambiguous" | "error";
             /** @description The state a set or date_added row writes */
             proposed?: components["schemas"]["HarborShareState"];
+            /** @description Dry run only: the row now matches a member by itself, so its resolution was ignored; drop it before applying, as the apply refuses it */
+            resolution_dropped: boolean;
             /** @description Matched through a resolution the operator picked */
             resolved: boolean;
             /**

@@ -80,6 +80,8 @@ describe('HarborShareImportModal', () => {
     expect(wrapper.text()).toContain('admin.users.harborShareImport.deactivated')
     expect(wrapper.get('[data-testid="hsi-apply"]').attributes('disabled')).toBeUndefined()
     expect(wrapper.findComponent(MemberSearch).exists()).toBe(true)
+    // Deactivated members still own their share, so the search finds them.
+    expect(wrapper.findComponent(MemberSearch).props('status')).toBe('all')
   })
 
   it('shows a rejected file without leaving the upload step', async () => {
@@ -129,5 +131,65 @@ describe('HarborShareImportModal', () => {
     expect(wrapper.get('[data-testid="hsi-notice"]').text()).toBe('admin.users.harborShareImport.planChanged')
     expect(wrapper.emitted('applied')).toBeUndefined()
     expect(wrapper.get('[data-testid="hsi-apply"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('reverts a pick whose preview the server refuses', async () => {
+    totpAwareFetch
+      .mockImplementationOnce(() => respond(200, preview))
+      .mockImplementationOnce(() => respond(400, { error: 'the member chosen for row 3 is not a member of this club' }))
+      .mockImplementationOnce(() => respond(200, { ...preview, dry_run: false }))
+    const wrapper = await previewed()
+    await wrapper.get('[data-testid="hsi-candidate-3-c1"]').trigger('click')
+    await flushPromises()
+    expect(sentFields(1).resolutions).toBe('{"3":"c1"}')
+    expect(wrapper.get('[data-testid="hsi-error"]').text()).toContain('not a member of this club')
+
+    await wrapper.get('[data-testid="hsi-apply"]').trigger('click')
+    await flushPromises()
+    expect(sentFields(2)).toEqual({ dryRun: 'false', resolutions: null, token: 'token-1' })
+  })
+
+  it('drops a pick the server ignored before applying', async () => {
+    // After the pick, row 3 matches a member by itself (as after a 409
+    // re-preview), so the server ignores the pick and says so.
+    const autoMatched = {
+      ...preview,
+      plan_token: 'token-2',
+      counts: counts({ set: 2, unmatched: 1, conflict: 1 }),
+      rows: [
+        preview.rows[0],
+        { row: 3, name: 'Same Name', user_id: 'c2', outcome: 'set', deactivated: false, resolved: false,
+          resolution_dropped: true, message: 'matched automatically; your pick was dropped',
+          current: { owner: false, paid_on: null }, proposed: { owner: true, paid_on: null } },
+        preview.rows[2],
+        preview.rows[3],
+      ],
+    }
+    totpAwareFetch
+      .mockImplementationOnce(() => respond(200, preview))
+      .mockImplementationOnce(() => respond(200, autoMatched))
+      .mockImplementationOnce(() => respond(200, { ...autoMatched, dry_run: false }))
+    const wrapper = await previewed()
+    await wrapper.get('[data-testid="hsi-candidate-3-c1"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('your pick was dropped')
+
+    await wrapper.get('[data-testid="hsi-apply"]').trigger('click')
+    await flushPromises()
+    expect(sentFields(2)).toEqual({ dryRun: 'false', resolutions: null, token: 'token-2' })
+    expect(wrapper.emitted('applied')).toHaveLength(1)
+  })
+
+  it('shows the server error on a 409 that is not plan_changed', async () => {
+    totpAwareFetch
+      .mockImplementationOnce(() => respond(200, preview))
+      .mockImplementationOnce(() => respond(409, { error: 'another import is running' }))
+    const wrapper = await previewed()
+    await wrapper.get('[data-testid="hsi-apply"]').trigger('click')
+    await flushPromises()
+
+    expect(totpAwareFetch).toHaveBeenCalledTimes(2)
+    expect(wrapper.get('[data-testid="hsi-error"]').text()).toBe('another import is running')
+    expect(wrapper.find('[data-testid="hsi-notice"]').exists()).toBe(false)
   })
 })

@@ -936,17 +936,18 @@ type HarborShareCandidate struct {
 // HarborShareImportRow is the outcome of one CSV row. email and name echo the
 // uploaded file only.
 type HarborShareImportRow struct {
-	Row         int                    `json:"row" doc:"1-based row number in the CSV (header is row 1)"`
-	Email       string                 `json:"email,omitempty" doc:"Email as uploaded"`
-	Name        string                 `json:"name,omitempty" doc:"Name as uploaded"`
-	UserID      string                 `json:"user_id,omitempty" doc:"Matched member"`
-	Outcome     string                 `json:"outcome" enum:"set,date_added,unchanged,conflict,not_owner_but_set,duplicate,skipped,unmatched,ambiguous,error"`
-	Deactivated bool                   `json:"deactivated" doc:"The matched member is deactivated (still set: they own the share)"`
-	Resolved    bool                   `json:"resolved" doc:"Matched through a resolution the operator picked"`
-	Current     *HarborShareState      `json:"current,omitempty" doc:"The member's stored state, when matched"`
-	Proposed    *HarborShareState      `json:"proposed,omitempty" doc:"The state a set or date_added row writes"`
-	Candidates  []HarborShareCandidate `json:"candidates,omitempty" doc:"Members an ambiguous name could mean"`
-	Message     string                 `json:"message,omitempty" doc:"Reason for error and duplicate rows"`
+	Row               int                    `json:"row" doc:"1-based row number in the CSV (header is row 1)"`
+	Email             string                 `json:"email,omitempty" doc:"Email as uploaded"`
+	Name              string                 `json:"name,omitempty" doc:"Name as uploaded"`
+	UserID            string                 `json:"user_id,omitempty" doc:"Matched member"`
+	Outcome           string                 `json:"outcome" enum:"set,date_added,unchanged,conflict,not_owner_but_set,duplicate,skipped,unmatched,ambiguous,error"`
+	Deactivated       bool                   `json:"deactivated" doc:"The matched member is deactivated (still set: they own the share)"`
+	Resolved          bool                   `json:"resolved" doc:"Matched through a resolution the operator picked"`
+	ResolutionDropped bool                   `json:"resolution_dropped" doc:"Dry run only: the row now matches a member by itself, so its resolution was ignored; drop it before applying, as the apply refuses it"`
+	Current           *HarborShareState      `json:"current,omitempty" doc:"The member's stored state, when matched"`
+	Proposed          *HarborShareState      `json:"proposed,omitempty" doc:"The state a set or date_added row writes"`
+	Candidates        []HarborShareCandidate `json:"candidates,omitempty" doc:"Members an ambiguous name could mean"`
+	Message           string                 `json:"message,omitempty" doc:"Reason for error and duplicate rows, or a dropped resolution"`
 }
 
 // HarborShareImportCounts counts rows per outcome.

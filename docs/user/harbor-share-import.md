@@ -12,7 +12,7 @@ The import reads the club's member sheet and marks the members who own a share. 
 
 ## The file
 
-Save the sheet from Excel or Numbers as **CSV UTF-8** (in Excel: *File → Save as → CSV UTF-8 (comma delimited)*). Plain "CSV" from a Norwegian Excel is not UTF-8, and Brygge refuses it, because æ, ø and å would come out wrong and no name with them would match. Columns may be separated by commas or semicolons.
+Save the sheet from Excel or Numbers as **CSV UTF-8** (in Excel: *File → Save as → CSV UTF-8 (comma delimited)*). Plain "CSV" from a Norwegian Excel is not UTF-8, and Brygge refuses it, because æ, ø and å would come out wrong and no name with them would match. Columns may be separated by commas or semicolons. A file holds at most **5,000 rows** below the header; split a larger register into several files and import them one after another.
 
 The first row holds the column names:
 
@@ -39,7 +39,7 @@ Per Hansen;;nei;
 2. Choose the file and press **Forhåndsvis**.
 3. Read the preview. Rows are grouped by what will happen to them:
    - **Blir eier** and **Betalingsdato lagt til** are the changes.
-   - **Flere medlemmer passer**: more than one member has that name. Pick the right one; their slips are shown to tell them apart.
+   - **Flere medlemmer passer**: more than one member has that name, or that email. Pick the right one; their slips are shown to tell them apart.
    - **Fant ikke medlemmet**: search for the member, or create them with the member import and start again.
    - **Annen dato registrert** and **Eier i Brygge, ikke i filen** are left alone. Check them by hand.
    - **Samme medlem på flere rader**: rows that name the same member with different values are all left out.
@@ -47,4 +47,4 @@ Per Hansen;;nei;
    - Deactivated members are marked as owners too, since they still own the share; the row says they are deactivated.
 4. Press **Bruk endringer (N)**.
 
-If someone edits a member while you have the preview open, nothing is written: the import shows a fresh preview for you to check and apply again.
+If someone edits a member while you have the preview open, nothing is written: the import shows a fresh preview for you to check and apply again. If a row you picked a member for now matches a member by itself, the fresh preview says "matched automatically; your pick was dropped" and uses the automatic match.

@@ -35,6 +35,13 @@ const (
 	harborShareAmbiguous     = "ambiguous"
 	harborShareError         = "error"
 	codeHarborSharePlanStale = "plan_changed"
+
+	// harborShareMaxRows caps the data rows of one upload. A club's register
+	// is a few hundred rows; the cap keeps the preview a page a person can
+	// actually review, and the plan cheap to rebuild on every pick.
+	harborShareMaxRows = 5000
+
+	msgHarborSharePickDropped = "matched automatically; your pick was dropped"
 )
 
 var harborShareOutcomes = []string{
@@ -63,17 +70,21 @@ type harborShareCandidate struct {
 // the uploaded values, never the stored ones, so the response discloses
 // nothing the caller did not send.
 type harborShareImportRow struct {
-	Row         int                    `json:"row"`
-	Email       string                 `json:"email,omitempty"`
-	Name        string                 `json:"name,omitempty"`
-	UserID      string                 `json:"user_id,omitempty"`
-	Outcome     string                 `json:"outcome"`
-	Deactivated bool                   `json:"deactivated"`
-	Resolved    bool                   `json:"resolved"`
-	Current     *harborShareState      `json:"current,omitempty"`
-	Proposed    *harborShareState      `json:"proposed,omitempty"`
-	Candidates  []harborShareCandidate `json:"candidates,omitempty"`
-	Message     string                 `json:"message,omitempty"`
+	Row         int    `json:"row"`
+	Email       string `json:"email,omitempty"`
+	Name        string `json:"name,omitempty"`
+	UserID      string `json:"user_id,omitempty"`
+	Outcome     string `json:"outcome"`
+	Deactivated bool   `json:"deactivated"`
+	Resolved    bool   `json:"resolved"`
+	// ResolutionDropped marks a dry-run row that now matches by itself, so
+	// the resolution sent for it was ignored. The client drops it before
+	// applying, as the apply refuses it.
+	ResolutionDropped bool                   `json:"resolution_dropped"`
+	Current           *harborShareState      `json:"current,omitempty"`
+	Proposed          *harborShareState      `json:"proposed,omitempty"`
+	Candidates        []harborShareCandidate `json:"candidates,omitempty"`
+	Message           string                 `json:"message,omitempty"`
 }
 
 // harborShareInput is one parsed data row of the upload.
@@ -202,6 +213,9 @@ func readHarborShareInputs(u *csvUpload) ([]harborShareInput, error) {
 		}
 		in.owner, in.paidOn = owner, paidOn
 		inputs = append(inputs, in)
+		if len(inputs) > harborShareMaxRows {
+			return nil, fmt.Errorf("the file has more than %d data rows; split it into smaller files", harborShareMaxRows)
+		}
 	}
 	return inputs, nil
 }
@@ -279,14 +293,18 @@ func harborShareOutcome(in harborShareInput, m harborShareMember) (string, *harb
 
 // planHarborShareImport matches every row and decides its outcome. It does
 // no I/O, so the dry run and the apply plan identically from the same state.
-func planHarborShareImport(inputs []harborShareInput, members []harborShareMember, resolutions map[int]string) (*harborSharePlan, error) { //nolint:gocognit,cyclop // one pass of match, resolve, dedupe and decide per row
+// A resolution for a row that matches by itself is refused on apply; a dry
+// run ignores it and flags the row instead, since members can change between
+// the pick and the preview (a 409 re-preview) and the pick is then moot.
+func planHarborShareImport(inputs []harborShareInput, members []harborShareMember, resolutions map[int]string, dryRun bool) (*harborSharePlan, error) { //nolint:gocognit,cyclop // one pass of match, resolve, dedupe and decide per row
 	byID := make(map[string]*harborShareMember, len(members))
-	byEmail := make(map[string]*harborShareMember, len(members))
+	byEmail := map[string][]*harborShareMember{}
 	byName := map[string][]*harborShareMember{}
 	for i := range members {
 		m := &members[i]
 		byID[m.id] = m
-		byEmail[strings.ToLower(m.email)] = m
+		key := strings.ToLower(m.email)
+		byEmail[key] = append(byEmail[key], m)
 		byName[m.nameKey] = append(byName[m.nameKey], m)
 	}
 
@@ -300,33 +318,43 @@ func planHarborShareImport(inputs []harborShareInput, members []harborShareMembe
 	for i, in := range inputs {
 		seenRows[in.row] = true
 		row := harborShareImportRow{Row: in.row, Email: in.email, Name: in.name}
+		pick, hasPick := resolutions[in.row]
 		if in.err != "" {
+			if hasPick {
+				return nil, &errHarborShareResolution{fmt.Sprintf("row %d has an error and takes no resolution", in.row)}
+			}
 			row.Outcome, row.Message = harborShareError, in.err
 			plan.rows = append(plan.rows, row)
 			continue
 		}
 
-		var m *harborShareMember
-		if in.email != "" {
-			m = byEmail[strings.ToLower(in.email)]
-		}
+		// An email shared by several members (case aside) is as ambiguous
+		// as a shared name, and is not second-guessed by the name.
 		var candidates []*harborShareMember
-		if m == nil && in.name != "" {
+		if in.email != "" {
+			candidates = byEmail[strings.ToLower(in.email)]
+		}
+		if len(candidates) == 0 && in.name != "" {
 			candidates = byName[normaliseMemberName(in.name)]
-			if len(candidates) == 1 {
-				m = candidates[0]
-			}
+		}
+		var m *harborShareMember
+		if len(candidates) == 1 {
+			m = candidates[0]
 		}
 
-		if pick, ok := resolutions[in.row]; ok {
-			if m != nil {
+		if hasPick {
+			switch {
+			case m != nil && dryRun:
+				row.ResolutionDropped, row.Message = true, msgHarborSharePickDropped
+			case m != nil:
 				return nil, &errHarborShareResolution{fmt.Sprintf("row %d matched a member and takes no resolution", in.row)}
+			default:
+				m = byID[pick]
+				if m == nil {
+					return nil, &errHarborShareResolution{fmt.Sprintf("the member chosen for row %d is not a member of this club", in.row)}
+				}
+				row.Resolved = true
 			}
-			m = byID[pick]
-			if m == nil {
-				return nil, &errHarborShareResolution{fmt.Sprintf("the member chosen for row %d is not a member of this club", in.row)}
-			}
-			row.Resolved = true
 		}
 
 		if m == nil {
@@ -378,11 +406,11 @@ func planHarborShareImport(inputs []harborShareInput, members []harborShareMembe
 			switch {
 			case !agree:
 				row.Outcome = harborShareDuplicate
-				row.Message = fmt.Sprintf("rows %s name the same member with different values; none is applied", joinRowNumbers(inputs, group))
+				row.Message = joinMessages(row.Message, fmt.Sprintf("rows %s name the same member with different values; none is applied", joinRowNumbers(inputs, group)))
 				continue
 			case group[0] != i:
 				row.Outcome = harborShareDuplicate
-				row.Message = fmt.Sprintf("same member and values as row %d", inputs[group[0]].row)
+				row.Message = joinMessages(row.Message, fmt.Sprintf("same member and values as row %d", inputs[group[0]].row))
 				continue
 			}
 		}
@@ -403,6 +431,13 @@ func planHarborShareImport(inputs []harborShareInput, members []harborShareMembe
 	}
 	plan.token = hex.EncodeToString(hash.Sum(nil))
 	return plan, nil
+}
+
+func joinMessages(a, b string) string {
+	if a == "" {
+		return b
+	}
+	return a + "; " + b
 }
 
 func joinRowNumbers(inputs []harborShareInput, idx []int) string {
@@ -498,7 +533,7 @@ func (h *AdminUsersHandler) HandleImportHarborShares(w http.ResponseWriter, r *h
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
-		plan, ok := h.planHarborShares(w, inputs, members, resolutions)
+		plan, ok := h.planHarborShares(w, inputs, members, resolutions, true)
 		if !ok {
 			return
 		}
@@ -520,7 +555,7 @@ func (h *AdminUsersHandler) HandleImportHarborShares(w http.ResponseWriter, r *h
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	plan, ok := h.planHarborShares(w, inputs, members, resolutions)
+	plan, ok := h.planHarborShares(w, inputs, members, resolutions, false)
 	if !ok {
 		return
 	}
@@ -555,8 +590,8 @@ func (h *AdminUsersHandler) HandleImportHarborShares(w http.ResponseWriter, r *h
 	h.writeHarborShareResponse(w, false, plan)
 }
 
-func (h *AdminUsersHandler) planHarborShares(w http.ResponseWriter, inputs []harborShareInput, members []harborShareMember, resolutions map[int]string) (*harborSharePlan, bool) {
-	plan, err := planHarborShareImport(inputs, members, resolutions)
+func (h *AdminUsersHandler) planHarborShares(w http.ResponseWriter, inputs []harborShareInput, members []harborShareMember, resolutions map[int]string, dryRun bool) (*harborSharePlan, bool) {
+	plan, err := planHarborShareImport(inputs, members, resolutions, dryRun)
 	var resErr *errHarborShareResolution
 	switch {
 	case errors.As(err, &resErr):
@@ -587,18 +622,23 @@ func writeHarborSharePlanChanged(w http.ResponseWriter) {
 }
 
 // applyHarborShareWrites makes the plan's writes and their audit rows in tx.
-// Each UPDATE repeats its precondition, so a member changed after the plan
-// was read is not overwritten; it reports false when any write missed.
+// Each UPDATE repeats its precondition, including the member filter of
+// loadHarborShareMembers, so a member changed or erased after the plan was
+// read is not overwritten; it reports false when any write missed.
 func applyHarborShareWrites(ctx context.Context, tx pgx.Tx, clubID, actorID string, plan *harborSharePlan) (bool, error) {
 	for _, wr := range plan.writes {
 		q := `UPDATE users SET harbor_share_owner = true, harbor_share_paid_on = $3::date, updated_at = now()
-		       WHERE id = $1 AND club_id = $2 AND kind = 'person' AND NOT harbor_share_owner`
+		       WHERE id = $1 AND club_id = $2 AND kind = 'person'
+		         AND email NOT LIKE '%' || $4 AND email <> $5
+		         AND NOT harbor_share_owner`
 		if wr.outcome == harborShareDateAdded {
 			q = `UPDATE users SET harbor_share_paid_on = $3::date, updated_at = now()
 			      WHERE id = $1 AND club_id = $2 AND kind = 'person'
+			        AND email NOT LIKE '%' || $4 AND email <> $5
 			        AND harbor_share_owner AND harbor_share_paid_on IS NULL`
 		}
-		tag, err := tx.Exec(ctx, q, wr.userID, clubID, wr.paidOn)
+		tag, err := tx.Exec(ctx, q, wr.userID, clubID, wr.paidOn,
+			accounting.ErasedEmailSuffix, accounting.LegacyAnonymizedEmail)
 		if err != nil {
 			return false, err
 		}

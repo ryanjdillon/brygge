@@ -1333,6 +1333,7 @@ func registerAdminOps(api huma.API) {
 		Summary:     "Import harbor share (moloandel) ownership for existing members from a CSV",
 		Description: "multipart/form-data: `file` (UTF-8 CSV, ',' or ';', 8 MB cap; columns harbor_share_owner, optional harbor_share_paid_on, and email and/or name or first_name + last_name), " +
 			"`dry_run` (default true), `resolutions` (JSON {row: user_id} for ambiguous or unmatched rows) and, to apply, the dry run's `plan_token`. " +
+			"At most 5,000 data rows. A resolution for an error row is a 400; one for a row that matches by itself is a 400 on apply and flagged resolution_dropped on a dry run. " +
 			"Never overwrites or clears. 409 with code plan_changed when members changed since the preview. Site-admin role and a fresh TOTP step-up required.",
 		Security: BearerSecurity,
 	}, stub[struct{}, struct{ Body HarborShareImportResult }]())
