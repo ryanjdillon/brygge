@@ -44,6 +44,14 @@ What is **not** counted: broadcast mail (inbox compose and bulk send) goes out t
 
 Registered only when `SES_EVENTS_QUEUE_NAME` is set ([configuration.md](../configuration.md#amazon-ses-delivery-events)). `brygge.email.delivery` counts each per-recipient event once, when it is first stored: an SQS redelivery is dropped by the event table's unique key and not counted again. `kind` comes from the message's `kind` tag (unknown values count as `other`); `result` is the `email_sends` status the event maps to. Raw domains and addresses are never attributes; the domain class buckets common providers and their aliases. `brygge.ses.events.received` counts every message taken off the queue, including redeliveries, so it doubles as the worker's liveness signal; `invalid` is a body that failed to parse (left for the DLQ), `ignored` a well-formed event type the worker does not record. Every series is created at 0 on start except the `smtp_status_class` values other than `none`, which appear with their first event (the alert rule allows for that, [alerting.md](alerting.md)). Details: [backend/internal/sesevents/README.md](../../../backend/internal/sesevents/README.md). Alerts on these: SesDeliveryFailed, SesEventsMissing and SesDlqNotEmpty ([alerts-runbook.md](alerts-runbook.md#sesdeliveryfailed)).
 
+## Stalwart delivery outcomes
+
+| Metric | Prometheus name | Type | Attributes |
+|--------|-----------------|------|------------|
+| `brygge.email.stalwart_outcome` (`{send}`) | `brygge_email_stalwart_outcome_total` | Counter (cumulative) | `kind` = as `brygge.email.delivery`; `result` = `queued` \| `deferred` \| `accepted` \| `rejected_temporary` \| `rejected`; `recipient_domain_class` = `gmail` \| `outlook` \| `yahoo` \| `icloud` \| `other` |
+
+Counted by the journal outcome sweep ([stalwart-internals.md § Outcome sweep](../mail/stalwart-internals.md#outcome-sweep-journalsweep)) each time it changes a Stalwart send's `email_sends.status`; a run that rewrites the same status counts nothing. Registered only when `MAIL_LOG_SOCKET` is set, no series is pre-created, and no alert reads it. It is separate from `brygge.email.delivery` so that metric and SesDeliveryFailed stay SES-only, and it goes away with the sweep (BRY-594).
+
 ## Mail queue (Stalwart)
 
 | Metric | Prometheus name | Type | Meaning |

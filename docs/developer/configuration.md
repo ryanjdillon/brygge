@@ -87,7 +87,7 @@ The API's handle on the mail server's management REST API (`/api/…`). What it 
 | `BRYGGE_MAILBOXES_PATH`   | For the inbox | —       | Path to the board-mailbox spec the shared-inbox reconciler applies ([mail/inbox.md](mail/inbox.md)) |
 | `STALWART_MAILBOX_PASSWORDS_PATH` | For the inbox | — | Path to the shared mailboxes' password file |
 | `BRYGGE_RECONCILER_DRY_RUN` | No          | `false` | Logs what the reconciler would change without writing to Stalwart |
-| `MAIL_LOG_SOCKET`         | No            | —       | Unix socket of the host's mail-log helper (`/run/brygge-mail-log.sock` in `nix/host.nix`). The faktura delivery log reads Stalwart's delivery events through it; unset, the log says "unavailable" for sends it cannot answer from `email_sends` ([mail/stalwart-internals.md § Faktura delivery log](mail/stalwart-internals.md#faktura-delivery-log)). Legacy: removed 35 days after the SES cutover (BRY-594) |
+| `MAIL_LOG_SOCKET`         | No            | —       | Unix socket of the host's mail-log helper (`/run/brygge-mail-log.sock` in `nix/host.nix`). The faktura delivery log reads Stalwart's delivery events through it; unset, the log says "unavailable" for sends it cannot answer from `email_sends` ([mail/stalwart-internals.md § Faktura delivery log](mail/stalwart-internals.md#faktura-delivery-log)). Also enables the journal outcome sweep that writes Stalwart sends' outcomes into `email_sends` ([§ Outcome sweep](mail/stalwart-internals.md#outcome-sweep-journalsweep)). Legacy: removed 35 days after the SES cutover (BRY-594) |
 
 The fallback admin has every permission. Any other principal used here needs at least `message-queue-list` for the queue gauges, plus the principal-management permissions provisioning uses.
 

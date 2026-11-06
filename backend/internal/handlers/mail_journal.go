@@ -172,6 +172,10 @@ type mailOutcome struct {
 	Detail      string
 	NextRetryAt *time.Time
 	At          *time.Time
+	// Final is set when the journal holds a terminal event (delivered, DSN
+	// success, DSN permanent failure, delivery failed): no later event can
+	// change the outcome.
+	Final bool
 }
 
 // outcome folds a submission's events. Acceptance wins over everything
@@ -187,12 +191,17 @@ func (s *mailSubmission) outcome() mailOutcome {
 	for _, e := range s.Events {
 		if e.Message == mailEvDelivered || e.Message == mailEvDsnSuccess {
 			set(deliveryAccepted, e)
+			out.Final = true
 			return out
 		}
 	}
 	for _, e := range s.Events {
 		if e.Message == mailEvDsnPermFail || e.Message == mailEvFailed {
 			set(deliveryRejected, e)
+			if s.expired() {
+				out.Status = deliveryRejectedTemporary
+			}
+			out.Final = true
 			return out
 		}
 	}
@@ -217,6 +226,36 @@ func (s *mailSubmission) outcome() mailOutcome {
 		out.NextRetryAt = retry
 	}
 	return out
+}
+
+// lastAttemptError is the submission's latest attempt error that carries an
+// SMTP code: the remote server's own answer, which a DSN or failure event
+// only paraphrases.
+func (s *mailSubmission) lastAttemptError() (mailEvent, bool) {
+	for i := len(s.Events) - 1; i >= 0; i-- {
+		if e := s.Events[i]; mailEvDeferred[e.Message] && e.code() != 0 {
+			return e, true
+		}
+	}
+	return mailEvent{}, false
+}
+
+// expired reports a queue expiry: Stalwart gave up (Delivery failed) while
+// the remote server was still answering 4xx. The address may well be valid,
+// so it is a temporary rejection, not a hard bounce.
+func (s *mailSubmission) expired() bool {
+	failed := false
+	for _, e := range s.Events {
+		if e.Message == mailEvFailed {
+			failed = true
+			break
+		}
+	}
+	if !failed {
+		return false
+	}
+	e, ok := s.lastAttemptError()
+	return ok && e.code() >= 400 && e.code() < 500
 }
 
 func mailJournalFromConfig(cfg *config.Config) mailJournal {

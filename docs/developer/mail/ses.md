@@ -181,7 +181,12 @@ from `sent_at` and the audit log and are matched against the Stalwart journal,
 as are rows with `provider = 'stalwart'`. That journal path is read-only legacy
 and goes away with the `brygge-mail-log` units 35 days after the cutover
 (BRY-594). The list badge (`GET …/invoices/delivery-statuses`) is the latest
-row per faktura, one query for the club, tables only.
+row per faktura, one query for the club, tables only. A Stalwart row's status
+comes from the journal outcome sweep
+([stalwart-internals.md § Outcome sweep](stalwart-internals.md#outcome-sweep-journalsweep)),
+which BRY-594 removes along with the helper; after the cutover only the SES
+event worker writes outcomes. The member list's bounce badge
+(`GET /admin/users/email-bounces`) reads the same table.
 
 SES puts an address on the account-level suppression list after a hard bounce
 or a complaint and then refuses every send to it; the event is a `Bounce` with

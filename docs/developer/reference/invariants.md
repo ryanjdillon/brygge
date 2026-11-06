@@ -883,6 +883,12 @@ A new group is created just before the faktura built-in and the positions are re
 
 **Failure mode:** SNS → SQS has no ordering, so a late `Send` event would turn a bounced or delivered faktura back into `queued`, hiding the bounce from the board.
 
+### A Stalwart send's status is the journal fold, written with compare-and-set
+
+**Rule (BRY-615):** for a `provider = 'stalwart'` row, `email_sends.status` is whatever the journal fold (`mailSubmission.outcome()`) says now, written by `JournalSweep` only `WHERE status = <the status it read>`. It is not rank-advanced like an SES row: the fold re-reads the whole history, so a 5xx attempt that a later MX accepts moves `rejected` back to `accepted`. Sends other than `failed` ones pair with journal submissions in `created_at` order (earliest unclaimed submission in `[created_at − 1 s, created_at + 3 min]`), never closest-pair-first. See [stalwart-internals.md § Outcome sweep](../mail/stalwart-internals.md#outcome-sweep-journalsweep).
+
+**Failure mode:** a rank rule would pin a send that a second MX delivered at `rejected` and flag a working address; closest-pair matching swaps the outcomes of two back-to-back sends to one address; a blind write would overwrite a status another writer changed meanwhile.
+
 ### A delivery event the worker can't store goes to the DLQ, never away
 
 **Rule (BRY-588):** the worker deletes an SQS message only after its transaction commits. An unparseable body or a failed write is left on the queue, and after five receives SQS moves it to the dead-letter queue (14 days), which raises `SesDlqNotEmpty` and is redriven by a person. See [sesevents README § Failures and the DLQ](../../../backend/internal/sesevents/README.md#failures-and-the-dlq) and [alerts runbook § SesDlqNotEmpty](../otel/alerts-runbook.md#sesdlqnotempty).

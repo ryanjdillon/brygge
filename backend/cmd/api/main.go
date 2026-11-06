@@ -1576,6 +1576,15 @@ func main() {
 		}
 	}
 
+	// Stalwart delivery outcomes (BRY-615): folds the mail journal into
+	// email_sends so a Stalwart bounce reaches the faktura badge and the
+	// member list. Needs the host's mail-log helper; legacy with it (BRY-594).
+	if journalSweep := handlers.NewJournalSweep(db, &cfg, log); journalSweep != nil {
+		go journalSweep.Run(ctx, handlers.JournalSweepInterval)
+	} else {
+		log.Info().Msg("journal sweep disabled (MAIL_LOG_SOCKET not set)")
+	}
+
 	// Hourly background sweep of expired sessions. Cookies expire on the
 	// client after 30 days; the row stays until something deletes it,
 	// which would otherwise grow unbounded.
