@@ -1,4 +1,3 @@
-import 'agents.just'
 
 set dotenv-load
 

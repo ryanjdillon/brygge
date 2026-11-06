@@ -1,134 +1,3 @@
-<!--
-  GENERATED FILE — do not edit.
-  Source: <base>/AGENTS.base.md (shared conventions)
-  Source: AGENTS.repo.md (this repo)
-  Regenerate with: just agents
--->
-
-# Agent conventions
-
-Shared across all my repos. Repo-specific detail lives in the overlay below the
-separator. The deeper reasoning behind each rule is in `docs/` — read a doc when
-you need the *why* or an edge case, not by default.
-
-## Plan on Linear
-
-Linear is the source of truth for what is being worked on. The repo records how
-the code works; Linear records why work is happening and what is left.
-
-- **File, ship, close.** Every non-trivial change has an issue. Move it to
-  In Progress when you start and close it when the change ships.
-- **Tier the tracking to the size.** A one-line fix needs no issue. A change
-  worth reviewing needs an issue. A body of work spanning several changes needs
-  a project with a dependency graph.
-- **Parents before subs.** Create the parent issue first, then decompose.
-- **Close on ship, in the same turn.** An issue left open after its change ships
-  makes the whole board untrustworthy. The exception is an explicit "leave it,
-  I want to look first".
-- **Reference the issue in the commit message** so history and Linear stay linked.
-- **Do not invent issues** to look busy, and do not silently work off-issue.
-
-See `docs/planning-on-linear.md`.
-
-## Plan strategically before decomposing
-
-Work descends from an objective, not from whatever is nearest to hand.
-
-1. Start from the **initiative** — the goal in one sentence.
-2. Decompose into **projects** with explicit acceptance criteria.
-3. Map the **critical path to the objective** and the **path to the target
-   state** independently. They are not the same path.
-4. Classify every body of work as one of:
-   - **strategic-critical** — on the critical path; do it now.
-   - **drift-guard** — not on the path, but deferring it causes rework; do it now.
-   - **target-state-deferrable** — improves the end state, costs nothing to
-     defer; file it and move on.
-
-The rule: no shortsighted shortcuts, and no gold-plating off the critical path.
-
-See `docs/planning-strategically.md`.
-
-## Stay on target
-
-When a fix or a discovery spawns work that is not on the current critical path:
-**file it as a Linear issue and continue.** Do not rabbit-hole, and do not
-silently expand scope.
-
-- Distinguish must-do-now (on the path, or a drift-guard) from file-for-later.
-- Filing is not dropping — Linear is durable, so deferring loses nothing.
-- If the new work invalidates the current plan, say so and stop; do not
-  improvise a new plan mid-change.
-
-See `docs/staying-on-target.md`.
-
-## Protect the main context
-
-Delegate to a sub-agent whatever produces bulk you do not need to keep: broad
-searches, multi-file reads, research spikes, large tool output.
-
-- The sub-agent returns **the conclusion**, not the raw material.
-- The main thread keeps the decision and the Linear update, never the dumps.
-- State the return contract in the sub-agent's prompt (what shape, what fields).
-- Sub-agent context loss is harmless because Linear holds the durable record.
-
-See `docs/subagents.md`.
-
-## Keep modules deep
-
-A small, narrow interface with as much depth behind it as the domain needs —
-for source and docs alike. One unit per domain; one topic per doc, standing
-alone rather than assembled from fragments across five files.
-
-See `docs/module-organisation.md`.
-
-## Keep docs honest
-
-- **Docs alongside code, in the same commit.** A change that invalidates a doc
-  updates that doc in the same commit — never as a follow-up.
-- **Write back what you learn.** A non-obvious fact discovered while working
-  (an invariant, a gotcha, why an approach failed) goes into the relevant doc.
-- Every `docs/` tree has an index; every substantial directory has a README.
-
-See `docs/doc-discipline.md`.
-
-## Code and comments
-
-- Comments explain **why**, not what. No comment narrates a change, references a
-  conversation, or notes that something was removed.
-- Keep comments general to the code, not to one deployment — describe what the
-  code does, not the author's hosts or environment.
-- Match the surrounding code's naming, idiom, and comment density.
-- Destructure imports where the language supports it
-  (`import { foo } from 'bar'`).
-
-## Commits
-
-- Logical, atomic, rebase-able, and succinct. One concern per commit.
-- Strip trailing whitespace before staging.
-- No references to the tooling or model that produced the change.
-- Reference the Linear issue.
-- **Never assume git state.** Check `git status` / `git log` before acting —
-  do not assume the user has already committed, pushed, or pulled.
-- Stage files by name, not by glob.
-
-## Handing off
-
-Work that outlives a session goes in an untracked `<TOPIC>-HANDOFF.md` written
-for a reader with no prior context — settled decisions, what is verified (with
-SHAs), what remains, and what must not be touched. Never secret values.
-
-See `docs/session-handoff.md`.
-
-## Memory
-
-Record what is durable and not derivable from the repo: user preferences,
-guidance you were given and why, project constraints, external references.
-Do not record what the code, git history, or this file already says.
-
-See `docs/memory.md`.
-
----
-
 # Brygge
 
 Harbor club platform: a Go API backend and a Vue 3 SPA frontend in one
@@ -163,7 +32,7 @@ Source-tree subsystems also carry colocated READMEs that cross-link up:
 
 ### Drift discipline
 
-The base rule is docs-alongside-code in the same commit. For this repo, that
+The rule is docs-alongside-code in the same commit. For this repo, that
 means specifically:
 
 | When you | Update |
@@ -200,9 +69,9 @@ material (`architecture.md`, `tech-stack.md`) lives at `docs/`.
 
 Migrations run automatically as part of every deploy — `brygge-migrate.service` fires before the API starts, so no manual migration step is needed after merging. Do not tell the user to run migrations manually.
 
-`brygge-migrate.service` runs as the `brygge` DB role. golang-migrate (lib/pq `postgres://` driver) sends each file in **one** exec, so a file without its own `BEGIN`/`COMMIT` runs in one implicit transaction: if statement N fails, statements 1..N-1 roll back too and the version is left `dirty` (verified BRY-395). Files apply in separate transactions, and a file that carries its own `BEGIN;`/`COMMIT;` (000001, 000006) commits in pieces — so keep DDL guarded with `IF NOT EXISTS` / `pg_constraint` checks for retries.
+`brygge-migrate.service` runs as the `brygge` DB role inside a chain of separate `BEGIN/COMMIT` blocks (golang-migrate's pgx driver splits the file at `;` boundaries). A partially-applied migration that fails on statement N leaves statements 1..N-1 committed — so retries hit "already exists" errors unless every DDL statement is guarded with `IF NOT EXISTS` / `pg_constraint` checks.
 
-**Before every deploy** — use `just deploy <host>`. Gate order: `just migrate-check` → pre-deploy snapshot → pending migrations dry-run on prod (rolled back) → deploy-rs:
+**Before every deploy** — use `just deploy <host>`, which now gates on `just migrate-check`:
 
 ```bash
 just deploy klokkarvikbaatlag.no    # runs migrate-check first; then nix run .#deploy
@@ -215,8 +84,7 @@ Run `just migrate-check` standalone when you just want to validate a migration i
 Two gates, cheapest first:
 
 - **`just migrate-check`** — applies every migration to an *empty* DB. Fast, catches ~80% of breakage (syntax, ordering, non-idempotent DDL). This is the default `just deploy` gate.
-- **Prod dry-run (automatic, in the deploy app)** — `scripts/deploy-migration-dryrun.sh` streams the *pending* files + `dev_masked.sql` to prod's psql inside `BEGIN … ROLLBACK` (lock_timeout 2s, statement_timeout 15s). Catches data-shape failures on populated tables (TEXT/UUID cast, DIL-363; `NOT NULL` / `CHECK` on existing rows). Exit 75 = prod busy (lock timeout), retry. Exit 2 with "PROD WAS MODIFIED" (the in-transaction canary table survived) or "MAY HAVE BEEN MODIFIED" (a file ended the transaction): restore the pre-deploy snapshot first. Files the fail-closed statement-level scan flags (transaction control, savepoints, timeout changes, COPY FROM STDIN, psql meta-commands, unterminated comments/strings), and SQLSTATE 55P04/25001, fall back to the snapshot check against the dump the deploy just pulled. `SKIP_PROD_CHECK=1` skips it (loudly), `PROD_CHECK=snapshot` forces the fallback. Tests: `just test-deploy-dryrun`.
-- **`just migrate-check-prod`** — the snapshot fallback, also runnable by hand: restores a prod dump (S3 or a local `*.dump`) into the local compose DB, applies pending migrations, drops it. Needs `just up`. The snapshot is shredded on exit (carries member PII).
+- **`just migrate-check-prod`** — restores the latest prod snapshot (from the DIL-328 S3 backup) and applies *pending* migrations against that real data, then drops it. Catches data-shape failures that only surface on populated tables — e.g. a TEXT/UUID cast on a non-empty column (DIL-363), a `NOT NULL` / `CHECK` addition on existing rows. Needs `just up` running + `BACKUP_S3_*` env; pass a local `*.dump` to work offline. **Run this before any migration that changes a column type, adds a `NOT NULL`/`CHECK`, or otherwise depends on existing row contents.** The snapshot is fetched to a tmpdir and shredded on exit (carries member PII).
 
 The recipe spins up a fresh `brygge_migrate_check` DB, applies every migration in `backend/migrations/` end-to-end as the `brygge` role, then drops it. Failures here are deploy-blocking — fix the migration before shipping. Catches:
 
@@ -240,20 +108,6 @@ nix develop /home/ryan/code/personal/brygge --command bash -c "cd backend && go 
 ```
 
 Node (v22) is available system-wide. Frontend commands (`npm`, `npx`) work directly from `frontend/`.
-
-### Troubleshooting production data
-
-To inspect production data (e.g. a Vipps payment that didn't reconcile to its
-faktura), use `just prod-query "<read-only SQL>"`. It runs as the restricted,
-read-only `brygge_dev_ro` role: writes are rejected and member identity columns
-(names, emails, addresses) come back **NULL by design** — correlate on
-`user_id` / `kid_number` / `vipps_reference` instead. The deny / allow / mask
-table matrix is [docs/developer/security/dev-query.md](docs/developer/security/dev-query.md).
-Prefer this wrapper over raw `ssh`/`psql` (a permission allowlist should cover
-only `just prod-query`), and add your own `LIMIT` — rows are not capped.
-Without a usable SSH key (e.g. an agent session), use `just prod-query-http
-"<sql>"` instead — same role and masking, authenticated by a short-lived
-developer token from `$BRYGGE_DEV_TOKEN` or `~/.config/brygge/dev-token`.
 
 ## Common Commands
 
@@ -288,7 +142,7 @@ For single-test examples and full dev workflow, see [CONTRIBUTING.md](CONTRIBUTI
 ### Backend (`backend/`)
 
 - **Go 1.25** with **chi/v5** router, **PostgreSQL 16** (pgx/v5 + sqlc), **Redis 7** (cache/sessions)
-- Routes in `cmd/api/main.go`, one handler struct per domain, auth via server-side sessions (`middleware.AuthenticateSession`)
+- Routes in `cmd/api/main.go`, one handler struct per domain, auth via JWT middleware
 - Claims: `middleware.GetClaims(ctx)` → `*middleware.Claims` (UserID, ClubID, Roles)
 - Pagination: `shared.PaginatedResponse` → `{ items, limit, offset, has_more }`
 - Feature flags: `cfg.Features.{Bookings, Projects, Calendar, Commerce, Communications}`
@@ -415,8 +269,14 @@ Real issues that have been encountered in passing but are deliberately out of sc
 
 ## Testing Tips
 
-- **Go unit tests**: Use nil db/redis — no containers needed. Handler tests use `setupAuthenticatedRouter()` + `generateTestToken()`, an opaque test token the test middleware decodes into claims (not a JWT)
+- **Go unit tests**: Use nil db/redis — no containers needed. Handler tests use `setupAuthenticatedRouter()` + `generateTestToken()` for JWT mocking
 - **Go integration tests**: Real Postgres/Redis via testcontainers. Run with `-count=1` to bypass cache
 - **Vue tests**: `mountWithPlugins()` from `src/test/test-utils.ts`, mock lucide-vue-next icons
 - **E2E**: Playwright specs in `e2e/`. Not yet in CI (local only)
 - **CI**: `api-types` freshness check catches stale OpenAPI types. Security jobs are `continue-on-error` — failures don't block merge
+
+# SYSTEM.md
+
+<!-- Rules for all repos, not only this repo. A periodic process moves them to
+     SYSTEM.md in ryanjdillon/agents. Keep this heading. See docs/promotion.md
+     in that repo. -->
