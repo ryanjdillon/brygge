@@ -190,6 +190,23 @@ open   voided
 
 Enforced by `invoices_status_check` (BRY-325). This column is **not** the payment state: whether an invoice is paid lives in `payment_id` (reconciled) and `online_paid_at` (captured via the pay link by the provider in `online_paid_provider`, awaiting settlement; `vipps_paid_at` is its legacy Vipps-only copy, still written until BRY-450 drops it). Ask "is it settled?" through `finance.SettledForMemberSQL` / `SettledForGLSQL`, never with ad-hoc checks. See the invariant "Settled means one thing, defined once".
 
+### `orders.purpose` and `invoices.purpose` (CHECK since migration 000135)
+
+```
+membership_join
+```
+
+NULL (the default) is the ordinary case: settling the order or faktura only clears what was owed. A value names a side effect of settlement. `membership_join` marks the applicant's pending checkout order, and the KID faktura issued when the applicant chooses bank payment instead; settling either grants membership. Enforced by `orders_purpose_check` and `invoices_purpose_check`. A new value needs its settlement hook in every settle path (Vipps, Stripe and the KID match) before anything writes it.
+
+### `legal_documents.doc_type` and `user_consents.consent_type` (TEXT, no CHECK)
+
+```
+doc_type:      terms   privacy   statutes   harbour_rules   terms_of_sale
+consent_type:  terms   privacy   statutes   harbour_rules   terms_of_sale   newsletter
+```
+
+Neither column has a CHECK. The vocabularies are `legalDocTypes` and `consentTypes` in `backend/internal/handlers/gdpr.go`: the admin legal editor and `POST /members/me/consent` refuse other values (400), and `GET /legal/{docType}` answers 404 for one. A consent to a document names that document's type and records its version; `newsletter` is an opt-in with no document. The OpenAPI enums (`get-legal-document`'s path, `record-consent`'s body) and the `gdpr.consentType.*` i18n keys follow the same lists. Rows written before the vocabulary was enforced may hold `privacy_policy`, which the old admin editor sent; `GET /legal/privacy` never serves those, and the `gdpr.consentType.privacy_policy` label stays so the admin list can show them.
+
 ### `invoices.recipient_kind`
 
 ```

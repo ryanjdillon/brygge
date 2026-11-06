@@ -107,6 +107,15 @@ func TestIntegration_AdminDeleteUserSoftRevokesAccess(t *testing.T) {
 		userID, accounting.ErasedEmailSuffix); n != 1 {
 		t.Errorf("identity not anonymised with a per-member address")
 	}
+	if n := gdprCount(t, e.db,
+		`SELECT count(*) FROM users WHERE id = $1 AND membership_cancel_reason IS NULL`, userID); n != 1 {
+		t.Errorf("membership_cancel_reason still set")
+	}
+	if n := gdprCount(t, e.db,
+		`SELECT count(*) FROM membership_applications WHERE club_id = $1 AND lower(email) = lower($2)`,
+		e.clubID, email); n != 0 {
+		t.Errorf("join requests left = %d, want 0", n)
+	}
 	if revoked := e.deleteAuditSessionsRevoked(t, userID); revoked != 1 {
 		t.Errorf("audit sessions_revoked = %d, want 1", revoked)
 	}

@@ -46,6 +46,29 @@ func DeleteMemberMailLog(ctx context.Context, db audit.Execer, userID string) er
 	return nil
 }
 
+// EraseMemberMembershipData clears what the join and cancel flows hold about a
+// member outside the users identity columns: the member's own free-text reason
+// for cancelling, and every join request made with their current address in
+// their club. Neither has a retention obligation, so every path that erases a
+// member's identity calls this, in its transaction and before the address is
+// overwritten.
+func EraseMemberMembershipData(ctx context.Context, db audit.Execer, userID string) error {
+	if _, err := db.Exec(ctx,
+		`DELETE FROM membership_applications a USING users u
+		  WHERE u.id = $1 AND a.club_id = u.club_id AND lower(a.email) = lower(u.email)`,
+		userID,
+	); err != nil {
+		return fmt.Errorf("delete member join requests: %w", err)
+	}
+	if _, err := db.Exec(ctx,
+		`UPDATE users SET membership_cancel_reason = NULL WHERE id = $1`,
+		userID,
+	); err != nil {
+		return fmt.Errorf("clear cancellation reason: %w", err)
+	}
+	return nil
+}
+
 // PurgeExpiredMemberPII anonymizes the PII of deactivated members whose
 // financial records have all cleared the retention window (BRY-207). It never
 // deletes the user row — invoices reference it (no ON DELETE cascade) and keep
@@ -200,6 +223,9 @@ func (s *Service) purgeOneMember(ctx context.Context, userID, clubID string) (bo
 	// Before the update overwrites the address it matches on. An ineligible
 	// member returns below without committing, so this rolls back with it.
 	if err := DeleteMemberMailLog(ctx, tx, userID); err != nil {
+		return false, err
+	}
+	if err := EraseMemberMembershipData(ctx, tx, userID); err != nil {
 		return false, err
 	}
 

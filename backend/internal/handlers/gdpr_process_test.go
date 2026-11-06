@@ -122,6 +122,20 @@ func (e *gdprProcessEnv) seedMember(t *testing.T, withRecords bool) (userID, ema
 		t.Fatalf("seed developer token: %v", err)
 	}
 
+	if _, err := e.db.Exec(ctx,
+		`UPDATE users SET membership_cancelled_at = now(), membership_ends_on = '2026-12-31',
+		        membership_cancel_reason = 'Synthetic reason' WHERE id = $1`, userID,
+	); err != nil {
+		t.Fatalf("seed cancellation: %v", err)
+	}
+	if _, err := e.db.Exec(ctx,
+		`INSERT INTO membership_applications (club_id, first_name, last_name, email, token_hash, expires_at)
+		 VALUES ($1, 'Test', 'Applicant', $2, $3, now() + interval '1 day')`,
+		e.clubID, email, "join-"+testutil.RandomHex(8),
+	); err != nil {
+		t.Fatalf("seed join request: %v", err)
+	}
+
 	if withRecords {
 		if _, err := e.db.Exec(ctx,
 			`INSERT INTO invoices (club_id, user_id, kid_number, total_amount, status, issue_date, due_date)
@@ -237,6 +251,18 @@ func TestIntegration_GDPRProcessDeletionRevokesAccess(t *testing.T) {
 			inv.HandleGetUserPayLink(recMint, userPayLinkReq(userID, e.clubID))
 			if recMint.Code != http.StatusNotFound {
 				t.Errorf("minting a pay link for the member status = %d, want 404", recMint.Code)
+			}
+
+			// The cancellation reason and the join requests carry no retention
+			// obligation, so both outcomes remove them.
+			if n := gdprCount(t, e.db,
+				`SELECT count(*) FROM users WHERE id = $1 AND membership_cancel_reason IS NULL`, userID); n != 1 {
+				t.Errorf("membership_cancel_reason still set")
+			}
+			if n := gdprCount(t, e.db,
+				`SELECT count(*) FROM membership_applications WHERE club_id = $1 AND lower(email) = lower($2)`,
+				e.clubID, email); n != 0 {
+				t.Errorf("join requests left = %d, want 0", n)
 			}
 
 			var erasedEmail bool

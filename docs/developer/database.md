@@ -545,6 +545,33 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   follow-up. Both new columns pass through `dev_masked.users` raw. **The down**
   drops `dev_masked.users` first (the repeatable file rebuilds it), then the
   CHECK and both columns.
+- **Self-service membership.** 000135 adds the schema for joining online and
+  cancelling at year end; the flows that use it come with their own changes.
+  On `users`: `member_since` (DATE, when membership was granted),
+  `membership_cancelled_at` (TIMESTAMPTZ, when the member cancelled),
+  `membership_ends_on` (DATE, the day the cancellation takes effect) and
+  `membership_cancel_reason` (TEXT, the member's own words, cleared by every
+  erasure path through `accounting.EraseMemberMembershipData`). The table
+  `membership_applications` holds a join request until its email link is
+  clicked: the form fields (`first_name`, `last_name`, `email`, nullable
+  `phone`, `address_line`, `postal_code`, `city`, `is_local`, `newsletter`),
+  the SHA-256 `token_hash` of the link token (UNIQUE), `consent_versions`
+  (JSONB, consent type to document version), `expires_at` and `consumed_at`
+  (single use). `club_id` cascades; `idx_membership_applications_expires`
+  serves the purge, `idx_membership_applications_club_email`
+  (`club_id, lower(email)`) the per-address rate limit and erasure, which
+  deletes a member's requests by address. `clubs.join_price_item_id` (UUID,
+  `ON DELETE SET NULL`) is the price item a join is charged from; NULL means
+  joining is closed. `orders.purpose` and `invoices.purpose` (TEXT, NULL by
+  default, CHECKs `orders_purpose_check` / `invoices_purpose_check`) mark what
+  settlement must also do; vocabulary in
+  [`enums.md`](reference/enums.md#orderspurpose-and-invoicespurpose-check-since-migration-000135).
+  `dev_masked` exposes the dates, `join_price_item_id` and `purpose` raw,
+  NULLs `membership_cancel_reason`, and fronts `membership_applications` with
+  the identity and token hash NULL. **The down** drops the five affected
+  `dev_masked` views first, then the CHECKs, columns and table. The current
+  repeatable file names what the down drops, so rebuilding the views after a
+  down needs the code reverted with it.
 - `invoice_pdf_archive` (migration 000050) — preserves prior PDF bytes when
   `invoices.pdf_data` is regenerated, so Norwegian bokføringsloven §13's
   5-year retention requirement is satisfied.

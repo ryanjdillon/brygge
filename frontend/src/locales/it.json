@@ -1966,7 +1966,12 @@
     "noConsents": "No consents recorded yet.",
     "consentType": {
       "terms": "Terms of Service",
-      "privacy_policy": "Privacy Policy"
+      "privacy_policy": "Privacy Policy",
+      "privacy": "Informativa sulla privacy",
+      "statutes": "Statuto",
+      "harbour_rules": "Regolamento del porto",
+      "terms_of_sale": "Condizioni di vendita",
+      "newsletter": "Newsletter"
     },
     "admin": {
       "title": "GDPR & Privacy",

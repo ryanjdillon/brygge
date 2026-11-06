@@ -2927,7 +2927,12 @@
     "noConsents": "Ingen samtykker registrert",
     "consentType": {
       "terms": "Vilkår for bruk",
-      "privacy_policy": "Personvernerklæring"
+      "privacy_policy": "Personvernerklæring",
+      "privacy": "Personvernerklæring",
+      "statutes": "Vedtekter",
+      "harbour_rules": "Havnereglement",
+      "terms_of_sale": "Salgsvilkår",
+      "newsletter": "Nyhetsbrev"
     },
     "admin": {
       "title": "GDPR-administrasjon",

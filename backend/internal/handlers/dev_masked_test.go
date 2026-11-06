@@ -24,7 +24,7 @@ var maskedTables = []string{
 	"journal_entries", "journal_lines", "payments", "invoice_lines",
 	"account_mapping_rules", "vipps_message_rules", "slips", "dock_fingers",
 	"payment_refunds", "payment_webhook_events", "stripe_balance_transactions",
-	"email_sends", "mail_delivery_events",
+	"email_sends", "mail_delivery_events", "membership_applications",
 }
 
 // rawTextColumns is every text/JSON column the role may read from a raw
@@ -274,6 +274,53 @@ func TestDevMaskedViews(t *testing.T) {
 		}
 		if sendDomain != "example.test" || feedback != "fb-1" || destCount != 1 {
 			t.Errorf("diagnosis columns lost: domain %q, feedback %q, destinations %d", sendDomain, feedback, destCount)
+		}
+
+		// Membership lifecycle: the dates pass through, the member's own
+		// cancellation reason does not. A join request keeps its timestamps
+		// and flags; the applicant's identity and the link token's hash are
+		// NULL, and the raw table is denied.
+		mustExec(t, pool, ctx,
+			`UPDATE users SET member_since = '2026-03-01', membership_ends_on = '2026-12-31',
+			        membership_cancelled_at = now(), membership_cancel_reason = 'Flyttar frå Ola'
+			  WHERE id = $1`, user)
+		var memberSince, endsOn *string
+		var cancelReason *string
+		if err := rolePool.QueryRow(ctx,
+			"SELECT member_since::text, membership_ends_on::text, membership_cancel_reason FROM users WHERE id = $1", user,
+		).Scan(&memberSince, &endsOn, &cancelReason); err != nil {
+			t.Fatalf("role select membership columns: %v", err)
+		}
+		if cancelReason != nil {
+			t.Errorf("membership_cancel_reason leaked through dev_masked.users: %q", *cancelReason)
+		}
+		if memberSince == nil || *memberSince != "2026-03-01" || endsOn == nil || *endsOn != "2026-12-31" {
+			t.Errorf("membership dates not passed through: since %v, ends %v", memberSince, endsOn)
+		}
+		app := "77777777-0000-0000-0000-000000000001"
+		mustExec(t, pool, ctx, `INSERT INTO membership_applications
+			(id, club_id, first_name, last_name, email, phone, address_line, postal_code, city, newsletter, token_hash, consent_versions, expires_at)
+			VALUES ($1, $2, 'Kari', 'Nordmann', 'kari@example.test', '99999998', 'Strandvegen 5', '5000', 'Bergen', true,
+			        'synthetic-token-hash', '{"privacy":"1"}', now() + interval '1 day')`, app, club)
+		var appFirst, appEmail, appPhone, appAddr, appToken *string
+		var appNewsletter bool
+		var appConsents string
+		if err := rolePool.QueryRow(ctx,
+			`SELECT first_name, email, phone, address_line, token_hash, newsletter, consent_versions::text
+			   FROM membership_applications WHERE id = $1`, app,
+		).Scan(&appFirst, &appEmail, &appPhone, &appAddr, &appToken, &appNewsletter, &appConsents); err != nil {
+			t.Fatalf("role select from masked membership_applications: %v", err)
+		}
+		for _, s := range []*string{appFirst, appEmail, appPhone, appAddr, appToken} {
+			if s != nil {
+				t.Errorf("membership application identity or token leaked: %q", *s)
+			}
+		}
+		if !appNewsletter || appConsents != `{"privacy": "1"}` {
+			t.Errorf("application flags lost: newsletter %v, consents %q", appNewsletter, appConsents)
+		}
+		if _, err := rolePool.Exec(ctx, "SELECT 1 FROM public.membership_applications"); err == nil {
+			t.Error("role could read raw public.membership_applications")
 		}
 
 		drift := "drifttest_" + testutil.RandomHex(6)

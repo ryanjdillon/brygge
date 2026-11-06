@@ -5334,8 +5334,11 @@ export interface components {
              * @example https://example.com/schemas/Record-consentRequest.json
              */
             readonly $schema?: string;
-            /** @description Type of consent */
-            consent_type: string;
+            /**
+             * @description Type of consent
+             * @enum {string}
+             */
+            consent_type: "terms" | "privacy" | "statutes" | "harbour_rules" | "terms_of_sale" | "newsletter";
             /** @description Consent version */
             version: string;
         };
@@ -10305,7 +10308,7 @@ export interface operations {
             header?: never;
             path: {
                 /** @description Document type */
-                docType: "terms" | "privacy";
+                docType: "terms" | "privacy" | "statutes" | "harbour_rules" | "terms_of_sale";
             };
             cookie?: never;
         };

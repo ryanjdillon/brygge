@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAdminDeletionRequests, useProcessDeletion, useAdminLegalDocuments, useCreateLegalDocument } from '@/composables/useGdpr'
+import type { LegalDocType } from '@/composables/useGdpr'
 import Select from '@/components/ui/form/Select.vue'
 import Input from '@/components/ui/form/Input.vue'
 import Textarea from '@/components/ui/form/Textarea.vue'
@@ -23,8 +24,8 @@ const confirm = useConfirm()
 const toast = useToast()
 
 const showForm = ref(false)
-const form = ref({
-  doc_type: 'terms',
+const form = ref<{ doc_type: LegalDocType; version: string; content: string; publish: boolean }>({
+  doc_type: 'privacy',
   version: '',
   content: '',
   publish: false,
@@ -59,10 +60,10 @@ async function handleProcess(req: { id: string; user_name?: string }) {
   })
 }
 
-const docTypeOptions = computed(() => [
-  { value: 'terms', label: t('gdpr.consentType.terms') },
-  { value: 'privacy_policy', label: t('gdpr.consentType.privacy_policy') },
-])
+const docTypes: LegalDocType[] = ['privacy', 'statutes', 'harbour_rules', 'terms_of_sale', 'terms']
+const docTypeOptions = computed(() =>
+  docTypes.map((value) => ({ value, label: t(`gdpr.consentType.${value}`) })),
+)
 
 function handleCreate() {
   createDocument(
@@ -70,7 +71,7 @@ function handleCreate() {
     {
       onSuccess: () => {
         showForm.value = false
-        form.value = { doc_type: 'terms', version: '', content: '', publish: false }
+        form.value = { doc_type: 'privacy', version: '', content: '', publish: false }
       },
     },
   )

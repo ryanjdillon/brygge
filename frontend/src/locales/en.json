@@ -2931,7 +2931,12 @@
     "noConsents": "No consents recorded",
     "consentType": {
       "terms": "Terms of service",
-      "privacy_policy": "Privacy policy"
+      "privacy_policy": "Privacy policy",
+      "privacy": "Privacy policy",
+      "statutes": "Statutes",
+      "harbour_rules": "Harbour rules",
+      "terms_of_sale": "Terms of sale",
+      "newsletter": "Newsletter"
     },
     "admin": {
       "title": "GDPR Management",

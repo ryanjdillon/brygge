@@ -3437,6 +3437,14 @@
           },
           "consent_type": {
             "description": "Type of consent",
+            "enum": [
+              "terms",
+              "privacy",
+              "statutes",
+              "harbour_rules",
+              "terms_of_sale",
+              "newsletter"
+            ],
             "type": "string"
           },
           "version": {
@@ -8994,7 +9002,10 @@
               "description": "Document type",
               "enum": [
                 "terms",
-                "privacy"
+                "privacy",
+                "statutes",
+                "harbour_rules",
+                "terms_of_sale"
               ],
               "type": "string"
             }

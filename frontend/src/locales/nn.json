@@ -2810,7 +2810,12 @@
     "noConsents": "Ingen samtykke registrerte",
     "consentType": {
       "terms": "Vilkår for bruk",
-      "privacy_policy": "Personvernerklæring"
+      "privacy_policy": "Personvernerklæring",
+      "privacy": "Personvernerklæring",
+      "statutes": "Vedtekter",
+      "harbour_rules": "Hamnereglement",
+      "terms_of_sale": "Salsvilkår",
+      "newsletter": "Nyheitsbrev"
     },
     "admin": {
       "title": "GDPR-administrasjon",

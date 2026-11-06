@@ -3,10 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
 import { ApiError } from '@/lib/errors'
 import { useFreshTotp } from '@/composables/useFreshTotp'
-import type { components } from '@/types/api'
+import type { components, operations } from '@/types/api'
 
 export type DeletionRequest = components['schemas']['DeletionRequest']
 export type LegalDocument = components['schemas']['LegalDocument']
+export type LegalDocType = operations['get-legal-document']['parameters']['path']['docType']
 
 export function useDeletionStatus() {
   const client = useApiClient()
@@ -65,7 +66,7 @@ export function useMyConsents() {
   return { ...query, consents }
 }
 
-export function useLegalDocument(docType: 'terms' | 'privacy') {
+export function useLegalDocument(docType: LegalDocType) {
   const client = useApiClient()
   return useQuery({
     queryKey: ['legal-document', docType],

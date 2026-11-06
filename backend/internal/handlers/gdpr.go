@@ -26,6 +26,29 @@ import (
 // from grace_end and is overdue one calendar month after requested_at.
 const deletionGracePeriod = 14 * 24 * time.Hour
 
+// legalDocTypes is the vocabulary of legal_documents.doc_type: the documents a
+// club publishes in versions. The column is TEXT without a CHECK, so these
+// handlers are what keep it closed.
+var legalDocTypes = map[string]bool{
+	"terms":         true,
+	"privacy":       true,
+	"statutes":      true,
+	"harbour_rules": true,
+	"terms_of_sale": true,
+}
+
+// consentTypes is the vocabulary of user_consents.consent_type. Each legal
+// document type is a consent to that document's version; newsletter is an
+// opt-in with no document behind it.
+var consentTypes = map[string]bool{
+	"terms":         true,
+	"privacy":       true,
+	"statutes":      true,
+	"harbour_rules": true,
+	"terms_of_sale": true,
+	"newsletter":    true,
+}
+
 type GDPRHandler struct {
 	db     *pgxpool.Pool
 	config *config.Config
@@ -291,6 +314,10 @@ func (h *GDPRHandler) HandleRecordConsent(w http.ResponseWriter, r *http.Request
 		Error(w, http.StatusBadRequest, "consent_type and version are required")
 		return
 	}
+	if !consentTypes[req.ConsentType] {
+		Error(w, http.StatusBadRequest, "unknown consent_type")
+		return
+	}
 
 	var id string
 	var grantedAt time.Time
@@ -366,6 +393,10 @@ func (h *GDPRHandler) HandleGetMyConsents(w http.ResponseWriter, r *http.Request
 func (h *GDPRHandler) HandleGetLegalDocument(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	docType := chi.URLParam(r, "docType")
+	if !legalDocTypes[docType] {
+		Error(w, http.StatusNotFound, "document not found")
+		return
+	}
 
 	var id, version, content string
 	var publishedAt time.Time
@@ -628,7 +659,7 @@ func (h *GDPRHandler) HandleProcessDeletion(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Always wipe data carrying no retention obligation.
-	recordsWiped := []string{"push_subscriptions", "notification_preferences", "user_consents", "email_sends", "mail_delivery_events"}
+	recordsWiped := []string{"push_subscriptions", "notification_preferences", "user_consents", "email_sends", "mail_delivery_events", "membership_applications", "membership_cancel_reason"}
 	for _, stmt := range []string{
 		`DELETE FROM push_subscriptions WHERE user_id = $1`,
 		`DELETE FROM notification_preferences WHERE user_id = $1`,
@@ -642,6 +673,11 @@ func (h *GDPRHandler) HandleProcessDeletion(w http.ResponseWriter, r *http.Reque
 	}
 	if err = accounting.DeleteMemberMailLog(ctx, tx, userID); err != nil {
 		h.log.Error().Err(err).Msg("failed to delete mail log")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if err = accounting.EraseMemberMembershipData(ctx, tx, userID); err != nil {
+		h.log.Error().Err(err).Msg("failed to erase membership data")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -749,6 +785,10 @@ func (h *GDPRHandler) HandleAdminCreateLegalDocument(w http.ResponseWriter, r *h
 
 	if req.DocType == "" || req.Version == "" || req.Content == "" {
 		Error(w, http.StatusBadRequest, "doc_type, version, and content are required")
+		return
+	}
+	if !legalDocTypes[req.DocType] {
+		Error(w, http.StatusBadRequest, "unknown doc_type")
 		return
 	}
 

@@ -2,6 +2,7 @@ package accounting
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -121,5 +122,71 @@ func TestIntegration_PurgeOneMemberSkipsReactivatedMember(t *testing.T) {
 	}
 	if done, err := svc.purgeOneMember(ctx, userID, clubID); err != nil || done {
 		t.Fatalf("second purgeOneMember = (%v, %v), want (false, nil)", done, err)
+	}
+}
+
+// The sweep clears the member's own cancellation reason and deletes the join
+// requests made with their address in their club, and nothing else's.
+func TestIntegration_PurgeOneMemberErasesMembershipData(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	clubID := testutil.SeedClub(t, pool)
+	otherClub := testutil.SeedClub(t, pool)
+	svc := NewService(pool, nil, zerolog.Nop())
+
+	userID, email := testutil.SeedUser(t, pool, clubID, []string{"member"})
+	if _, err := pool.Exec(ctx,
+		`UPDATE users SET deactivated_at = now(), membership_ends_on = '2025-12-31',
+		        membership_cancelled_at = now(), membership_cancel_reason = 'Synthetic reason'
+		  WHERE id = $1`, userID); err != nil {
+		t.Fatalf("seed cancelled member: %v", err)
+	}
+	insertApp := func(club, addr, hash string) {
+		t.Helper()
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO membership_applications (club_id, first_name, last_name, email, token_hash, expires_at)
+			 VALUES ($1, 'Test', 'Applicant', $2, $3, now() + interval '1 day')`,
+			club, addr, hash); err != nil {
+			t.Fatalf("seed application: %v", err)
+		}
+	}
+	insertApp(clubID, strings.ToUpper(email), "hash-own")
+	insertApp(clubID, "someone-else@example.test", "hash-other-address")
+	insertApp(otherClub, email, "hash-other-club")
+
+	if done, err := svc.purgeOneMember(ctx, userID, clubID); err != nil || !done {
+		t.Fatalf("purgeOneMember = (%v, %v), want (true, nil)", done, err)
+	}
+
+	var reason *string
+	var endsOn *string
+	if err := pool.QueryRow(ctx,
+		`SELECT membership_cancel_reason, membership_ends_on::text FROM users WHERE id = $1`, userID,
+	).Scan(&reason, &endsOn); err != nil {
+		t.Fatalf("read member: %v", err)
+	}
+	if reason != nil {
+		t.Errorf("membership_cancel_reason = %q, want NULL", *reason)
+	}
+	if endsOn == nil || *endsOn != "2025-12-31" {
+		t.Errorf("membership_ends_on = %v, want it kept", endsOn)
+	}
+
+	rows, err := pool.Query(ctx, `SELECT token_hash FROM membership_applications ORDER BY token_hash`)
+	if err != nil {
+		t.Fatalf("list applications: %v", err)
+	}
+	var left []string
+	for rows.Next() {
+		var h string
+		if err := rows.Scan(&h); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		left = append(left, h)
+	}
+	rows.Close()
+	if strings.Join(left, ",") != "hash-other-address,hash-other-club" {
+		t.Errorf("applications left = %v, want only the other address and the other club", left)
 	}
 }

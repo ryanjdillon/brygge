@@ -871,6 +871,12 @@ A new group is created just before the faktura built-in and the positions are re
 
 **Failure mode:** a row written after DATA is lost when the process dies in between: SES has the message and publishes its events, but they can only be stored unlinked, and the Leveringslogg shows the faktura as never sent.
 
+### Erasure clears the cancellation reason and the join requests
+
+**Rule (migration 000135):** `users.membership_cancel_reason` is the member's own free text and `membership_applications` rows hold an applicant's identity; neither has a retention obligation. Every path that erases a member's identity (`HandleDeleteUser`, `HandleProcessDeletion` in both outcomes, `purgeOneMember`) calls `accounting.EraseMemberMembershipData` in its transaction, **before** the address is overwritten: it NULLs the reason and deletes the club's join requests whose address matches the member's, case-insensitively. The membership dates stay; they are not identity. `dev_masked` NULLs the reason and every identity column of `membership_applications`, and the token hash.
+
+**Failure mode:** a deferred or erased member's own words about why they left, or the name and address they typed into the join form, outlive the erasure.
+
 ### An ambiguous send is never retried automatically
 
 **Rule (BRY-589, MAIL-3):** an error while writing the message body or at the close of DATA wraps `email.ErrDeliveryAmbiguous` and is recorded `unknown`. No caller (reminder worker, delivery queue, magic-link fallback) retries an error that `errors.Is` it; only a person resends, after checking.

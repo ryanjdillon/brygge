@@ -936,6 +936,11 @@ func (h *AdminUsersHandler) HandleDeleteUser(w http.ResponseWriter, r *http.Requ
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	if err = accounting.EraseMemberMembershipData(ctx, tx, userID); err != nil {
+		h.log.Error().Err(err).Msg("failed to erase membership data")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
 
 	// The row is anonymised in place and never deleted. Other tables reference
 	// it without a cascade (audit actors, deletion requests, orders, journal

@@ -48,6 +48,8 @@ SELECT
     kind,                                -- person | system, not PII
     harbor_share_owner,                  -- ownership flag, not identity
     harbor_share_paid_on,                -- ownership date, not identity
+    member_since, membership_cancelled_at, membership_ends_on,
+    NULL::text  AS membership_cancel_reason, -- member-typed free text
     (email IS NOT NULL) AS has_email
 FROM public.users;
 
@@ -86,8 +88,28 @@ SELECT
     online_max_amount, payment_fee_account, stripe_clearing_account,
     stripe_payout_descriptor, stripe_suspense_account, stripe_dispute_account,
     vipps_portal_url,                    -- club's own portal address, host-restricted
-    automatic_booking                    -- boolean switch
+    automatic_booking,                   -- boolean switch
+    join_price_item_id                   -- catalog id
 FROM public.clubs;
+
+-- Unconfirmed join requests: the applicant's identity is NULL and so is the
+-- link token's hash (a credential). What stays answers "did a join request
+-- arrive, and was it confirmed": timestamps, the two flags and the consent
+-- versions (document version strings, not personal).
+CREATE VIEW dev_masked.membership_applications AS
+SELECT
+    id, club_id,
+    NULL::text AS first_name,
+    NULL::text AS last_name,
+    NULL::text AS email,
+    NULL::text AS phone,
+    NULL::text AS address_line,
+    NULL::text AS postal_code,
+    NULL::text AS city,
+    is_local, newsletter,
+    NULL::text AS token_hash,
+    consent_versions, created_at, expires_at, consumed_at
+FROM public.membership_applications;
 
 CREATE VIEW dev_masked.billing_recipients AS
 SELECT
@@ -108,6 +130,7 @@ SELECT
     created_at, updated_at,
     NULL::text AS token,                  -- pay-link capability secret
     provider,
+    purpose,                              -- fixed code
     (guest_email IS NOT NULL) AS has_guest_email
 FROM public.orders;
 
@@ -130,6 +153,7 @@ SELECT
     vipps_payment_expires_at, vipps_paid_at, vipps_payment_link_opt_in,
     credits_invoice_id, reissued_as_invoice_id,
     online_paid_at, online_paid_provider, online_payment_opt_in,
+    purpose,                              -- fixed code
     (pdf_data IS NOT NULL) AS has_pdf
 FROM public.invoices;
 

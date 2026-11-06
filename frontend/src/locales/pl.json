@@ -1937,7 +1937,12 @@
     "noConsents": "No consents recorded yet.",
     "consentType": {
       "terms": "Terms of Service",
-      "privacy_policy": "Privacy Policy"
+      "privacy_policy": "Privacy Policy",
+      "privacy": "Polityka prywatności",
+      "statutes": "Statut",
+      "harbour_rules": "Regulamin portu",
+      "terms_of_sale": "Warunki sprzedaży",
+      "newsletter": "Newsletter"
     },
     "admin": {
       "title": "GDPR & Privacy",

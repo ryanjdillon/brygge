@@ -218,7 +218,7 @@ func registerPublicContentOps(api huma.API) {
 		Tags:        []string{"Legal"},
 		Summary:     "Get legal document",
 	}, stub[struct {
-		DocType string `path:"docType" enum:"terms,privacy" doc:"Document type"`
+		DocType string `path:"docType" enum:"terms,privacy,statutes,harbour_rules,terms_of_sale" doc:"Document type"`
 	}, struct{ Body LegalDocument }]())
 
 	huma.Register(api, huma.Operation{
@@ -1210,7 +1210,7 @@ func registerGDPROps(api huma.API) {
 		Security:    BearerSecurity,
 	}, stub[struct {
 		Body struct {
-			ConsentType string `json:"consent_type" doc:"Type of consent"`
+			ConsentType string `json:"consent_type" enum:"terms,privacy,statutes,harbour_rules,terms_of_sale,newsletter" doc:"Type of consent"`
 			Version     string `json:"version" doc:"Consent version"`
 		}
 	}, struct{ Body StatusResponse }]())

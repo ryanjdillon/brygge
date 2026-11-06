@@ -63,7 +63,7 @@ func TestHandleRecordConsentUnauthenticated(t *testing.T) {
 	h := newTestGDPRHandler(t)
 	r := setupAuthenticatedRouter(http.MethodPost, "/members/me/consent", h.HandleRecordConsent)
 
-	body := `{"consent_type":"privacy_policy","version":"1.0"}`
+	body := `{"consent_type":"privacy","version":"1.0"}`
 	req := httptest.NewRequest(http.MethodPost, "/members/me/consent", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -104,7 +104,7 @@ func TestHandleRecordConsentMissingFields(t *testing.T) {
 		body string
 	}{
 		{"missing consent_type", `{"version":"1.0"}`},
-		{"missing version", `{"consent_type":"privacy_policy"}`},
+		{"missing version", `{"consent_type":"privacy"}`},
 		{"both empty", `{}`},
 	}
 
@@ -132,20 +132,58 @@ func TestHandleRecordConsentMissingFields(t *testing.T) {
 	}
 }
 
-func TestHandleGetLegalDocumentNotFound(t *testing.T) {
+// A type outside the vocabulary is answered before the database is read, so
+// the nil db here is never touched.
+func TestHandleGetLegalDocumentUnknownTypeIs404(t *testing.T) {
 	h := newTestGDPRHandler(t)
 
 	r := setupAuthenticatedRouter(http.MethodGet, "/legal/{docType}", h.HandleGetLegalDocument)
 
 	req := httptest.NewRequest(http.MethodGet, "/legal/privacy_policy", nil)
+	req.Header.Set("Authorization", authHeader(generateTestToken("user-123", "club-456", []string{"member"})))
 	rec := httptest.NewRecorder()
 
 	r.ServeHTTP(rec, req)
 
-	// Handler will fail because db is nil, which results in a panic recovered by chi
-	// or an internal error. Since db is nil, we expect a non-200 status.
-	if rec.Code == http.StatusOK {
-		t.Fatalf("expected non-200 status for nil db, got %d", rec.Code)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected status %d, got %d; body: %s", http.StatusNotFound, rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleRecordConsentUnknownType(t *testing.T) {
+	h := newTestGDPRHandler(t)
+	r := setupAuthenticatedRouter(http.MethodPost, "/members/me/consent", h.HandleRecordConsent)
+
+	token := generateTestToken("user-123", "club-456", []string{"member"})
+	req := httptest.NewRequest(http.MethodPost, "/members/me/consent",
+		strings.NewReader(`{"consent_type":"marketing","version":"1.0"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", authHeader(token))
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d; body: %s", http.StatusBadRequest, rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleAdminCreateLegalDocumentUnknownType(t *testing.T) {
+	h := newTestGDPRHandler(t)
+	r := setupRoleProtectedRouter(http.MethodPost, "/admin/gdpr/legal", h.HandleAdminCreateLegalDocument, "admin")
+
+	token := generateTestToken("user-123", "club-456", []string{"admin"})
+	// newsletter is a consent type but has no document behind it.
+	req := httptest.NewRequest(http.MethodPost, "/admin/gdpr/legal",
+		strings.NewReader(`{"doc_type":"newsletter","version":"1.0","content":"test"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", authHeader(token))
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d; body: %s", http.StatusBadRequest, rec.Code, rec.Body.String())
 	}
 }
 
@@ -243,7 +281,7 @@ func TestHandleAdminCreateLegalDocumentUnauthenticated(t *testing.T) {
 	h := newTestGDPRHandler(t)
 	r := setupRoleProtectedRouter(http.MethodPost, "/admin/gdpr/legal", h.HandleAdminCreateLegalDocument, "admin")
 
-	body := `{"doc_type":"privacy_policy","version":"1.0","content":"test","publish":true}`
+	body := `{"doc_type":"privacy","version":"1.0","content":"test","publish":true}`
 	req := httptest.NewRequest(http.MethodPost, "/admin/gdpr/legal", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -284,8 +322,8 @@ func TestHandleAdminCreateLegalDocumentMissingFields(t *testing.T) {
 		body string
 	}{
 		{"missing doc_type", `{"version":"1.0","content":"test"}`},
-		{"missing version", `{"doc_type":"privacy_policy","content":"test"}`},
-		{"missing content", `{"doc_type":"privacy_policy","version":"1.0"}`},
+		{"missing version", `{"doc_type":"privacy","content":"test"}`},
+		{"missing content", `{"doc_type":"privacy","version":"1.0"}`},
 	}
 
 	for _, tt := range tests {
