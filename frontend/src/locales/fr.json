@@ -489,6 +489,27 @@
       "refundedFull": "Le montant total a été remboursé sur votre carte.",
       "refundedPartly": "Remboursée en partie : {amount} ont été remboursés sur votre carte.",
       "creditNoteNumber": "Avoir #{number}"
+    },
+    "membership": {
+      "title": "Résilier l'adhésion",
+      "yearEnd": "La résiliation prend effet en fin d'année : vous restez membre jusqu'au {date}.",
+      "noRefund": "Les cotisations déjà payées ne sont pas remboursées.",
+      "waitingList": "Si vous êtes sur la liste d'attente, vous perdez votre place à la fin de l'adhésion.",
+      "slipOrShare": "Vous avez une place de port ou une part du port. Le bureau vous contactera à ce sujet.",
+      "openInvoices": "Vous avez {n} facture impayée. | Vous avez {n} factures impayées.",
+      "openInvoicesLink": "Voir les factures",
+      "boardRole": "Votre fonction au bureau ({roles}) prend fin avec l'adhésion.",
+      "reasonLabel": "Pourquoi ? (facultatif)",
+      "reasonPlaceholder": "Le bureau verra votre motif.",
+      "cancel": "Résilier l'adhésion",
+      "confirmTitle": "Résilier votre adhésion ?",
+      "confirmBody": "Votre adhésion prend fin le {date}. Vous recevrez une confirmation par e-mail et pourrez annuler jusqu'à cette date.",
+      "confirmAction": "Résilier",
+      "cancelledUntil": "Résiliée, prend fin le {date}",
+      "undo": "Annuler",
+      "cancelFailed": "La résiliation n'a pas pu être enregistrée. Veuillez réessayer.",
+      "undoFailed": "La résiliation n'a pas pu être annulée. Veuillez réessayer.",
+      "undoEnded": "L'adhésion a pris fin ; la résiliation ne peut plus être annulée."
     }
   },
   "admin": {
@@ -729,7 +750,7 @@
       "deactivate": "Deactivate",
       "deactivateConfirm": "Deactivate this member? They'll be hidden from active lists and can't log in, but their data and invoice history are retained.",
       "reactivate": "Reactivate",
-      "reactivateConfirm": "Reactivate this member?",
+      "reactivateConfirm": "Réactiver ce membre ? La place sur la liste d'attente n'est pas rétablie.",
       "lastAdminError": "C'est le seul administrateur actif du club. Nommez d'abord un autre membre administrateur.",
       "adminRequiredError": "Seul un administrateur peut modifier un administrateur.",
       "actionError": "La modification n'a pas pu être enregistrée.",
@@ -848,7 +869,8 @@
         "alertNoDetail": "Le dernier e-mail envoyé à cette adresse a été rejeté le {date}. Demandez une adresse à jour au membre.",
         "alertComplaint": "Le membre a signalé les e-mails du club comme spam le {date}. N'envoyez plus d'e-mails à cette adresse ; contactez le membre autrement.",
         "alertSuppressed": "Aucun e-mail n'est envoyé à cette adresse car elle a déjà rejeté des e-mails (bloquée le {date}). Demandez une adresse à jour au membre."
-      }
+      },
+      "cancelledBadge": "Résilié"
     },
     "waitingList": {
       "loadError": "Impossible de charger la liste d'attente",
@@ -2054,7 +2076,8 @@
     "exemptionRole": "Rôle",
     "exemptionItem": "Article",
     "exemptionsHint": "Les lignes exonérées apparaissent au prix plein avec une ligne de compensation « Fritak » ; une faktura à 0 kr est envoyée pour information, sans rien à payer.",
-    "exemptionsApplied": "{n} ligne(s) exonérée(s) pour les rôles du bureau."
+    "exemptionsApplied": "{n} ligne(s) exonérée(s) pour les rôles du bureau.",
+    "skipMembershipEnded": "l'adhésion prend fin le {date}, avant le début de la période"
   },
   "harborTargets": {
     "title": "Affiches de paiement QR",

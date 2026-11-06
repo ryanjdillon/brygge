@@ -19,7 +19,7 @@ Brygge is configured entirely via environment variables. In production, set thes
 | `CLUB_NAME`    | Yes      | —                       | Human-readable club name in the UI and email subjects. Unset → the NavBar says "Brygge" and emails say "your club" |
 | `DOMAIN`       | Yes      | `localhost`             | Public domain, used in email footers and canonical URLs |
 | `DISABLE_API_DOCS` | No   | —                       | `true` stops mounting the OpenAPI docs at `/api/docs` |
-| `TZ`           | No       | the host's zone         | The process's local time zone. It must be the club's: Stripe postings are dated on the local calendar day of the transaction (`created_at` in `time.Local`). NixOS sets it through `time.timeZone = clubConfig.timezone` (no env var needed); the docker-compose deploy sets `TZ` in `deploy/.env` |
+| `TZ`           | No       | the host's zone         | The process's local time zone. It must be the club's: Stripe postings are dated on the local calendar day of the transaction (`created_at` in `time.Local`), and a membership cancelled online ends on 31 December of the local year, with the daily job deactivating from the next local day (BRY-633). NixOS sets it through `time.timeZone = clubConfig.timezone` (no env var needed); the docker-compose deploy sets `TZ` in `deploy/.env` |
 
 In NixOS deploys `CLUB_SLUG`, `CLUB_NAME` and `DOMAIN` come from `clubConfig` (see the env-layering rules in the repo's `AGENTS.md`); don't put them in the secrets env file.
 

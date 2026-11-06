@@ -2233,6 +2233,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/members/me/membership": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get my membership and what cancelling it affects */
+        get: operations["get-my-membership"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/members/me/membership/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel my membership at year end
+         * @description Cancels the caller's membership with effect from 31 December of the current year (server-local), with no refund. The first call sets cancelled_at and ends_on, and queues the member's receipt and the board's notice; a repeat changes nothing. Not reachable by an applicant-only session.
+         */
+        post: operations["cancel-my-membership"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/members/me/membership/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo my membership cancellation
+         * @description Clears the caller's cancellation while the caller is still active and tells the board: through ends_on, and past it while the daily job could not deactivate them (the club's only admin). With no cancellation it changes nothing. Once the membership has ended (deactivated) it answers 409 with code `membership_ended`.
+         */
+        post: operations["undo-cancel-my-membership"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/members/me/notifications": {
         parameters: {
             query?: never;
@@ -2950,6 +3007,11 @@ export interface components {
             is_local: boolean;
             /** @description Family name */
             last_name: string;
+            /**
+             * Format: date
+             * @description Last day of membership when the member has cancelled (utmeld); null otherwise
+             */
+            membership_ends_on: string | null;
             /** @description Phone number */
             phone: string;
             /** @description Postal code */
@@ -3525,6 +3587,16 @@ export interface components {
             warnings?: string[] | null;
         };
         BulkInvoiceSkipped: {
+            /**
+             * @description Machine-readable reason, when the SPA words it itself: membership_ended (the member's cancelled membership ends before the period starts)
+             * @enum {string}
+             */
+            code?: "membership_ended";
+            /**
+             * Format: date
+             * @description With code membership_ended: the membership's last day
+             */
+            ends_on?: string;
             /** @description Why the member was skipped */
             reason: string;
             /** @description Member UUID */
@@ -3573,6 +3645,16 @@ export interface components {
              * @description Last update timestamp
              */
             updated_at: string;
+        };
+        "Cancel-my-membershipRequest": {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Cancel-my-membershipRequest.json
+             */
+            readonly $schema?: string;
+            /** @description Optional reason, shown to the board */
+            reason?: string;
         };
         ClubCoordinatesResponse: {
             /**
@@ -4795,6 +4877,49 @@ export interface components {
              * @description Width in metres
              */
             width_m?: number;
+        };
+        MyMembership: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/MyMembership.json
+             */
+            readonly $schema?: string;
+            /** @description Board roles the member holds, which end with the membership */
+            board_roles: string[] | null;
+            /** @description The cancellation can still be undone: cancelled and the member still active */
+            can_undo: boolean;
+            /**
+             * Format: date
+             * @description The ends_on a cancellation made now would set
+             */
+            cancel_ends_on: string;
+            /**
+             * Format: date-time
+             * @description When the member cancelled; null when not cancelled
+             */
+            cancelled_at: string | null;
+            /**
+             * Format: date
+             * @description Last day of membership after a cancellation (31 December of the year cancelled); null when not cancelled
+             */
+            ends_on: string | null;
+            /** @description Owns a harbor share (moloandel) */
+            harbor_share_owner: boolean;
+            /** @description Holds an active permanent slip assignment */
+            holds_slip: boolean;
+            /**
+             * Format: date
+             * @description Date membership was granted; null when unknown
+             */
+            member_since: string | null;
+            /** @description Has an active or offered waiting-list entry */
+            on_waiting_list: boolean;
+            /**
+             * Format: int64
+             * @description Fakturas the member still owes
+             */
+            open_invoices: number;
         };
         NotificationConfig: {
             /** @description Notification category */
@@ -11264,6 +11389,97 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MemberInvoice"][] | null;
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-my-membership": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyMembership"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "cancel-my-membership": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Cancel-my-membershipRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyMembership"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "undo-cancel-my-membership": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyMembership"];
                 };
             };
             /** @description Error */

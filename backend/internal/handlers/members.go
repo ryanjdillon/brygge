@@ -25,6 +25,9 @@ type MembersHandler struct {
 	db     *pgxpool.Pool
 	config *config.Config
 	log    zerolog.Logger
+	// deliveryKick wakes the delivery worker after a cancel or undo queued
+	// its emails; nil leaves them for the worker's next poll.
+	deliveryKick func()
 }
 
 func NewMembersHandler(
@@ -38,6 +41,10 @@ func NewMembersHandler(
 		log:    log.With().Str("handler", "members").Logger(),
 	}
 }
+
+// SetDeliveryKick sets the function that wakes the delivery worker once a
+// membership cancel or undo has queued its emails.
+func (h *MembersHandler) SetDeliveryKick(kick func()) { h.deliveryKick = kick }
 
 // supportedUILocales is the set of UI language codes a member may pick.
 // Keep aligned with the clubs/users CHECK constraints (migration 000047)

@@ -489,6 +489,27 @@
       "refundedFull": "L'intero importo è stato rimborsato sulla tua carta.",
       "refundedPartly": "Rimborsata in parte: {amount} sono stati rimborsati sulla tua carta.",
       "creditNoteNumber": "Nota di credito #{number}"
+    },
+    "membership": {
+      "title": "Disdici l'iscrizione",
+      "yearEnd": "La disdetta ha effetto a fine anno: resti socio fino al {date}.",
+      "noRefund": "Le quote già pagate non vengono rimborsate.",
+      "waitingList": "Se sei in lista d'attesa, perdi il posto quando l'iscrizione termina.",
+      "slipOrShare": "Hai un posto barca o una quota del porto. Il consiglio ti contatterà in merito.",
+      "openInvoices": "Hai {n} fattura non pagata. | Hai {n} fatture non pagate.",
+      "openInvoicesLink": "Vedi le fatture",
+      "boardRole": "Il tuo incarico nel consiglio ({roles}) termina con l'iscrizione.",
+      "reasonLabel": "Perché? (facoltativo)",
+      "reasonPlaceholder": "Il consiglio vedrà la tua motivazione.",
+      "cancel": "Disdici l'iscrizione",
+      "confirmTitle": "Disdire l'iscrizione?",
+      "confirmBody": "La tua iscrizione termina il {date}. Riceverai una conferma via e-mail e potrai annullare fino ad allora.",
+      "confirmAction": "Disdici",
+      "cancelledUntil": "Disdetta, termina il {date}",
+      "undo": "Annulla",
+      "cancelFailed": "Impossibile registrare la disdetta. Riprova.",
+      "undoFailed": "Impossibile annullare la disdetta. Riprova.",
+      "undoEnded": "L'iscrizione è terminata e la disdetta non può più essere annullata."
     }
   },
   "admin": {
@@ -729,7 +750,7 @@
       "deactivate": "Deactivate",
       "deactivateConfirm": "Deactivate this member? They'll be hidden from active lists and can't log in, but their data and invoice history are retained.",
       "reactivate": "Reactivate",
-      "reactivateConfirm": "Reactivate this member?",
+      "reactivateConfirm": "Riattivare questo socio? Il posto in lista d'attesa non viene ripristinato.",
       "lastAdminError": "Questo è l'unico amministratore attivo del club. Nomina prima un altro socio amministratore.",
       "adminRequiredError": "Solo un amministratore può modificare un amministratore.",
       "actionError": "Non è stato possibile salvare la modifica.",
@@ -848,7 +869,8 @@
         "alertNoDetail": "L'ultima email a questo indirizzo è stata respinta il {date}. Chiedi al socio un indirizzo aggiornato.",
         "alertComplaint": "Il socio ha segnalato le email del club come spam il {date}. Non inviare altre email a questo indirizzo; contatta il socio in un altro modo.",
         "alertSuppressed": "Le email a questo indirizzo non vengono inviate perché in passato ha respinto delle email (bloccato il {date}). Chiedi al socio un indirizzo aggiornato."
-      }
+      },
+      "cancelledBadge": "Disdetto"
     },
     "waitingList": {
       "loadError": "Impossibile caricare la lista d'attesa",
@@ -2055,7 +2077,8 @@
     "exemptionRole": "Ruolo",
     "exemptionItem": "Voce",
     "exemptionsHint": "Le righe esentate appaiono a prezzo pieno con una riga di compensazione «Fritak»; una faktura da 0 kr viene inviata a titolo informativo, senza nulla da pagare.",
-    "exemptionsApplied": "{n} riga/e esentata/e per i ruoli del consiglio."
+    "exemptionsApplied": "{n} riga/e esentata/e per i ruoli del consiglio.",
+    "skipMembershipEnded": "l'iscrizione termina il {date}, prima dell'inizio del periodo"
   },
   "harborTargets": {
     "title": "Poster di pagamento QR",

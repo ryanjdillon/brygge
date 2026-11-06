@@ -9,6 +9,7 @@ Cross-audience navigation: see [`../index.md`](../index.md).
 | [faktura.md](faktura.md) | Treasurer's guide to the invoicing module (price catalogue, send, reconcile, card refunds and disputes) |
 | [migrating-from-previous-system.md](migrating-from-previous-system.md) | Treasurer + operator guide to moving from a previous accounting system: exports, faktura import, open items, opening balance, the reference year |
 | [members.md](members.md) | Board's guide to the Members page signals: the email rejected badge and what to do about it |
+| [membership.md](membership.md) | Member's guide to cancelling online (**Meld deg ut**) and undoing it, and the board's follow-up: the notices, the **Utmeld** badge, dues runs and the 1 January deactivation |
 | [payments-overview.md](payments-overview.md) | The Payments page: reading it, and setting up its filter groups (names, icons, order, prices) |
 | [harbor-share-import.md](harbor-share-import.md) | Site admin's guide to importing harbor share (moloandel) owners from the member sheet: the CSV UTF-8 file format and the preview |
 | [harbor-qr.md](harbor-qr.md) | Harbor master's guide to QR payment targets: full-page posters and 2/4/6-up card sheets |

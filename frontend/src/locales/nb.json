@@ -578,6 +578,27 @@
       "refundedFull": "Hele beløpet er betalt tilbake til kortet ditt.",
       "refundedPartly": "Delvis refundert: {amount} er betalt tilbake til kortet ditt.",
       "creditNoteNumber": "Kreditnota #{number}"
+    },
+    "membership": {
+      "title": "Meld deg ut",
+      "yearEnd": "Utmeldingen gjelder fra årsskiftet: du er medlem ut {date}.",
+      "noRefund": "Kontingent du har betalt, refunderes ikke.",
+      "waitingList": "Står du på ventelisten, mister du plassen når medlemskapet avsluttes.",
+      "slipOrShare": "Du har båtplass eller moloandel. Styret tar kontakt om det.",
+      "openInvoices": "Du har {n} ubetalt faktura. | Du har {n} ubetalte fakturaer.",
+      "openInvoicesLink": "Se fakturaene",
+      "boardRole": "Vervet ditt ({roles}) avsluttes sammen med medlemskapet.",
+      "reasonLabel": "Hvorfor? (valgfritt)",
+      "reasonPlaceholder": "Styret ser begrunnelsen din.",
+      "cancel": "Meld deg ut",
+      "confirmTitle": "Meld deg ut?",
+      "confirmBody": "Medlemskapet ditt avsluttes {date}. Du får en bekreftelse på e-post, og du kan angre fram til da.",
+      "confirmAction": "Meld meg ut",
+      "cancelledUntil": "Utmeldt fra {date}",
+      "undo": "Angre",
+      "cancelFailed": "Utmeldingen kunne ikke registreres. Prøv igjen.",
+      "undoFailed": "Kunne ikke angre utmeldingen. Prøv igjen.",
+      "undoEnded": "Medlemskapet er avsluttet, og utmeldingen kan ikke lenger angres."
     }
   },
   "admin": {
@@ -1333,7 +1354,7 @@
       "deactivate": "Deaktiver",
       "deactivateConfirm": "Deaktiver dette medlemmet? De skjules fra aktive lister og kan ikke logge inn, men data og fakturahistorikk beholdes.",
       "reactivate": "Reaktiver",
-      "reactivateConfirm": "Reaktiver dette medlemmet?",
+      "reactivateConfirm": "Reaktiver dette medlemmet? Plassen på ventelisten gjenopprettes ikke.",
       "lastAdminError": "Dette er klubbens eneste aktive administrator. Gjør et annet medlem til administrator først.",
       "adminRequiredError": "Bare en administrator kan endre en administrator.",
       "actionError": "Endringen kunne ikke lagres.",
@@ -1482,7 +1503,8 @@
         "alertNoDetail": "Siste e-post til denne adressen ble avvist {date}. Få en oppdatert adresse fra medlemmet.",
         "alertComplaint": "Medlemmet merket e-post fra klubben som søppelpost {date}. Ikke send mer e-post til adressen; kontakt medlemmet på en annen måte.",
         "alertSuppressed": "E-post til denne adressen blir ikke sendt fordi den tidligere har avvist e-post (blokkert {date}). Få en oppdatert adresse fra medlemmet."
-      }
+      },
+      "cancelledBadge": "Utmeldt"
     },
     "waitingList": {
       "loadError": "Kunne ikke hente ventelisten",
@@ -3247,7 +3269,8 @@
     "exemptionRole": "Rolle",
     "exemptionItem": "Komponent",
     "exemptionsHint": "Fritatte linjer vises med full pris og en motpostert «Fritak»-linje; en faktura på 0 kr sendes til orientering uten noe å betale.",
-    "exemptionsApplied": "{n} linje(r) fritatt for styreroller."
+    "exemptionsApplied": "{n} linje(r) fritatt for styreroller.",
+    "skipMembershipEnded": "medlemskapet avsluttes {date}, før perioden starter"
   },
   "footer": {
     "poweredBy": "drevet av",

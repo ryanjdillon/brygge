@@ -310,6 +310,21 @@ type DirectoryMember struct {
 	Email    *string `json:"email,omitempty" doc:"Email address"`
 }
 
+// MyMembership is the caller's membership state and what cancelling it
+// affects (BRY-633).
+type MyMembership struct {
+	MemberSince      *string    `json:"member_since" format:"date" doc:"Date membership was granted; null when unknown"`
+	CancelledAt      *time.Time `json:"cancelled_at" doc:"When the member cancelled; null when not cancelled"`
+	EndsOn           *string    `json:"ends_on" format:"date" doc:"Last day of membership after a cancellation (31 December of the year cancelled); null when not cancelled"`
+	CancelEndsOn     string     `json:"cancel_ends_on" format:"date" doc:"The ends_on a cancellation made now would set"`
+	CanUndo          bool       `json:"can_undo" doc:"The cancellation can still be undone: cancelled and the member still active"`
+	OpenInvoices     int        `json:"open_invoices" doc:"Fakturas the member still owes"`
+	HoldsSlip        bool       `json:"holds_slip" doc:"Holds an active permanent slip assignment"`
+	HarborShareOwner bool       `json:"harbor_share_owner" doc:"Owns a harbor share (moloandel)"`
+	OnWaitingList    bool       `json:"on_waiting_list" doc:"Has an active or offered waiting-list entry"`
+	BoardRoles       []string   `json:"board_roles" doc:"Board roles the member holds, which end with the membership"`
+}
+
 type MemberProfile struct {
 	ID              string    `json:"id" doc:"Member UUID"`
 	ClubID          string    `json:"club_id" doc:"Club UUID"`
@@ -764,6 +779,8 @@ type BulkInvoiceCreated struct {
 type BulkInvoiceSkipped struct {
 	UserID string `json:"user_id" doc:"Member UUID"`
 	Reason string `json:"reason" doc:"Why the member was skipped"`
+	Code   string `json:"code,omitempty" enum:"membership_ended" doc:"Machine-readable reason, when the SPA words it itself: membership_ended (the member's cancelled membership ends before the period starts)"`
+	EndsOn string `json:"ends_on,omitempty" format:"date" doc:"With code membership_ended: the membership's last day"`
 }
 
 type BulkInvoiceResponse struct {
@@ -860,6 +877,7 @@ type AdminUser struct {
 	HarborShareOwner   bool                  `json:"harbor_share_owner" doc:"Owns a paid-up harbor share (moloandel). The only is-owner predicate (BRD-14)."`
 	HarborSharePaidOn  *string               `json:"harbor_share_paid_on" format:"date" doc:"Date the harbor share was paid (YYYY-MM-DD); null when not an owner or the date is unknown"`
 	RejoinBlocked      bool                  `json:"rejoin_blocked" doc:"The board's 'can't rejoin' mark: the self-service join form points this address to the board instead"`
+	MembershipEndsOn   *string               `json:"membership_ends_on" format:"date" doc:"Last day of membership when the member has cancelled (utmeld); null otherwise"`
 }
 
 // AdminEmailBounce is a member's last hard delivery outcome to their

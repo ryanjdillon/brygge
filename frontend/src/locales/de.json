@@ -489,6 +489,27 @@
       "refundedFull": "Der gesamte Betrag wurde auf Ihre Karte zurückgezahlt.",
       "refundedPartly": "Teilweise erstattet: {amount} wurden auf Ihre Karte zurückgezahlt.",
       "creditNoteNumber": "Gutschrift #{number}"
+    },
+    "membership": {
+      "title": "Mitgliedschaft kündigen",
+      "yearEnd": "Die Kündigung wird zum Jahreswechsel wirksam: Sie bleiben bis zum {date} Mitglied.",
+      "noRefund": "Bereits gezahlte Beiträge werden nicht erstattet.",
+      "waitingList": "Wenn Sie auf der Warteliste stehen, verlieren Sie Ihren Platz, sobald die Mitgliedschaft endet.",
+      "slipOrShare": "Sie haben einen Liegeplatz oder einen Hafenanteil. Der Vorstand meldet sich dazu bei Ihnen.",
+      "openInvoices": "Sie haben {n} unbezahlte Rechnung. | Sie haben {n} unbezahlte Rechnungen.",
+      "openInvoicesLink": "Rechnungen ansehen",
+      "boardRole": "Ihr Vorstandsamt ({roles}) endet mit der Mitgliedschaft.",
+      "reasonLabel": "Warum? (optional)",
+      "reasonPlaceholder": "Der Vorstand sieht Ihre Begründung.",
+      "cancel": "Mitgliedschaft kündigen",
+      "confirmTitle": "Mitgliedschaft kündigen?",
+      "confirmBody": "Ihre Mitgliedschaft endet am {date}. Sie erhalten eine Bestätigung per E-Mail und können die Kündigung bis dahin zurücknehmen.",
+      "confirmAction": "Jetzt kündigen",
+      "cancelledUntil": "Gekündigt, endet am {date}",
+      "undo": "Rückgängig",
+      "cancelFailed": "Die Kündigung konnte nicht gespeichert werden. Bitte erneut versuchen.",
+      "undoFailed": "Die Kündigung konnte nicht zurückgenommen werden. Bitte erneut versuchen.",
+      "undoEnded": "Die Mitgliedschaft ist beendet; die Kündigung kann nicht mehr zurückgenommen werden."
     }
   },
   "admin": {
@@ -729,7 +750,7 @@
       "deactivate": "Deactivate",
       "deactivateConfirm": "Deactivate this member? They'll be hidden from active lists and can't log in, but their data and invoice history are retained.",
       "reactivate": "Reactivate",
-      "reactivateConfirm": "Reactivate this member?",
+      "reactivateConfirm": "Dieses Mitglied reaktivieren? Der Wartelistenplatz wird nicht wiederhergestellt.",
       "lastAdminError": "Das ist der einzige aktive Administrator des Vereins. Machen Sie zuerst ein anderes Mitglied zum Administrator.",
       "adminRequiredError": "Nur ein Administrator kann einen Administrator ändern.",
       "actionError": "Die Änderung konnte nicht gespeichert werden.",
@@ -848,7 +869,8 @@
         "alertNoDetail": "Die letzte E-Mail an diese Adresse wurde am {date} abgewiesen. Fragen Sie das Mitglied nach einer aktuellen Adresse.",
         "alertComplaint": "Das Mitglied hat E-Mails des Vereins am {date} als Spam markiert. Senden Sie keine weiteren E-Mails an diese Adresse; kontaktieren Sie das Mitglied auf anderem Weg.",
         "alertSuppressed": "An diese Adresse werden keine E-Mails gesendet, weil sie früher E-Mails abgewiesen hat (blockiert am {date}). Fragen Sie das Mitglied nach einer aktuellen Adresse."
-      }
+      },
+      "cancelledBadge": "Gekündigt"
     },
     "waitingList": {
       "loadError": "Warteliste konnte nicht geladen werden",
@@ -2055,7 +2077,8 @@
     "exemptionRole": "Rolle",
     "exemptionItem": "Posten",
     "exemptionsHint": "Befreite Zeilen erscheinen zum vollen Preis mit einer ausgleichenden „Fritak“-Zeile; eine Faktura mit 0 kr wird zur Information versendet, ohne dass etwas zu zahlen ist.",
-    "exemptionsApplied": "{n} Zeile(n) für Vorstandsrollen befreit."
+    "exemptionsApplied": "{n} Zeile(n) für Vorstandsrollen befreit.",
+    "skipMembershipEnded": "Mitgliedschaft endet am {date}, vor Beginn des Zeitraums"
   },
   "harborTargets": {
     "title": "QR-Zahlungsplakate",

@@ -2,7 +2,7 @@
 
 > Audience: board members and site admins keeping the member register (**Medlemmer**) current.
 
-This guide covers the signals on the Members page that need someone to act. The register itself (adding, editing, importing members) is described in the app.
+This guide covers the signals on the Members page that need someone to act. The register itself (adding, editing, importing members) is described in the app. A member who has cancelled carries an amber **Utmeld** badge with their end date; see [membership.md](membership.md#for-the-board-following-up-a-cancellation).
 
 ## Email rejected badge
 

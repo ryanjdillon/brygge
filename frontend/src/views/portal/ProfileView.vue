@@ -10,6 +10,7 @@ import Checkbox from '@/components/ui/form/Checkbox.vue'
 import FormField from '@/components/ui/form/FormField.vue'
 import { LOCALE_OPTIONS, setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
+import CancelMembershipSection from '@/components/portal/CancelMembershipSection.vue'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -312,5 +313,7 @@ onMounted(() => {
         {{ isSaving ? t('portal.profile.saving') : t('common.save') }}
       </button>
     </form>
+
+    <CancelMembershipSection v-if="!isLoading && !auth.isApplicant" />
   </div>
 </template>

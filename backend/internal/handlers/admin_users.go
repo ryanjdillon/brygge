@@ -285,7 +285,8 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		        u.deactivated_at,
 		        u.harbor_share_owner,
 		        to_char(u.harbor_share_paid_on, 'YYYY-MM-DD'),
-		        u.rejoin_blocked
+		        u.rejoin_blocked,
+		        to_char(u.membership_ends_on, 'YYYY-MM-DD')
 		 FROM users u
 		 LEFT JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
 		 LEFT JOIN LATERAL (
@@ -426,12 +427,15 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		HarborShareOwner   bool            `json:"harbor_share_owner"`
 		HarborSharePaidOn  *string         `json:"harbor_share_paid_on"`
 		RejoinBlocked      bool            `json:"rejoin_blocked"`
+		// MembershipEndsOn is set while the member has cancelled (utmeld):
+		// the bulk faktura run skips them for a period after it.
+		MembershipEndsOn *string `json:"membership_ends_on"`
 	}
 
 	var users []userRow
 	for rows.Next() {
 		var u userRow
-		if err := rows.Scan(&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.FullName, &u.Phone, &u.AddressLine, &u.PostalCode, &u.City, &u.IsLocal, &u.AdminNotes, &u.CreatedAt, &u.UpdatedAt, &u.Roles, &u.SlipID, &u.SlipNumber, &u.SlipSection, &u.SlipAssignmentType, &u.Slips, &u.MembershipStatus, &u.SlipFeeStatus, &u.Boats, &u.DeactivatedAt, &u.HarborShareOwner, &u.HarborSharePaidOn, &u.RejoinBlocked); err != nil {
+		if err := rows.Scan(&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.FullName, &u.Phone, &u.AddressLine, &u.PostalCode, &u.City, &u.IsLocal, &u.AdminNotes, &u.CreatedAt, &u.UpdatedAt, &u.Roles, &u.SlipID, &u.SlipNumber, &u.SlipSection, &u.SlipAssignmentType, &u.Slips, &u.MembershipStatus, &u.SlipFeeStatus, &u.Boats, &u.DeactivatedAt, &u.HarborShareOwner, &u.HarborSharePaidOn, &u.RejoinBlocked, &u.MembershipEndsOn); err != nil {
 			h.log.Error().Err(err).Msg("failed to scan user row")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
@@ -1049,48 +1053,15 @@ func (h *AdminUsersHandler) HandleDeactivateUser(w http.ResponseWriter, r *http.
 		return
 	}
 
-	tag, err := tx.Exec(ctx,
-		`UPDATE users SET deactivated_at = now(), deactivated_by = $3, updated_at = now()
-		  WHERE id = $1 AND club_id = $2 AND deactivated_at IS NULL`,
-		userID, claims.ClubID, claims.UserID,
-	)
-	if err != nil {
-		h.log.Error().Err(err).Msg("failed to deactivate user")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-	if tag.RowsAffected() == 0 {
+	switch err := DeactivateMemberTx(ctx, tx, claims.ClubID, userID, claims.UserID); {
+	case errors.Is(err, errNotDeactivatable):
 		// Either no such member in this club, or already deactivated.
 		Error(w, http.StatusNotFound, "member not found or already deactivated")
 		return
-	}
-
-	// The row's resource_id names the member; the details stay empty so the
-	// log holds no name or address that outlives an erasure.
-	if _, err := tx.Exec(ctx,
-		`INSERT INTO audit_log (club_id, actor_id, action, resource, resource_id, details)
-		 VALUES ($1, $2, 'user.deactivated', 'user', $3, '{}')`,
-		claims.ClubID, claims.UserID, userID,
-	); err != nil {
-		h.log.Error().Err(err).Msg("failed to write audit log")
-		Error(w, http.StatusInternalServerError, "internal error")
+	case writeAdminGuard(w, err):
 		return
-	}
-
-	// Drop their sessions so they're logged out immediately rather than at
-	// the next natural expiry (ValidateSession also rejects deactivated
-	// members, so this is belt-and-suspenders).
-	if _, err := tx.Exec(ctx, `DELETE FROM sessions WHERE user_id = $1`, userID); err != nil {
-		h.log.Error().Err(err).Msg("failed to clear sessions")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	// Reactivating must not bring a developer token back to life, so the
-	// member's tokens are revoked now. Passkeys and TOTP stay: this is the
-	// reversible state.
-	if err := revokeDeveloperTokens(ctx, tx, claims.ClubID, userID); err != nil {
-		h.log.Error().Err(err).Msg("failed to revoke developer tokens")
+	case err != nil:
+		h.log.Error().Err(err).Msg("failed to deactivate user")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -1142,9 +1113,15 @@ func (h *AdminUsersHandler) HandleReactivateUser(w http.ResponseWriter, r *http.
 	}
 
 	tag, err := tx.Exec(ctx,
-		`UPDATE users SET deactivated_at = NULL, deactivated_by = NULL, updated_at = now()
+		// A cancellation that has already ended is cleared: it is what
+		// deactivated the member, and left in place the daily membership-end
+		// job would deactivate them again. One still running is kept.
+		`UPDATE users SET deactivated_at = NULL, deactivated_by = NULL, updated_at = now(),
+		        membership_cancelled_at = CASE WHEN membership_ends_on < $3::date THEN NULL ELSE membership_cancelled_at END,
+		        membership_cancel_reason = CASE WHEN membership_ends_on < $3::date THEN NULL ELSE membership_cancel_reason END,
+		        membership_ends_on = CASE WHEN membership_ends_on < $3::date THEN NULL ELSE membership_ends_on END
 		  WHERE id = $1 AND club_id = $2 AND deactivated_at IS NOT NULL`,
-		userID, claims.ClubID,
+		userID, claims.ClubID, localToday(time.Now()),
 	)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to reactivate user")

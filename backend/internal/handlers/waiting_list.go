@@ -830,46 +830,30 @@ func (h *WaitingListHandler) HandleWithdraw(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var entryID, oldStatus string
-	err := h.db.QueryRow(ctx,
-		`SELECT id, status FROM waiting_list_entries
-		 WHERE user_id = $1 AND club_id = $2 AND status IN ('active', 'offered')`,
-		claims.UserID, claims.ClubID,
-	).Scan(&entryID, &oldStatus)
-	if err == pgx.ErrNoRows {
-		Error(w, http.StatusNotFound, "not on waiting list")
-		return
-	}
+	tx, err := h.db.Begin(ctx)
 	if err != nil {
-		h.log.Error().Err(err).Msg("failed to fetch entry for withdrawal")
+		h.log.Error().Err(err).Msg("failed to begin withdrawal")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after commit
 
-	var entry waitingListEntry
-	err = h.db.QueryRow(ctx,
-		`UPDATE waiting_list_entries
-		 SET status = 'withdrawn', updated_at = now()
-		 WHERE id = $1 AND club_id = $2
-		 RETURNING id, user_id, club_id, position, is_local, status, offer_deadline, created_at, updated_at`,
-		entryID, claims.ClubID,
-	).Scan(
-		&entry.ID, &entry.UserID, &entry.ClubID, &entry.Position,
-		&entry.IsLocal, &entry.Status, &entry.OfferDeadline,
-		&entry.CreatedAt, &entry.UpdatedAt,
-	)
+	withdrawn, err := WithdrawWaitingListTx(ctx, tx, claims.ClubID, claims.UserID, claims.UserID)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to withdraw from waiting list")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-
-	if auditErr := LogAudit(ctx, h.db, claims.ClubID, claims.UserID, "withdraw", "waiting_list_entry", entryID,
-		map[string]string{"status": oldStatus},
-		map[string]string{"status": "withdrawn"},
-	); auditErr != nil {
-		h.log.Error().Err(auditErr).Msg("failed to write audit log")
+	if len(withdrawn) == 0 {
+		Error(w, http.StatusNotFound, "not on waiting list")
+		return
 	}
+	if err := tx.Commit(ctx); err != nil {
+		h.log.Error().Err(err).Msg("failed to commit withdrawal")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	entry := withdrawn[0].entry
 
 	JSON(w, http.StatusOK, entry)
 }

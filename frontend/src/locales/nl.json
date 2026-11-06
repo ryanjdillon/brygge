@@ -489,6 +489,27 @@
       "refundedFull": "Het volledige bedrag is teruggestort op je kaart.",
       "refundedPartly": "Deels terugbetaald: {amount} is teruggestort op je kaart.",
       "creditNoteNumber": "Creditnota #{number}"
+    },
+    "membership": {
+      "title": "Lidmaatschap opzeggen",
+      "yearEnd": "De opzegging gaat in bij de jaarwisseling: je blijft lid tot en met {date}.",
+      "noRefund": "Betaalde contributie wordt niet terugbetaald.",
+      "waitingList": "Sta je op de wachtlijst, dan verlies je je plaats wanneer het lidmaatschap eindigt.",
+      "slipOrShare": "Je hebt een ligplaats of een havenaandeel. Het bestuur neemt hierover contact met je op.",
+      "openInvoices": "Je hebt {n} onbetaalde factuur. | Je hebt {n} onbetaalde facturen.",
+      "openInvoicesLink": "Bekijk de facturen",
+      "boardRole": "Je bestuursfunctie ({roles}) eindigt samen met het lidmaatschap.",
+      "reasonLabel": "Waarom? (optioneel)",
+      "reasonPlaceholder": "Het bestuur ziet je reden.",
+      "cancel": "Lidmaatschap opzeggen",
+      "confirmTitle": "Lidmaatschap opzeggen?",
+      "confirmBody": "Je lidmaatschap eindigt op {date}. Je krijgt een bevestiging per e-mail en kunt de opzegging tot dan ongedaan maken.",
+      "confirmAction": "Opzeggen",
+      "cancelledUntil": "Opgezegd, eindigt {date}",
+      "undo": "Ongedaan maken",
+      "cancelFailed": "De opzegging kon niet worden vastgelegd. Probeer het opnieuw.",
+      "undoFailed": "De opzegging kon niet ongedaan worden gemaakt. Probeer het opnieuw.",
+      "undoEnded": "Het lidmaatschap is beëindigd; de opzegging kan niet meer ongedaan worden gemaakt."
     }
   },
   "admin": {
@@ -729,7 +750,7 @@
       "deactivate": "Deactivate",
       "deactivateConfirm": "Deactivate this member? They'll be hidden from active lists and can't log in, but their data and invoice history are retained.",
       "reactivate": "Reactivate",
-      "reactivateConfirm": "Reactivate this member?",
+      "reactivateConfirm": "Dit lid opnieuw activeren? De plaats op de wachtlijst wordt niet hersteld.",
       "lastAdminError": "Dit is de enige actieve beheerder van de club. Maak eerst een ander lid beheerder.",
       "adminRequiredError": "Alleen een beheerder kan een beheerder wijzigen.",
       "actionError": "De wijziging kon niet worden opgeslagen.",
@@ -848,7 +869,8 @@
         "alertNoDetail": "De laatste e-mail naar dit adres werd op {date} geweigerd. Vraag het lid om een actueel adres.",
         "alertComplaint": "Het lid heeft e-mail van de club op {date} als spam gemarkeerd. Stuur geen e-mail meer naar dit adres; neem op een andere manier contact op.",
         "alertSuppressed": "E-mail naar dit adres wordt niet verzonden omdat het eerder e-mail heeft geweigerd (geblokkeerd op {date}). Vraag het lid om een actueel adres."
-      }
+      },
+      "cancelledBadge": "Opgezegd"
     },
     "waitingList": {
       "loadError": "Kon wachtlijst niet laden",
@@ -2055,7 +2077,8 @@
     "exemptionRole": "Rol",
     "exemptionItem": "Post",
     "exemptionsHint": "Vrijgestelde regels staan tegen volle prijs met een compenserende „Fritak”-regel; een faktura van 0 kr wordt ter informatie verstuurd, zonder te betalen bedrag.",
-    "exemptionsApplied": "{n} regel(s) vrijgesteld voor bestuursrollen."
+    "exemptionsApplied": "{n} regel(s) vrijgesteld voor bestuursrollen.",
+    "skipMembershipEnded": "lidmaatschap eindigt {date}, voordat de periode begint"
   },
   "harborTargets": {
     "title": "QR-betaalposters",

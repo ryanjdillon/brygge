@@ -364,12 +364,10 @@ func main() {
 	// with a note saying so.
 	membership.SetLogger(log)
 	membershipSender := handlers.NewMembershipNoticeSender(db, &cfg, emailClient, log)
-	for _, kind := range []string{
-		broadcast.KindMembershipWelcome, broadcast.KindMembershipBoardNotice,
-		broadcast.KindMembershipJoinRefunded, broadcast.KindMembershipGrantWithheld,
-	} {
+	for _, kind := range handlers.MembershipNoticeKinds {
 		deliveryWorker.RegisterSender(kind, membershipSender)
 	}
+	membersHandler.SetDeliveryKick(deliveryWorker.Kick)
 	if emailClient != nil {
 		deliveryWorker.RegisterSender(broadcast.KindInvoiceReminder, handlers.NewInvoiceReminderSender(invoiceHandler))
 		invoiceHandler.SetDeliveryQueue(deliveryStore, deliveryWorker.Kick)
@@ -667,6 +665,20 @@ func main() {
 				log.Warn().Err(err).Msg("recipient PII purge failed")
 			} else if n > 0 {
 				log.Info().Int64("recipients", n).Msg("purged PII of past-retention billing recipients")
+			}
+			// A membership cancelled online ends on 31 December; from the
+			// next day the member is deactivated and leaves the waiting
+			// list (BRY-633). Idempotent, so the startup run is harmless.
+			ended, err := handlers.EndCancelledMemberships(ctx, db, accountingSvc.SystemActor, time.Now())
+			if err != nil {
+				log.Error().Err(err).Msg("membership end job failed")
+			}
+			if ended.Ended > 0 || len(ended.Refused) > 0 {
+				log.Info().Int("ended", ended.Ended).Int("waiting_list_withdrawn", ended.Withdrawn).
+					Strs("refused_last_admin", ended.Refused).Msg("ended cancelled memberships")
+			}
+			if ended.Queued {
+				deliveryWorker.Kick()
 			}
 			// Outgoing-mail history holds recipient addresses; kept 13
 			// months whether or not the SES worker runs, since the sender

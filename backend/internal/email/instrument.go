@@ -38,6 +38,13 @@ const (
 	// KindMembershipGrantWithheld tells the board a paid join was not
 	// granted by the integrity check.
 	KindMembershipGrantWithheld Kind = "membership_grant_withheld"
+	// Cancelling online (BRY-633): the member's receipt, the board's notices
+	// of the cancellation and of its undo, and the board's notice that the
+	// year-end deactivation was refused (the member is the only admin).
+	KindMembershipCancelReceipt Kind = "membership_cancel_receipt"
+	KindMembershipCancelBoard   Kind = "membership_cancel_board_notice"
+	KindMembershipCancelUndone  Kind = "membership_cancel_undone"
+	KindMembershipEndRefused    Kind = "membership_end_refused"
 	KindOther                   Kind = "other"
 )
 
@@ -46,7 +53,8 @@ var allKinds = []Kind{
 	KindCreditNote, KindDispute, KindContact,
 	KindJoinConfirm, KindJoinAlreadyMember, KindJoinContactBoard,
 	KindMembershipWelcome, KindMembershipBoardNotice, KindMembershipJoinRefunded,
-	KindMembershipGrantWithheld, KindOther,
+	KindMembershipGrantWithheld, KindMembershipCancelReceipt, KindMembershipCancelBoard,
+	KindMembershipCancelUndone, KindMembershipEndRefused, KindOther,
 }
 
 const (

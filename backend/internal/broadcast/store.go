@@ -53,6 +53,16 @@ const (
 	// KindMembershipGrantWithheld tells the board that a join was paid but
 	// the integrity check (or the payer's state) withheld the grant.
 	KindMembershipGrantWithheld = "membership_grant_withheld"
+	// Cancelling online (BRY-633) queues the member's receipt and the
+	// board's notice in the cancel's transaction, an undo queues the
+	// board's notice of it, and the daily membership-end job queues the
+	// board's notice when deactivation is refused because the member is the
+	// club's only active admin. Each is keyed by payload->>'ref' so it is
+	// queued once (migration 000139).
+	KindMembershipCancelReceipt     = "membership_cancel_receipt"
+	KindMembershipCancelBoardNotice = "membership_cancel_board_notice"
+	KindMembershipCancelUndone      = "membership_cancel_undone"
+	KindMembershipEndRefused        = "membership_end_refused"
 )
 
 // Broadcast (parent) statuses.

@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import Modal from '@/components/ui/Modal.vue'
 import LineItemPicker from '@/components/admin/LineItemPicker.vue'
 import { useFreshTotp } from '@/composables/useFreshTotp'
+import { formatDate } from '@/lib/format'
 
 interface PriceItem {
   id: string
@@ -29,7 +30,7 @@ interface BulkResult {
     line_count: number
     dropped_lines?: string[]
   }[]
-  skipped: { user_id: string; reason: string }[]
+  skipped: { user_id: string; reason: string; code?: string; ends_on?: string }[]
   exemptions?: Exemption[]
   warnings?: string[]
 }
@@ -53,7 +54,7 @@ const emit = defineEmits<{
   (e: 'completed'): void
 }>()
 
-const { t, n } = useI18n()
+const { t, n, locale } = useI18n()
 const { totpAwareFetch } = useFreshTotp()
 
 const periods = ref<FiscalPeriod[]>([])
@@ -452,7 +453,15 @@ function nameFor(id: string): string {
               <tbody>
                 <tr v-for="s in result.skipped" :key="s.user_id">
                   <td class="px-2 py-1">{{ nameFor(s.user_id) }}</td>
-                  <td class="px-2 py-1">{{ s.reason }}</td>
+                  <td class="px-2 py-1">
+                    <template v-if="s.code === 'membership_ended'">
+                      <span
+                        class="mr-1 inline-flex items-center rounded-full bg-amber-200 px-2 py-0.5 font-medium text-amber-900"
+                      >{{ t('admin.users.cancelledBadge') }}</span>
+                      {{ t('bulkInvoices.skipMembershipEnded', { date: formatDate(s.ends_on, locale) }) }}
+                    </template>
+                    <template v-else>{{ s.reason }}</template>
+                  </td>
                 </tr>
               </tbody>
             </table>

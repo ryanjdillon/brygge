@@ -596,6 +596,14 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   `dev_masked.clubs` NULLs the address. **The down** drops
   `dev_masked.clubs` first, the column and the index, deletes queued
   `membership_*` deliveries and restores the narrower CHECK.
+- **Membership cancel notices.** 000139 (BRY-633) adds the partial unique
+  index `idx_deliveries_membership_cancel_ref` on `(kind, payload->>'ref')`
+  for kinds `membership_cancel_receipt`, `membership_cancel_board_notice`,
+  `membership_cancel_undone` and `membership_end_refused`, so each notice of
+  one cancellation (`cancel:<user>:<cancelled_at>`) or one refused end
+  (`end_refused:<user>:<ends_on>`) is queued once. The kinds need no CHECK
+  change: 000138's `membership_*` branch admits them. Index only; **the
+  down** drops it.
 - `invoice_pdf_archive` (migration 000050) — preserves prior PDF bytes when
   `invoices.pdf_data` is regenerated, so Norwegian bokføringsloven §13's
   5-year retention requirement is satisfied.

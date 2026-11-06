@@ -582,6 +582,27 @@
       "refundedFull": "The full amount has been paid back to your card.",
       "refundedPartly": "Partly refunded: {amount} has been paid back to your card.",
       "creditNoteNumber": "Credit note #{number}"
+    },
+    "membership": {
+      "title": "Cancel membership",
+      "yearEnd": "Cancelling takes effect at the turn of the year: you remain a member until {date}.",
+      "noRefund": "Dues you have paid are not refunded.",
+      "waitingList": "If you are on the waiting list, you lose your place when your membership ends.",
+      "slipOrShare": "You have a slip or a harbour share. The board will contact you about it.",
+      "openInvoices": "You have {n} unpaid invoice. | You have {n} unpaid invoices.",
+      "openInvoicesLink": "See your invoices",
+      "boardRole": "Your board role ({roles}) ends with your membership.",
+      "reasonLabel": "Why? (optional)",
+      "reasonPlaceholder": "The board sees your reason.",
+      "cancel": "Cancel membership",
+      "confirmTitle": "Cancel your membership?",
+      "confirmBody": "Your membership ends on {date}. You will get a confirmation by email, and you can undo it until then.",
+      "confirmAction": "Cancel my membership",
+      "cancelledUntil": "Cancelled, ends {date}",
+      "undo": "Undo",
+      "cancelFailed": "The cancellation could not be registered. Please try again.",
+      "undoFailed": "The cancellation could not be undone. Please try again.",
+      "undoEnded": "Your membership has ended and the cancellation can no longer be undone."
     }
   },
   "admin": {
@@ -1337,7 +1358,7 @@
       "deactivate": "Deactivate",
       "deactivateConfirm": "Deactivate this member? They'll be hidden from active lists and can't log in, but their data and invoice history are retained.",
       "reactivate": "Reactivate",
-      "reactivateConfirm": "Reactivate this member?",
+      "reactivateConfirm": "Reactivate this member? The waiting-list place is not restored.",
       "lastAdminError": "This is the club's only active admin. Make another member an admin first.",
       "adminRequiredError": "Only an admin can change an admin.",
       "actionError": "The change could not be saved.",
@@ -1486,7 +1507,8 @@
         "alertNoDetail": "Last email to this address was rejected {date}. Get a current address from the member.",
         "alertComplaint": "The member marked email from the club as spam {date}. Do not send more email to this address; contact the member another way.",
         "alertSuppressed": "Email to this address is not sent because it rejected email before (blocked {date}). Get a current address from the member."
-      }
+      },
+      "cancelledBadge": "Cancelled"
     },
     "waitingList": {
       "loadError": "Could not load the waiting list",
@@ -3251,7 +3273,8 @@
     "exemptionRole": "Role",
     "exemptionItem": "Item",
     "exemptionsHint": "Exempt lines are shown at full price with an offsetting \"Fritak\" line; a faktura that nets to 0 kr is sent as information with nothing to pay.",
-    "exemptionsApplied": "{n} line(s) exempted for board roles."
+    "exemptionsApplied": "{n} line(s) exempted for board roles.",
+    "skipMembershipEnded": "membership ends {date}, before the period starts"
   },
   "footer": {
     "poweredBy": "powered by",

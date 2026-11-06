@@ -18,6 +18,12 @@ import (
 // LogAudit bridges existing handler calls to the new audit_log schema.
 // Kept for backward compatibility with handlers that haven't been refactored yet.
 func LogAudit(ctx context.Context, db *pgxpool.Pool, clubID, userID, action, resource, resourceID string, oldData, newData any) error {
+	return logAuditTx(ctx, db, clubID, userID, action, resource, resourceID, oldData, newData)
+}
+
+// logAuditTx is LogAudit on a pool or a transaction, for a row that must
+// commit with the change it records.
+func logAuditTx(ctx context.Context, db dbtx, clubID, userID, action, resource, resourceID string, oldData, newData any) error {
 	details := map[string]any{}
 	if oldData != nil {
 		details["old"] = oldData

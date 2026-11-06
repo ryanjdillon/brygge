@@ -76,7 +76,15 @@ type bulkInvoiceCreated struct {
 type bulkInvoiceSkipped struct {
 	UserID string `json:"user_id"`
 	Reason string `json:"reason"`
+	// Code and EndsOn let the SPA word a skip itself; set for
+	// skipMembershipEnded only.
+	Code   string `json:"code,omitempty"`
+	EndsOn string `json:"ends_on,omitempty"`
 }
+
+// skipMembershipEnded is the skip code of a member whose cancelled
+// membership ends before the fiscal period starts (BRY-633).
+const skipMembershipEnded = "membership_ended"
 
 type bulkInvoiceResponse struct {
 	Created    []bulkInvoiceCreated `json:"created"`
@@ -172,12 +180,47 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 	}
 
 	var fiscalYear int
+	var periodStart time.Time
 	if err := h.db.QueryRow(ctx,
-		`SELECT year FROM fiscal_periods WHERE id = $1 AND club_id = $2`,
+		`SELECT year, start_date FROM fiscal_periods WHERE id = $1 AND club_id = $2`,
 		req.FiscalPeriodID, claims.ClubID,
-	).Scan(&fiscalYear); err != nil {
+	).Scan(&fiscalYear, &periodStart); err != nil {
 		Error(w, http.StatusBadRequest, "fiscal period not found for this club")
 		return
+	}
+
+	// A member who cancelled is billed for the year they cancelled in, never
+	// for a period that starts after their membership ends (BRY-633): they
+	// are skipped with a reason rather than failing the run, since a dues run
+	// selects everyone.
+	endedBefore := map[string]string{}
+	{
+		rows, err := h.db.Query(ctx,
+			`SELECT id::text, to_char(membership_ends_on, 'YYYY-MM-DD') FROM users
+			  WHERE club_id = $1 AND id = ANY($2) AND membership_ends_on < $3::date`,
+			claims.ClubID, req.UserIDs, periodStart.Format(time.DateOnly),
+		)
+		if err != nil {
+			h.log.Error().Err(err).Msg("failed to check cancelled members for bulk invoice")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		for rows.Next() {
+			var id, endsOn string
+			if err := rows.Scan(&id, &endsOn); err != nil {
+				rows.Close()
+				h.log.Error().Err(err).Msg("failed to scan cancelled member")
+				Error(w, http.StatusInternalServerError, "internal error")
+				return
+			}
+			endedBefore[id] = endsOn
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			h.log.Error().Err(err).Msg("failed to read cancelled members")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
 	}
 
 	flatItems := make([]priceTier, 0, len(req.PriceItemIDs))
@@ -298,6 +341,13 @@ func (h *InvoiceHandler) HandleBulkCreateInvoices(w http.ResponseWriter, r *http
 
 	for _, userID := range req.UserIDs {
 		userID := userID
+		if endsOn, ok := endedBefore[userID]; ok {
+			resp.Skipped = append(resp.Skipped, bulkInvoiceSkipped{
+				UserID: userID, Code: skipMembershipEnded, EndsOn: endsOn,
+				Reason: "membership cancelled: ends " + endsOn + ", before the fiscal period starts",
+			})
+			continue
+		}
 		var lines []bulkResolvedLine
 		var dropReasons []string
 

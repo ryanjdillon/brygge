@@ -13,11 +13,59 @@ distinct states.
 |---|---|---|---|
 | **Deactivate** | Sets `users.deactivated_at`. Hides the member from active lists, member counts, the directory, broadcast/bulk-send recipients and dues runs; blocks login and drops their sessions. Their row, invoices and history are fully retained. | Yes — **Reactivate** clears it. | The normal "this person left the club" action. |
 | **Erase** (`DELETE /admin/users/{id}`, admin only) | Anonymises the row in place, deactivates it, removes the member's Stalwart mailbox and scrubs their identity from the audit log. The row is never deleted: other tables reference it and payments cascade from it (BRD-10). A `?erasure=true` from an older caller is ignored. Locks the member out first, see [Locking a member out](#locking-a-member-out). Refused for the club's last active admin, see [Who may change an admin](#who-may-change-an-admin). | No | Rare. Prefer Deactivate; the scheduled purge handles PII erasure automatically. |
+| **Cancel** (member, `POST /members/me/membership/cancel`) | The member cancels online (BRY-633). Sets `membership_cancelled_at`, `membership_ends_on` (31 December of the year cancelled) and the optional `membership_cancel_reason`; the member stays active until then. From the day after `ends_on` the daily membership-end job deactivates them, see [Cancelling online](#cancelling-online). | While the member is active: `POST …/undo`. After: the board reactivates (the waiting-list place is not restored). | The member leaving at year end. |
 | **Purge** (automatic) | A daily background sweep (`accounting.PurgeExpiredMemberPII`) anonymizes the PII of *deactivated* members whose most recent invoice has cleared retention. Never deletes the row. | No | Nothing to do — it runs itself. |
 
 ## An abandoned join ends in deactivation
 
-An applicant whose self-service join stays unpaid for 60 days (BRY-631, [ACC-14](../../adr/accounting.md)) is deactivated by the hourly sweep (`InvoiceHandler.ExpireUnpaidJoins`) through the same `revokeMemberAccess` step as every other path, with `deactivated_by` the club's system actor (or NULL without one). Their join faktura, if one was issued, is credited, never deleted. No path deletes the `users` row or rewrites their audit rows: an applicant with no faktura is purge-eligible at once, so the purge erases their identity on its next run, and the scrub stays the audit log's one sanctioned rewrite.
+An applicant whose self-service join stays unpaid for 60 days (BRY-631, [ACC-14](../../adr/accounting.md)) is deactivated by the hourly sweep (`InvoiceHandler.ExpireUnpaidJoins`) through `revokeMemberAccess`, the access-scrubbing step the GDPR and erasure paths share (the membership paths, a cancellation's end and the board's deactivate, use `DeactivateMemberTx` instead), with `deactivated_by` the club's system actor (or NULL without one). Their join faktura, if one was issued, is credited, never deleted. No path deletes the `users` row or rewrites their audit rows: an applicant with no faktura is purge-eligible at once, so the purge erases their identity on its next run, and the scrub stays the audit log's one sanctioned rewrite.
+
+## Cancelling online
+
+Decided in D5 and R8 of the self-service membership spec (BRY-476): a member
+cancels from the portal, the cancellation takes effect at the end of the year
+(31 December, server-local), nothing paid is refunded, and the confirmation
+email is the written notice. The member stays a full member until then and may
+undo it for as long as they are active: through `ends_on`, and past it while
+the job could not deactivate them (the last admin below). Once deactivated,
+undo answers 409 `membership_ended`.
+
+- **Who.** Any session past the applicant gate, including a board member who
+  holds no `member` role. An applicant-only session never reaches the routes.
+- **What is queued.** The cancel queues the member's receipt
+  (`membership_cancel_receipt`) and the board's notice
+  (`membership_cancel_board_notice`); an undo queues `membership_cancel_undone`.
+  Each is keyed by `payload->>'ref'` (the member and the `cancelled_at` instant),
+  so a repeated request queues nothing, and cancel, undo, cancel is a new
+  cancellation with its own notices. The emails are rendered when the worker
+  sends them: the end date and (for the receipt) whether the member was on
+  the waiting list come from the payload, fixed at cancel time, but the
+  member's name and **reason are read from the user row at send time**, so a
+  reason cleared by an undo before the board notice is sent does not appear
+  in it.
+- **The end.** The daily job (`handlers.EndCancelledMemberships`, run from the
+  daily loop in `cmd/api/main.go`) picks every active person whose
+  `membership_ends_on` is before today and, in one transaction per member and as
+  the club's system actor, re-reads the cancellation under the users row lock
+  (an undo, or a board deactivate and reactivate, since the list was read
+  wins), deactivates them through `DeactivateMemberTx` (the
+  same service as the board's button: sessions dropped, developer tokens
+  revoked, `user.deactivated` audited), withdraws their waiting-list entries
+  (`WithdrawWaitingListTx`, active and offered) and writes `membership.ended`.
+  Roles, slips and the harbor share are left for the board.
+- **The last admin.** If the member is the club's only active admin,
+  `DeactivateMemberTx` returns `errLastAdmin`: the transaction rolls back,
+  nothing is withdrawn, and the board gets one `membership_end_refused` notice
+  per member and end date. Once another admin exists, the next daily run ends
+  the membership.
+- **Reactivation.** `HandleReactivateUser` clears a cancellation whose
+  `ends_on` has passed, or the next daily run would deactivate the member again.
+  A cancellation still running is kept. Reactivation does **not** restore the
+  waiting-list entries the job withdrew: the member's place is lost, and the
+  reactivate confirmation says so.
+- **Erasure.** `membership_cancel_reason` is the member's own text: every
+  erasure path clears it (`accounting.EraseMemberMembershipData`), and it never
+  enters the audit log (`membership.cancelled` records only `reason_given`).
 
 ## The system actor is outside the lifecycle
 
@@ -40,9 +88,13 @@ until someone rewrites it.
 `revokeMemberAccess` (`handlers/gdpr.go`) is the single step that ends every way
 a member can authenticate. It runs in the caller's transaction, before the
 identity is anonymised because magic links are keyed by the old email. Both
-`HandleProcessDeletion` and `HandleDeleteUser` call it; `HandleDeactivateUser`
+`HandleProcessDeletion`, `HandleDeleteUser` and the join expiry (BRY-631) call it; `HandleDeactivateUser`
 (reversible) only sets `deactivated_at`, drops sessions and revokes the member's
-developer tokens, since reactivation must keep passkeys and TOTP.
+developer tokens, since reactivation must keep passkeys and TOTP. That
+deactivation is `DeactivateMemberTx` (`handlers/member_lifecycle.go`), shared with
+the year-end end of a cancelled membership. So a member is deactivated by two
+paths: `DeactivateMemberTx` (reversible: the board's button and the
+membership-end job) and `revokeMemberAccess` (erasure, GDPR deletion and join expiry: the scrubbing path).
 
 ### Developer tokens
 
@@ -51,7 +103,7 @@ tokens are revoked outright (`revoked_at` set, by `revokeDeveloperTokens`, in
 the same transaction) whenever one of these happens: the member is deactivated,
 they lose the `admin` role (a role change that keeps `admin` leaves them alone),
 an admin disables their TOTP (they can no longer mint), or `revokeMemberAccess`
-runs (erase, GDPR processing). Reactivating or regranting the role never brings
+runs (erase, GDPR processing, join expiry). Reactivating or regranting the role never brings
 a token back. `devtoken.Authenticate` still refuses a token whose minter is
 deactivated or no longer holds the admin role; that is the backstop for paths
 that do not revoke (direct SQL, a future role writer).
@@ -119,7 +171,9 @@ deactivated admin does not count. Every path that can remove one takes
 `lockClubAdmins` first, a transaction-scoped advisory lock per club, then the
 users row lock (the order matters: the reverse can deadlock), and counts the
 others under it, so two simultaneous removals of the only two admins leave
-exactly one. The paths are `HandleDeleteUser`, `HandleDeactivateUser`,
+exactly one. The paths are `HandleDeleteUser`, `HandleDeactivateUser` and the
+membership-end job (both through `DeactivateMemberTx`, which takes the lock
+itself; it is re-entrant, so a handler that took it first may call it),
 `HandleUpdateUserRoles` and `HandleProcessDeletion` (both outcomes deactivate
 the member). The purge sweep only erases members who are already deactivated,
 so it cannot reduce the active admins. A refused change writes no audit row.

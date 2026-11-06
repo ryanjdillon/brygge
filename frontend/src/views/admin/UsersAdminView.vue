@@ -1122,6 +1122,11 @@ function harborSharesImported() {
                 v-if="user.deactivated_at"
                 class="ml-1 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600"
               >{{ t('admin.users.deactivatedBadge') }}</span>
+              <span
+                v-if="user.membership_ends_on && !user.deactivated_at"
+                class="ml-1 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+                data-testid="cancelled-badge"
+              >{{ t('admin.users.cancelledBadge') }} {{ formatDate(user.membership_ends_on, locale) }}</span>
             </td>
             <td v-if="visible.has('last_name')" class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{{ user.last_name }}</td>
             <td v-if="visible.has('email')" class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">

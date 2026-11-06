@@ -605,6 +605,43 @@ func registerMemberOps(api huma.API) {
 	}, stub[struct{}, struct{ Body VolunteerHoursSummary }]())
 
 	huma.Register(api, huma.Operation{
+		OperationID: "get-my-membership",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/members/me/membership",
+		Tags:        []string{"Members"},
+		Summary:     "Get my membership and what cancelling it affects",
+		Security:    BearerSecurity,
+	}, stub[struct{}, struct{ Body MyMembership }]())
+
+	huma.Register(api, huma.Operation{
+		OperationID: "cancel-my-membership",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/members/me/membership/cancel",
+		Tags:        []string{"Members"},
+		Summary:     "Cancel my membership at year end",
+		Description: "Cancels the caller's membership with effect from 31 December of the current year (server-local), with no refund. " +
+			"The first call sets cancelled_at and ends_on, and queues the member's receipt and the board's notice; a repeat changes nothing. " +
+			"Not reachable by an applicant-only session.",
+		Security: BearerSecurity,
+	}, stub[struct {
+		Body struct {
+			Reason string `json:"reason,omitempty" maxLength:"2000" doc:"Optional reason, shown to the board"`
+		}
+	}, struct{ Body MyMembership }]())
+
+	huma.Register(api, huma.Operation{
+		OperationID: "undo-cancel-my-membership",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/members/me/membership/undo",
+		Tags:        []string{"Members"},
+		Summary:     "Undo my membership cancellation",
+		Description: "Clears the caller's cancellation while the caller is still active and tells the board: through ends_on, " +
+			"and past it while the daily job could not deactivate them (the club's only admin). " +
+			"With no cancellation it changes nothing. Once the membership has ended (deactivated) it answers 409 with code `membership_ended`.",
+		Security: BearerSecurity,
+	}, stub[struct{}, struct{ Body MyMembership }]())
+
+	huma.Register(api, huma.Operation{
 		OperationID: "get-member-directory",
 		Method:      http.MethodGet,
 		Path:        "/api/v1/members/directory",

@@ -188,6 +188,13 @@ const (
 	ActionMembershipJoinExpired       = "membership.join_expired"
 	ActionMembershipJoinExpiredReview = "membership.join_expired_review"
 
+	// Cancelling online (BRY-633): the member's cancellation and its undo,
+	// and the daily job deactivating the member once the cancellation's end
+	// date has passed.
+	ActionMembershipCancelled    = "membership.cancelled"
+	ActionMembershipCancelUndone = "membership.cancel_undone"
+	ActionMembershipEnded        = "membership.ended"
+
 	// GDPR operations
 	ActionGDPRExportRequested       = "gdpr.export_requested"
 	ActionGDPRDeletionRequested     = "gdpr.deletion_requested"

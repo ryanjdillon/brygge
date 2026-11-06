@@ -487,6 +487,27 @@
       "refundedFull": "Cała kwota została zwrócona na Twoją kartę.",
       "refundedPartly": "Zwrócono częściowo: {amount} wróciło na Twoją kartę.",
       "creditNoteNumber": "Nota kredytowa #{number}"
+    },
+    "membership": {
+      "title": "Zrezygnuj z członkostwa",
+      "yearEnd": "Rezygnacja obowiązuje od końca roku: pozostajesz członkiem do {date}.",
+      "noRefund": "Opłacone składki nie są zwracane.",
+      "waitingList": "Jeśli jesteś na liście oczekujących, stracisz miejsce po zakończeniu członkostwa.",
+      "slipOrShare": "Masz miejsce w porcie lub udział w porcie. Zarząd skontaktuje się z Tobą w tej sprawie.",
+      "openInvoices": "Masz {n} nieopłaconą fakturę. | Masz {n} nieopłaconych faktur.",
+      "openInvoicesLink": "Zobacz faktury",
+      "boardRole": "Twoja funkcja w zarządzie ({roles}) kończy się wraz z członkostwem.",
+      "reasonLabel": "Dlaczego? (opcjonalnie)",
+      "reasonPlaceholder": "Zarząd zobaczy Twoje uzasadnienie.",
+      "cancel": "Zrezygnuj z członkostwa",
+      "confirmTitle": "Zrezygnować z członkostwa?",
+      "confirmBody": "Twoje członkostwo kończy się {date}. Otrzymasz potwierdzenie e-mailem i do tego dnia możesz cofnąć rezygnację.",
+      "confirmAction": "Rezygnuję",
+      "cancelledUntil": "Rezygnacja, koniec {date}",
+      "undo": "Cofnij",
+      "cancelFailed": "Nie udało się zarejestrować rezygnacji. Spróbuj ponownie.",
+      "undoFailed": "Nie udało się cofnąć rezygnacji. Spróbuj ponownie.",
+      "undoEnded": "Członkostwo się zakończyło; rezygnacji nie można już cofnąć."
     }
   },
   "admin": {
@@ -719,7 +740,7 @@
       "deactivate": "Deactivate",
       "deactivateConfirm": "Deactivate this member? They'll be hidden from active lists and can't log in, but their data and invoice history are retained.",
       "reactivate": "Reactivate",
-      "reactivateConfirm": "Reactivate this member?",
+      "reactivateConfirm": "Ponownie aktywować tego członka? Miejsce na liście oczekujących nie zostanie przywrócone.",
       "lastAdminError": "To jedyny aktywny administrator klubu. Najpierw nadaj uprawnienia administratora innemu członkowi.",
       "adminRequiredError": "Tylko administrator może zmienić administratora.",
       "actionError": "Nie udało się zapisać zmiany.",
@@ -838,7 +859,8 @@
         "alertNoDetail": "Ostatni e-mail na ten adres został odrzucony {date}. Poproś członka o aktualny adres.",
         "alertComplaint": "Członek oznaczył e-maile od klubu jako spam {date}. Nie wysyłaj więcej e-maili na ten adres; skontaktuj się z członkiem w inny sposób.",
         "alertSuppressed": "E-maile na ten adres nie są wysyłane, ponieważ wcześniej odrzucał wiadomości (zablokowano {date}). Poproś członka o aktualny adres."
-      }
+      },
+      "cancelledBadge": "Rezygnacja"
     },
     "waitingList": {
       "loadError": "Nie udało się załadować listy oczekujących",
@@ -2026,7 +2048,8 @@
     "exemptionRole": "Rola",
     "exemptionItem": "Pozycja",
     "exemptionsHint": "Zwolnione pozycje są pokazane w pełnej cenie z pozycją kompensującą „Fritak”; faktura na 0 kr jest wysyłana informacyjnie, bez kwoty do zapłaty.",
-    "exemptionsApplied": "Zwolniono {n} pozycji dla ról zarządu."
+    "exemptionsApplied": "Zwolniono {n} pozycji dla ról zarządu.",
+    "skipMembershipEnded": "członkostwo kończy się {date}, przed początkiem okresu"
   },
   "harborTargets": {
     "title": "Plakaty płatności QR",
