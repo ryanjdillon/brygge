@@ -4,19 +4,10 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 errors=0
 
-# Check AGENTS.md line count. The shared agent conventions (composed in from
-# github:ryanjdillon/agents) sit above the first '---' separator; the
-# repo-specific overlay below it is what we keep lean — so cap the overlay, not
-# the vendored-in shared preamble (same spirit as skipping vendored files in the
-# link check). Falls back to the whole file if there is no separator.
-overlay_start=$(grep -n '^---$' "$REPO_ROOT/AGENTS.md" | head -1 | cut -d: -f1)
-if [ -n "$overlay_start" ]; then
-  agents_lines=$(tail -n +"$((overlay_start + 1))" "$REPO_ROOT/AGENTS.md" | wc -l)
-  agents_scope="overlay"
-else
-  agents_lines=$(wc -l < "$REPO_ROOT/AGENTS.md")
-  agents_scope="file"
-fi
+# Check AGENTS.md line count. The file is hand-written, so the limit applies to
+# the whole file.
+agents_lines=$(wc -l < "$REPO_ROOT/AGENTS.md")
+agents_scope="file"
 if [ "$agents_lines" -gt 300 ]; then
   echo "ERROR: AGENTS.md $agents_scope is $agents_lines lines (max 300)"
   errors=$((errors + 1))
