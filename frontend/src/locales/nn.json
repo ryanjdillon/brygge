@@ -1886,7 +1886,9 @@
         "calendar": "Kalender",
         "commerce": "Medlemsbutikk",
         "accounting": "Rekneskap og faktura"
-      }
+      },
+      "boardNotificationEmail": "Varsel om medlemskap til",
+      "boardNotificationEmailHint": "Hit får styret melding om nye medlemmer og refunderte innmeldingsbetalingar. La feltet stå tomt for å bruke den felles postkassa til klubben (post@), elles sekretær eller leiar."
     },
     "harborSettings": {
       "pageTitle": "Hamn og bubil",
@@ -2987,7 +2989,10 @@
       "failedBody": "Betalinga vart avbroten eller gjekk ikkje gjennom.",
       "tryAgain": "Prøv igjen",
       "notFoundTitle": "Fann ikkje betalinga",
-      "notFoundBody": "Lenka er ugyldig eller utløpt. Ta kontakt med kasseraren."
+      "notFoundBody": "Lenka er ugyldig eller utløpt. Ta kontakt med kasseraren.",
+      "welcomeTitle": "Velkomen som medlem!",
+      "welcomeBody": "Betalinga er motteken, og du er no medlem. Ein velkomst-e-post er på veg.",
+      "welcomePortal": "Gå til medlemsportalen"
     },
     "belowMinimum": "Beløpet er for lite til å betala på denne måten.",
     "unsupportedCurrency": "Nettbetaling er berre tilgjengeleg i norske kroner. Betal med bankoverføring eller ta kontakt med kasseraren."

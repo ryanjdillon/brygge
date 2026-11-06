@@ -16,6 +16,7 @@ import (
 
 	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/finance"
+	"github.com/brygge-klubb/brygge/internal/membership"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 )
 
@@ -481,6 +482,7 @@ func (h *InvoiceHandler) HandleLinkCreditNote(w http.ResponseWriter, r *http.Req
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	h.queueJoinRefundNotices(ctx, claims.ClubID, target.id)
 
 	if h.audit != nil {
 		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
@@ -504,6 +506,15 @@ func (h *InvoiceHandler) HandleLinkCreditNote(w http.ResponseWriter, r *http.Req
 		"credit_note_number": cn.number,
 		"invoice_number":     target.number,
 	})
+}
+
+// queueJoinRefundNotices tells the board when a credit note credits a paid
+// join faktura; membership stays. Best-effort: the hourly membership sweep
+// queues a notice missed here.
+func (h *InvoiceHandler) queueJoinRefundNotices(ctx context.Context, clubID, invoiceID string) {
+	if _, err := membership.QueueJoinRefundNotices(ctx, h.db, clubID); err != nil {
+		h.log.Error().Err(err).Str("invoice_id", invoiceID).Msg("link credit: queueing the board's join refund notice failed")
+	}
 }
 
 // HandleUnlinkCreditNote removes a credit note's link, reopening the faktura

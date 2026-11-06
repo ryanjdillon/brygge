@@ -25,6 +25,9 @@ const KEYS = [
   'tryAgain',
   'notFoundTitle',
   'notFoundBody',
+  'welcomeTitle',
+  'welcomeBody',
+  'welcomePortal',
 ]
 
 const LOCALES: Record<string, { pay: { receipt: Record<string, unknown> } }> = {

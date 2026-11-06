@@ -13,6 +13,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
+
+	"github.com/brygge-klubb/brygge/internal/membership"
 )
 
 // Refund refusal codes (409). The refund endpoint answers them with the
@@ -381,6 +383,13 @@ func (s *RefundService) settled(ctx context.Context, a refundAttempt, rec Refund
 	if err != nil {
 		s.log.Error().Err(err).Str("refund_id", rec.ID).Msg("storing refund result")
 		return &RefundResponse{Refund: rec, Awaiting: true}
+	}
+	// A refunded join payment is the board's to judge; membership stays.
+	// Best-effort: the hourly membership sweep queues a notice missed here.
+	if updated.Status == RefundSucceeded {
+		if _, err := membership.QueueJoinRefundNotices(ctx, s.db, a.clubID); err != nil {
+			s.log.Error().Err(err).Str("refund_id", rec.ID).Msg("queueing the board's join refund notice failed")
+		}
 	}
 	return &RefundResponse{Refund: updated, Awaiting: updated.Status == RefundRequested}
 }

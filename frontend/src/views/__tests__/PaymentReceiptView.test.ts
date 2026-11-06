@@ -3,6 +3,18 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import PaymentReceiptView from '@/views/PaymentReceiptView.vue'
 
+// The auth store stand-in: checkSession sets whatever roles the test chose
+// for the session the server would now report.
+const authState = vi.hoisted(() => ({
+  user: null as null | { roles: string[] },
+  rolesAfterRefresh: null as null | string[],
+  checkSession: undefined as unknown as () => Promise<void>,
+}))
+authState.checkSession = vi.fn(async () => {
+  authState.user = authState.rolesAfterRefresh ? { roles: authState.rolesAfterRefresh } : null
+})
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => authState }))
+
 vi.mock('lucide-vue-next', () => ({
   Loader2: { template: '<span />' },
   CheckCircle: { template: '<span />' },
@@ -10,7 +22,7 @@ vi.mock('lucide-vue-next', () => ({
   Clock: { template: '<span />' },
 }))
 
-type Answer = { status: string; already_paid: boolean; paid_amount?: number }
+type Answer = { status: string; already_paid: boolean; paid_amount?: number; purpose?: string }
 
 function checkoutBody(a: Answer) {
   return {
@@ -26,6 +38,7 @@ function checkoutBody(a: Answer) {
     providers: [],
     kid_number: '',
     bank_account: '',
+    ...(a.purpose ? { purpose: a.purpose } : {}),
   }
 }
 
@@ -70,6 +83,9 @@ const failed: Answer = { status: 'failed', already_paid: false }
 describe('PaymentReceiptView', () => {
   beforeEach(() => {
     vi.useFakeTimers()
+    authState.user = { roles: ['applicant'] }
+    authState.rolesAfterRefresh = null
+    vi.mocked(authState.checkSession).mockClear()
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -146,5 +162,54 @@ describe('PaymentReceiptView', () => {
     expect(wrapper.find('[data-testid="receipt-not-found"]').exists()).toBe(true)
     await advance(30_000)
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  describe('a paid membership join', () => {
+    const joinPaid: Answer = { ...paid, purpose: 'membership_join' }
+
+    it('refreshes the session and welcomes the new member', async () => {
+      authState.rolesAfterRefresh = ['member']
+      stubAnswers(joinPaid)
+      const wrapper = await mountReceipt()
+      expect(authState.checkSession).toHaveBeenCalledTimes(1)
+      expect(authState.user?.roles).toEqual(['member'])
+      expect(wrapper.find('[data-testid="receipt-welcome"]').exists()).toBe(true)
+      expect(wrapper.get('[data-testid="receipt-portal"]').attributes('href')).toBe('/portal')
+      // The receipt lines are still shown.
+      expect(wrapper.get('[data-testid="receipt-amount"]').text()).toContain('500,00')
+    })
+
+    it('refreshes after polling once the capture lands', async () => {
+      authState.rolesAfterRefresh = ['member']
+      stubAnswers(pending, joinPaid)
+      const wrapper = await mountReceipt()
+      expect(authState.checkSession).not.toHaveBeenCalled()
+      await advance(2000)
+      expect(authState.checkSession).toHaveBeenCalledTimes(1)
+      expect(wrapper.find('[data-testid="receipt-welcome"]').exists()).toBe(true)
+    })
+
+    it('shows the plain receipt when the session is still an applicant', async () => {
+      authState.rolesAfterRefresh = ['applicant']
+      stubAnswers(joinPaid)
+      const wrapper = await mountReceipt()
+      expect(authState.checkSession).toHaveBeenCalledTimes(1)
+      expect(wrapper.find('[data-testid="receipt-welcome"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="receipt-paid"]').exists()).toBe(true)
+    })
+
+    it('shows the plain receipt to a payer who is not logged in', async () => {
+      authState.user = null
+      stubAnswers(joinPaid)
+      const wrapper = await mountReceipt()
+      expect(wrapper.find('[data-testid="receipt-welcome"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="receipt-paid"]').exists()).toBe(true)
+    })
+  })
+
+  it('does not touch the session for an ordinary payment', async () => {
+    stubAnswers(paid)
+    await mountReceipt()
+    expect(authState.checkSession).not.toHaveBeenCalled()
   })
 })

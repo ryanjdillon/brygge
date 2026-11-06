@@ -2007,7 +2007,9 @@
         "keyPlaceholder": "sk-ant-…",
         "keySet": "API key is set — enter a new value to replace it",
         "keyActive": "Active"
-      }
+      },
+      "boardNotificationEmail": "Membership notices to",
+      "boardNotificationEmailHint": "Where the board is told of new members and refunded join payments. Leave empty to use the club's shared mailbox (post@), else the secretary or chair."
     },
     "harborSettings": {
       "pageTitle": "Harbor & motorhome",
@@ -3108,7 +3110,10 @@
       "failedBody": "The payment was cancelled or did not go through.",
       "tryAgain": "Try again",
       "notFoundTitle": "Payment not found",
-      "notFoundBody": "The link is invalid or expired. Please contact the treasurer."
+      "notFoundBody": "The link is invalid or expired. Please contact the treasurer.",
+      "welcomeTitle": "Welcome as a member!",
+      "welcomeBody": "Your payment is received and you are now a member. A welcome email is on its way.",
+      "welcomePortal": "Go to the member portal"
     },
     "belowMinimum": "This amount is too small to pay this way.",
     "unsupportedCurrency": "Online payment is only available in Norwegian kroner. Pay by bank transfer or contact the treasurer."

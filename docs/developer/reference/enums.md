@@ -322,7 +322,9 @@ ses   stalwart
 
 ```
 magic_link   invoice   invoice_reminder   credit_note   dispute   contact
-join_confirm   join_already_member   join_contact_board   other
+join_confirm   join_already_member   join_contact_board
+membership_welcome   membership_board_notice   membership_join_refunded
+membership_grant_withheld   other
 ```
 
 The `email.Kind` the sender passes; the vocabulary grows with it. `related_type` (also no CHECK) names the row a send is about, e.g. `invoice`.
@@ -339,9 +341,13 @@ SES's `eventType` in snake case. `bounce_type` / `bounce_subtype` / `delay_type`
 
 ```
 broadcast   invoice_reminder   invoice_refund_document
+membership_welcome   membership_board_notice   membership_join_refunded
+membership_grant_withheld
 ```
 
 `invoice_refund_document` (BRY-446) delivers a document a card refund issued: the delivery worker renders its PDF and emails it when `email` is set (an empty `email` means PDF only, a guest with no address). The booking pass queues it in the transaction that issues the document.
+
+The `membership_*` kinds (BRY-630, migration 000138) have neither `broadcast_id` nor `invoice_id` (the `deliveries_parent_by_kind` CHECK); they name the member by `user_id`. `membership_welcome` and `membership_board_notice` are queued by the grant in the transaction that settles the join payment; `membership_join_refunded` (a refunded join payment) and `membership_grant_withheld` (a paid join the integrity check withheld; `payload.reason`) are queued once per join source, keyed by `payload->>'ref'` (`order:<id>` or `invoice:<id>`, unique index `idx_deliveries_membership_notice_ref` on `(kind, payload->>'ref')`). The sender (`handlers.MembershipNoticeSender`) resolves the recipient when it sends: the member's current address for the welcome, the board address (`boardNotificationAddress`) for the other three; the welcome row's `email` is informational and the board rows' is empty.
 
 ### `stripe_balance_transactions.reporting_category` (CHECK since migration 000117)
 

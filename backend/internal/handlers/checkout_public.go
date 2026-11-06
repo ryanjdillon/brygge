@@ -65,6 +65,11 @@ type checkoutResp struct {
 	// total is left out. Empty when none is configured, none charges the total,
 	// or the order is blocked, which leaves bank transfer with BankAccount set.
 	Providers []string `json:"providers"`
+	// Purpose is the order's purpose, or that of a faktura it pays, when
+	// settling it does more than clear the receivable: "membership_join"
+	// tells the receipt page to refresh the session, whose roles the
+	// payment changed. Empty for an ordinary order.
+	Purpose string `json:"purpose,omitempty"`
 }
 
 // codeOrderLocked answers an add-on change to an order whose content is fixed
@@ -134,6 +139,15 @@ func (h *InvoiceHandler) buildCheckoutResp(ctx context.Context, orderID, clubID,
 		).Scan(&resp.PaidAmount); err != nil {
 			return nil, err
 		}
+	}
+	if err := h.db.QueryRow(ctx,
+		`SELECT COALESCE(o.purpose,
+		                 (SELECT i.purpose FROM order_sources s JOIN invoices i ON i.id = s.invoice_id
+		                   WHERE s.order_id = o.id AND i.purpose IS NOT NULL
+		                   ORDER BY i.id LIMIT 1), '')
+		   FROM orders o WHERE o.id = $1`, orderID,
+	).Scan(&resp.Purpose); err != nil {
+		return nil, err
 	}
 
 	inv, kid, err := h.checkoutInvoice(ctx, orderID)

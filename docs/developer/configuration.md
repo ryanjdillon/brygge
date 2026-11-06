@@ -71,6 +71,16 @@ The public contact form (`POST /api/v1/contact`) mails each message to the club'
 - With neither address set the form answers 503 `contact_recipient_not_configured`, and without `SMTP_HOST`/`EMAIL_FROM` it answers 503 `mail_not_configured`. A failed send answers 502 `contact_delivery_failed`. The page tells the visitor to retry or use the addresses listed on it; nothing is queued or retried.
 - The recipient is meant to move to the board-config function allocation (BRY-482; decision BRD-3 in [../adr/board-workflows.md](../adr/board-workflows.md)). The choice lives in one function, `contactRecipient` in `backend/internal/handlers/contact.go`.
 
+### Board notification address
+
+When a join payment settles, the board gets a "Nytt medlem" email; a refunded or credited join payment sends it an "Innmeldingsbetaling refundert" email, and a paid join whose grant was withheld an "Innmelding må kontrollerast" email (BRY-630). The recipient is resolved when the email is sent (`boardNotificationAddress` in `backend/internal/handlers/membership_notice_sender.go`), first match wins:
+
+1. `clubs.board_notification_email`, the club setting under Admin > Site settings ("Varsel om medlemskap til"; `board_notification_email` on `GET`/`PATCH /admin/settings/site`, a bare mailbox or empty). Empty is the default.
+2. The deployment's general shared mailbox: the `board_mailboxes` entry with `from_brand_only` in the board-mailbox spec (`BRYGGE_MAILBOXES_PATH`), conventionally `post@<domain>`. The spec is deployment-wide and a deployment serves one club, so this applies only to the club whose slug is `CLUB_SLUG`.
+3. The contact-form recipient: the secretary, else the chairman (as above).
+
+Nothing is hard-coded. With none of them set the email fails at once with the note "no board notification address configured"; the hourly membership sweep puts it back in the queue once the club has an address, so no notice is lost. The grant itself is unaffected. Without mail configured at all, membership emails fail with a note saying so and are never recorded as sent. The welcome email goes to the member's own address.
+
 ## Stalwart admin API
 
 The API's handle on the mail server's management REST API (`/api/…`). What it enables depends on what else is set:

@@ -1766,6 +1766,10 @@
     },
     "columns": {
       "harborShare": "Hafenanteil"
+    },
+    "siteSettings": {
+      "boardNotificationEmail": "Mitgliedschaftsmeldungen an",
+      "boardNotificationEmailHint": "Hierhin meldet die App dem Vorstand neue Mitglieder und erstattete Beitrittszahlungen. Leer lassen, um das gemeinsame Postfach des Vereins (post@) zu verwenden, sonst Schriftführer oder Vorsitz."
     }
   },
   "projects": {
@@ -2173,7 +2177,10 @@
       "failedBody": "Die Zahlung wurde abgebrochen oder ist nicht durchgegangen.",
       "tryAgain": "Erneut versuchen",
       "notFoundTitle": "Zahlung nicht gefunden",
-      "notFoundBody": "Der Link ist ungültig oder abgelaufen. Bitte wenden Sie sich an den Kassenwart."
+      "notFoundBody": "Der Link ist ungültig oder abgelaufen. Bitte wenden Sie sich an den Kassenwart.",
+      "welcomeTitle": "Willkommen als Mitglied!",
+      "welcomeBody": "Ihre Zahlung ist eingegangen, und Sie sind jetzt Mitglied. Eine Willkommens-E-Mail ist unterwegs.",
+      "welcomePortal": "Zum Mitgliederportal"
     },
     "belowMinimum": "Der Betrag ist für diese Zahlungsart zu klein.",
     "unsupportedCurrency": "Online-Zahlung ist nur in norwegischen Kronen möglich. Bitte per Banküberweisung zahlen oder den Kassenwart kontaktieren."

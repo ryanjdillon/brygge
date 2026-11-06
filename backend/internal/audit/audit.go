@@ -173,7 +173,14 @@ const (
 
 	// Self-service membership join (BRY-629). The request is logged with a
 	// hash of the address only; the confirmation names the user it created.
+	// Settling the join payment (BRY-630) is logged as the grant, naming its
+	// source (online, kid or sweep); a refund or credit of the payment is
+	// recorded for the board and never revokes the membership; a paid join
+	// the integrity check withholds is recorded for the board too.
+	ActionMembershipGrantWithheld = "membership.grant_withheld"
+	ActionMembershipGranted       = "membership.granted"
 	ActionMembershipJoinConfirmed = "membership.join_confirmed"
+	ActionMembershipJoinRefunded  = "membership.join_refunded"
 	ActionMembershipJoinRequested = "membership.join_requested"
 
 	// GDPR operations

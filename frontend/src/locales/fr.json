@@ -1765,6 +1765,10 @@
     },
     "columns": {
       "harborShare": "Part du port"
+    },
+    "siteSettings": {
+      "boardNotificationEmail": "Avis d'adhésion à",
+      "boardNotificationEmailHint": "Adresse où le bureau est informé des nouveaux membres et des paiements d'adhésion remboursés. Laissez vide pour utiliser la boîte partagée du club (post@), sinon le secrétaire ou le président."
     }
   },
   "projects": {
@@ -2172,7 +2176,10 @@
       "failedBody": "Le paiement a été annulé ou n'a pas abouti.",
       "tryAgain": "Réessayer",
       "notFoundTitle": "Paiement introuvable",
-      "notFoundBody": "Le lien est invalide ou a expiré. Veuillez contacter le trésorier."
+      "notFoundBody": "Le lien est invalide ou a expiré. Veuillez contacter le trésorier.",
+      "welcomeTitle": "Bienvenue parmi nos membres !",
+      "welcomeBody": "Votre paiement a été reçu et vous êtes désormais membre. Un e-mail de bienvenue est en route.",
+      "welcomePortal": "Aller à l'espace membre"
     },
     "belowMinimum": "Ce montant est trop faible pour ce moyen de paiement.",
     "unsupportedCurrency": "Le paiement en ligne n'est disponible qu'en couronnes norvégiennes. Payez par virement bancaire ou contactez le trésorier."

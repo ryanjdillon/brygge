@@ -29,13 +29,24 @@ const (
 	// KindJoinContactBoard is sent instead when the board has marked the
 	// address "can't rejoin": it points the person to the board.
 	KindJoinContactBoard Kind = "join_contact_board"
-	KindOther            Kind = "other"
+	// Settling a join payment (BRY-630): the new member's welcome, the
+	// board's new-member notice, and the board's notice that a join payment
+	// was refunded or credited.
+	KindMembershipWelcome      Kind = "membership_welcome"
+	KindMembershipBoardNotice  Kind = "membership_board_notice"
+	KindMembershipJoinRefunded Kind = "membership_join_refunded"
+	// KindMembershipGrantWithheld tells the board a paid join was not
+	// granted by the integrity check.
+	KindMembershipGrantWithheld Kind = "membership_grant_withheld"
+	KindOther                   Kind = "other"
 )
 
 var allKinds = []Kind{
 	KindMagicLink, KindInvoice, KindInvoiceReminder,
 	KindCreditNote, KindDispute, KindContact,
-	KindJoinConfirm, KindJoinAlreadyMember, KindJoinContactBoard, KindOther,
+	KindJoinConfirm, KindJoinAlreadyMember, KindJoinContactBoard,
+	KindMembershipWelcome, KindMembershipBoardNotice, KindMembershipJoinRefunded,
+	KindMembershipGrantWithheld, KindOther,
 }
 
 const (

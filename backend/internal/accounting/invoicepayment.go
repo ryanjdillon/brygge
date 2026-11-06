@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
+	"github.com/brygge-klubb/brygge/internal/membership"
 )
 
 // linkInvoicePayment creates a `payments` row for the supplied invoice
@@ -29,10 +31,48 @@ func (s *Service) linkInvoicePayment(ctx context.Context, clubID, invoiceID stri
 	return linkInvoicePaymentIn(ctx, s.db, clubID, invoiceID, paidAt)
 }
 
+// txBeginner is a pool, or a transaction that opens a savepoint.
+type txBeginner interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+}
+
+// errLinkRaced is a back-link that found the faktura already linked when it
+// came to write: its payment row is rolled back and the link is a no-op.
+var errLinkRaced = errors.New("faktura linked by another payment meanwhile")
+
 // linkInvoicePaymentIn is linkInvoicePayment on q, for a transaction that
-// holds row locks and must not touch the pool.
+// holds row locks and must not touch the pool. The payment row, the back-link
+// and the membership grant a join faktura carries are written in one
+// transaction (a savepoint when q already is one), which locks the faktura
+// first: of two concurrent links one writes and the other finds it linked, so
+// no payment row is left without a faktura. The grant runs in a savepoint of
+// its own and never fails the link (see membership.GrantForInvoiceInSavepoint).
 func linkInvoicePaymentIn(ctx context.Context, q dbtx, clubID, invoiceID string, paidAt time.Time) error {
+	b, ok := q.(txBeginner)
+	if !ok {
+		err := linkInvoicePaymentTx(ctx, q, clubID, invoiceID, paidAt)
+		if errors.Is(err, errLinkRaced) {
+			return nil
+		}
+		return err
+	}
+	tx, err := b.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after commit
+	if err := linkInvoicePaymentTx(ctx, tx, clubID, invoiceID, paidAt); err != nil {
+		if errors.Is(err, errLinkRaced) {
+			return nil
+		}
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func linkInvoicePaymentTx(ctx context.Context, q dbtx, clubID, invoiceID string, paidAt time.Time) error {
 	var (
+		purpose        *string
 		userID         *string
 		amount         float64
 		category       *string
@@ -45,14 +85,15 @@ func linkInvoicePaymentIn(ctx context.Context, q dbtx, clubID, invoiceID string,
 		memberName     *string
 	)
 	err := q.QueryRow(ctx,
-		`SELECT user_id, total_amount, category,
+		`SELECT purpose, user_id, total_amount, category,
 		        COALESCE(recipient_kind, 'private'),
 		        recipient_org_name, recipient_org_number, recipient_org_address,
 		        recipient_contact_person, recipient_email, member_name
 		   FROM invoices
-		  WHERE id = $1 AND club_id = $2 AND payment_id IS NULL`,
+		  WHERE id = $1 AND club_id = $2 AND payment_id IS NULL
+		  FOR UPDATE`,
 		invoiceID, clubID,
-	).Scan(&userID, &amount, &category, &recipientKind,
+	).Scan(&purpose, &userID, &amount, &category, &recipientKind,
 		&orgName, &orgNumber, &orgAddress, &contactPerson, &recipientEmail, &memberName)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -100,12 +141,24 @@ func linkInvoicePaymentIn(ctx context.Context, q dbtx, clubID, invoiceID string,
 		return err
 	}
 
-	if _, err := q.Exec(ctx,
+	tag, err := q.Exec(ctx,
 		`UPDATE invoices SET payment_id = $1, recipient_id = COALESCE(recipient_id, $4)
 		  WHERE id = $2 AND club_id = $3 AND payment_id IS NULL`,
 		paymentID, invoiceID, clubID, recipientID,
-	); err != nil {
+	)
+	if err != nil {
 		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return errLinkRaced
+	}
+	// A bank payment on a join faktura makes the applicant a member, in the
+	// transaction that links it; a grant the integrity check withholds is
+	// sent to the board.
+	if purpose != nil && *purpose == membership.Purpose {
+		if b, ok := q.(txBeginner); ok {
+			membership.GrantForInvoiceInSavepoint(ctx, b, invoiceID, membership.SourceKID)
+		}
 	}
 	return nil
 }

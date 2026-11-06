@@ -1766,6 +1766,10 @@
     },
     "columns": {
       "harborShare": "Havenaandeel"
+    },
+    "siteSettings": {
+      "boardNotificationEmail": "Lidmaatschapsmeldingen naar",
+      "boardNotificationEmailHint": "Hier krijgt het bestuur bericht over nieuwe leden en terugbetaalde inschrijvingsbetalingen. Laat leeg voor de gedeelde mailbox van de club (post@), anders de secretaris of voorzitter."
     }
   },
   "projects": {
@@ -2173,7 +2177,10 @@
       "failedBody": "De betaling is geannuleerd of niet gelukt.",
       "tryAgain": "Opnieuw proberen",
       "notFoundTitle": "Betaling niet gevonden",
-      "notFoundBody": "De link is ongeldig of verlopen. Neem contact op met de penningmeester."
+      "notFoundBody": "De link is ongeldig of verlopen. Neem contact op met de penningmeester.",
+      "welcomeTitle": "Welkom als lid!",
+      "welcomeBody": "Je betaling is ontvangen en je bent nu lid. Er is een welkomstmail onderweg.",
+      "welcomePortal": "Naar het ledenportaal"
     },
     "belowMinimum": "Dit bedrag is te laag voor deze betaalmethode.",
     "unsupportedCurrency": "Online betalen kan alleen in Noorse kronen. Betaal per bankoverschrijving of neem contact op met de penningmeester."

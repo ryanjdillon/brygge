@@ -1737,6 +1737,10 @@
     },
     "columns": {
       "harborShare": "Udział w porcie"
+    },
+    "siteSettings": {
+      "boardNotificationEmail": "Powiadomienia o członkostwie do",
+      "boardNotificationEmailHint": "Tu zarząd otrzymuje informacje o nowych członkach i zwróconych opłatach wpisowych. Zostaw puste, aby użyć wspólnej skrzynki klubu (post@), a w przeciwnym razie sekretarza lub prezesa."
     }
   },
   "projects": {
@@ -2144,7 +2148,10 @@
       "failedBody": "Płatność została anulowana lub nie powiodła się.",
       "tryAgain": "Spróbuj ponownie",
       "notFoundTitle": "Nie znaleziono płatności",
-      "notFoundBody": "Link jest nieprawidłowy lub wygasł. Skontaktuj się ze skarbnikiem."
+      "notFoundBody": "Link jest nieprawidłowy lub wygasł. Skontaktuj się ze skarbnikiem.",
+      "welcomeTitle": "Witamy w gronie członków!",
+      "welcomeBody": "Płatność została odebrana i jesteś teraz członkiem. Wiadomość powitalna jest już w drodze.",
+      "welcomePortal": "Przejdź do portalu członka"
     },
     "belowMinimum": "Ta kwota jest za mała dla tej metody płatności.",
     "unsupportedCurrency": "Płatność online jest dostępna tylko w koronach norweskich. Zapłać przelewem bankowym lub skontaktuj się ze skarbnikiem."

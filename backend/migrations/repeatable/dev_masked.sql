@@ -90,7 +90,8 @@ SELECT
     stripe_payout_descriptor, stripe_suspense_account, stripe_dispute_account,
     vipps_portal_url,                    -- club's own portal address, host-restricted
     automatic_booking,                   -- boolean switch
-    join_price_item_id                   -- catalog id
+    join_price_item_id,                  -- catalog id
+    NULL::text AS board_notification_email -- may be a board member's own address
 FROM public.clubs;
 
 -- Unconfirmed join requests: the applicant's identity is NULL and so is the

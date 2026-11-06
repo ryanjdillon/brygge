@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/brygge-klubb/brygge/internal/membership"
 	"github.com/brygge-klubb/brygge/internal/payments"
 	"github.com/brygge-klubb/brygge/internal/stripe"
 )
@@ -76,6 +77,11 @@ func (h *StripeWebhookHandler) onRefund(ctx context.Context, clubID string, evt 
 			h.log.Error().Err(err).Str("refund_id", r.ID).Str("event_id", evt.ID).Msg("webhook refund: storing failed")
 			failed = errors.Join(failed, err)
 		}
+	}
+	// A refunded join payment is the board's to judge; membership stays.
+	// Best-effort: the hourly membership sweep queues a notice missed here.
+	if _, err := membership.QueueJoinRefundNotices(ctx, h.db, clubID); err != nil {
+		h.log.Error().Err(err).Str("event_id", evt.ID).Msg("webhook refund: queueing the board's join refund notice failed")
 	}
 	return failed
 }

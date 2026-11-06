@@ -11,12 +11,18 @@ package broadcast
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// ErrUnsendable marks a delivery that cannot be sent as it stands (its
+// recipient is gone, or nothing is configured to send it): the worker fails it
+// at once, with the error as its note, rather than spending retries on it.
+var ErrUnsendable = errors.New("delivery cannot be sent")
 
 // Delivery statuses.
 const (
@@ -36,6 +42,17 @@ const (
 	// The booking pass queues it in the transaction that issues the
 	// document, so delivery happens after the commit.
 	KindInvoiceRefundDocument = "invoice_refund_document"
+	// The membership kinds hang off no broadcast or faktura (BRY-630). The
+	// grant queues the welcome email and the board's new-member notice in
+	// the transaction that grants membership; a refunded join payment
+	// queues the board's refund notice. The sender resolves each recipient
+	// when it sends, so a board address changed meanwhile applies.
+	KindMembershipWelcome      = "membership_welcome"
+	KindMembershipBoardNotice  = "membership_board_notice"
+	KindMembershipJoinRefunded = "membership_join_refunded"
+	// KindMembershipGrantWithheld tells the board that a join was paid but
+	// the integrity check (or the payer's state) withheld the grant.
+	KindMembershipGrantWithheld = "membership_grant_withheld"
 )
 
 // Broadcast (parent) statuses.

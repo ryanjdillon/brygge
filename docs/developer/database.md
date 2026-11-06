@@ -584,6 +584,18 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   self-service join flow reads. `dev_masked.users` passes it through (a board
   flag, not identity). **The down** drops `dev_masked.users` first (the
   repeatable file rebuilds it), then the column.
+- **Membership settlement.** 000138 (BRY-630) widens
+  `deliveries_parent_by_kind` with a `membership_*` branch (no broadcast or
+  faktura parent; `user_id` is not required, since it is `ON DELETE SET
+  NULL`), adds the partial unique index `idx_deliveries_membership_notice_ref`
+  on `(kind, payload->>'ref')` for kinds `membership_join_refunded` and
+  `membership_grant_withheld` (one board notice of each per join source),
+  and adds
+  `clubs.board_notification_email` (TEXT NOT NULL DEFAULT '', see
+  [configuration.md](configuration.md#board-notification-address)).
+  `dev_masked.clubs` NULLs the address. **The down** drops
+  `dev_masked.clubs` first, the column and the index, deletes queued
+  `membership_*` deliveries and restores the narrower CHECK.
 - `invoice_pdf_archive` (migration 000050) — preserves prior PDF bytes when
   `invoices.pdf_data` is regenerated, so Norwegian bokføringsloven §13's
   5-year retention requirement is satisfied.

@@ -34,6 +34,7 @@ import (
 	"github.com/brygge-klubb/brygge/internal/email"
 	"github.com/brygge-klubb/brygge/internal/handlers"
 	"github.com/brygge-klubb/brygge/internal/mail"
+	"github.com/brygge-klubb/brygge/internal/membership"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 	"github.com/brygge-klubb/brygge/internal/passkey"
 	"github.com/brygge-klubb/brygge/internal/payments"
@@ -358,6 +359,17 @@ func main() {
 	// later inside the inbox block when that stack is present.
 	deliveryWorker = broadcast.NewWorker(deliveryStore, cfg.BulkSendThrottle, log)
 	deliveryWorker.RegisterSender(broadcast.KindInvoiceRefundDocument, handlers.NewRefundDocumentSender(invoiceHandler))
+	// Membership grants, withheld grants and join refunds queue their emails
+	// whether or not mail is configured; without it the sender fails them
+	// with a note saying so.
+	membership.SetLogger(log)
+	membershipSender := handlers.NewMembershipNoticeSender(db, &cfg, emailClient, log)
+	for _, kind := range []string{
+		broadcast.KindMembershipWelcome, broadcast.KindMembershipBoardNotice,
+		broadcast.KindMembershipJoinRefunded, broadcast.KindMembershipGrantWithheld,
+	} {
+		deliveryWorker.RegisterSender(kind, membershipSender)
+	}
 	if emailClient != nil {
 		deliveryWorker.RegisterSender(broadcast.KindInvoiceReminder, handlers.NewInvoiceReminderSender(invoiceHandler))
 		invoiceHandler.SetDeliveryQueue(deliveryStore, deliveryWorker.Kick)
@@ -588,6 +600,27 @@ func main() {
 					log.Warn().Err(err).Msg("membership application purge failed")
 				} else if n > 0 {
 					log.Info().Int64("rows", n).Msg("purged expired membership applications")
+				}
+				// Settlement grants membership in its own transaction; this
+				// heals a paid join whose grant was missed and queues the
+				// board's notice of a refunded join payment (BRY-630).
+				// A board notice that failed for want of an address is sent
+				// once the club has one.
+				res, err := membership.Sweep(ctx, db)
+				for _, w := range res.Withheld {
+					log.Warn().Str("source", w).Msg("join payment settled but membership withheld; the board was told")
+				}
+				if err != nil {
+					log.Error().Err(err).Msg("membership sweep failed")
+				}
+				requeued, err := membershipSender.RequeueUnaddressed(ctx)
+				if err != nil {
+					log.Error().Err(err).Msg("membership notice requeue failed")
+				}
+				if res.Granted > 0 || res.RefundNotices > 0 || len(res.Withheld) > 0 || requeued > 0 {
+					log.Info().Int("granted", res.Granted).Int("refund_notices", res.RefundNotices).
+						Int64("requeued", requeued).Msg("membership sweep")
+					deliveryWorker.Kick()
 				}
 				n, err := sessionService.PurgeExpired(ctx)
 				if err != nil {

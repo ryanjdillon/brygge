@@ -28,7 +28,7 @@ Prometheus names below assume the upstream `prometheusremotewrite` exporter's de
 
 | Metric | Prometheus name | Type | Attributes |
 |--------|-----------------|------|------------|
-| `brygge.email.send` (`{message}`) | `brygge_email_send_total` | Counter (cumulative) | `kind` = `magic_link` \| `invoice` \| `invoice_reminder` \| `credit_note` \| `dispute` \| `contact` \| `join_confirm` \| `join_already_member` \| `join_contact_board` \| `other`; `provider` = `ses` \| `stalwart`; `result` = `ok` \| `error` |
+| `brygge.email.send` (`{message}`) | `brygge_email_send_total` | Counter (cumulative) | `kind` = `magic_link` \| `invoice` \| `invoice_reminder` \| `credit_note` \| `dispute` \| `contact` \| `join_confirm` \| `join_already_member` \| `join_contact_board` \| `membership_welcome` \| `membership_board_notice` \| `membership_join_refunded` \| `membership_grant_withheld` \| `other`; `provider` = `ses` \| `stalwart`; `result` = `ok` \| `error` |
 
 Counted by the `email.Instrument` decorator around each SMTP relay, once per hand-off: `provider="ses"` for the Amazon SES SMTP interface (`EMAIL_PROVIDER=ses`), `provider="stalwart"` for the local relay. A magic link that SES refuses and the Stalwart fallback then sends counts once under each. `kind` comes from `email.WithSendMeta(ctx, …)` (or the older `email.WithKind`) at the call site; untagged sends count as `other`. Every `kind` × `result` series of each configured provider (14 per provider) is created at 0 on startup so `increase()` sees the first error. Recipients, subjects and error text are never attributes — the error itself is in the `brygge.service` journal and the send's `email_sends` row.
 
@@ -38,7 +38,7 @@ What is **not** counted: broadcast mail (inbox compose and bulk send) goes out t
 
 | Metric | Prometheus name | Type | Attributes |
 |--------|-----------------|------|------------|
-| `brygge.email.delivery` (`{event}`) | `brygge_email_delivery_total` | Counter (cumulative) | `kind` = `magic_link` \| `invoice` \| `invoice_reminder` \| `credit_note` \| `dispute` \| `contact` \| `join_confirm` \| `join_already_member` \| `join_contact_board` \| `other`; `result` = `queued` \| `deferred` \| `accepted` \| `rejected_temporary` \| `rejected` \| `suppressed` \| `complaint`; `recipient_domain_class` = `gmail` \| `outlook` \| `yahoo` \| `icloud` \| `other`; `smtp_status_class` = RFC 3463 class.subject (`5.1`, `4.2`, …) or `none` |
+| `brygge.email.delivery` (`{event}`) | `brygge_email_delivery_total` | Counter (cumulative) | `kind` = `magic_link` \| `invoice` \| `invoice_reminder` \| `credit_note` \| `dispute` \| `contact` \| `join_confirm` \| `join_already_member` \| `join_contact_board` \| `membership_welcome` \| `membership_board_notice` \| `membership_join_refunded` \| `membership_grant_withheld` \| `other`; `result` = `queued` \| `deferred` \| `accepted` \| `rejected_temporary` \| `rejected` \| `suppressed` \| `complaint`; `recipient_domain_class` = `gmail` \| `outlook` \| `yahoo` \| `icloud` \| `other`; `smtp_status_class` = RFC 3463 class.subject (`5.1`, `4.2`, …) or `none` |
 | `brygge.ses.events.received` (`{message}`) | `brygge_ses_events_received_total` | Counter (cumulative) | `event_type` = `send` \| `delivery` \| `delivery_delay` \| `bounce` \| `complaint` \| `reject` \| `rendering_failure` \| `invalid` \| `ignored` |
 | `brygge.ses.dlq.messages` (`{message}`) | `brygge_ses_dlq_messages` | Gauge | Approximate messages in the SES events dead-letter queue, sampled every 60 s |
 

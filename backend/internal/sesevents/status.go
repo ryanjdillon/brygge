@@ -89,7 +89,8 @@ func StatusFor(r Record) string {
 var Kinds = []string{
 	"magic_link", "invoice", "invoice_reminder", "credit_note",
 	"dispute", "contact", "join_confirm", "join_already_member",
-	"join_contact_board", "other",
+	"join_contact_board", "membership_welcome", "membership_board_notice",
+	"membership_join_refunded", "membership_grant_withheld", "other",
 }
 
 func normaliseKind(k string) string {

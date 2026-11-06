@@ -3,9 +3,12 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Loader2, CheckCircle, XCircle, Clock } from 'lucide-vue-next'
+import { useAuthStore } from '@/stores/auth'
+import { isApplicantOnly } from '@/lib/applicantAccess'
 
 const { t } = useI18n()
 const route = useRoute()
+const auth = useAuthStore()
 const token = route.params.token as string
 
 type Line = { name: string; quantity: number; total: number }
@@ -15,6 +18,7 @@ type Checkout = {
   lines: Line[]
   already_paid: boolean
   paid_amount: number
+  purpose?: string
 }
 
 // The payer lands here from the payment provider before its webhook has
@@ -27,6 +31,8 @@ const MAX_WAIT_MS = 90_000
 
 const state = ref<'loading' | 'pending' | 'paid' | 'failed' | 'confirming' | 'notFound'>('loading')
 const checkout = ref<Checkout | null>(null)
+// welcomed: the payment made the logged-in payer a member.
+const welcomed = ref(false)
 let polls = 0
 let waited = 0
 let timer: ReturnType<typeof setTimeout> | undefined
@@ -67,6 +73,7 @@ async function check() {
   }
   checkout.value = data
   if (data.already_paid) {
+    if (data.purpose === 'membership_join') await refreshMembership()
     state.value = 'paid'
     return
   }
@@ -74,6 +81,16 @@ async function check() {
   // retried may have a newer payment whose capture has not landed yet.
   state.value = data.status === 'failed' ? 'failed' : 'pending'
   schedule()
+}
+
+// Settling a join payment made the applicant a member in the same
+// transaction, but the session the SPA loaded still holds the applicant role,
+// which keeps the router guard sending them to the finish-joining page.
+// Reloading it lets the new member in; the welcome shows only when the server
+// agrees they are one (a payer who is not logged in gets the plain receipt).
+async function refreshMembership() {
+  await auth.checkSession()
+  welcomed.value = !!auth.user && !isApplicantOnly(auth.user.roles)
 }
 
 onMounted(check)
@@ -96,7 +113,19 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-else-if="state === 'paid'" class="space-y-6" data-testid="receipt-paid">
-      <div class="space-y-3 py-6 text-center">
+      <div v-if="welcomed" class="space-y-3 py-6 text-center" data-testid="receipt-welcome">
+        <CheckCircle class="mx-auto h-14 w-14 text-green-600" />
+        <h1 class="text-2xl font-bold text-slate-900">{{ t('pay.receipt.welcomeTitle') }}</h1>
+        <p class="text-slate-500">{{ t('pay.receipt.welcomeBody') }}</p>
+        <RouterLink
+          to="/portal"
+          class="inline-flex min-h-11 items-center justify-center rounded-md bg-orange-500 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-orange-600"
+          data-testid="receipt-portal"
+        >
+          {{ t('pay.receipt.welcomePortal') }}
+        </RouterLink>
+      </div>
+      <div v-else class="space-y-3 py-6 text-center">
         <CheckCircle class="mx-auto h-14 w-14 text-green-600" />
         <h1 class="text-2xl font-bold text-slate-900">{{ t('pay.receipt.paidTitle') }}</h1>
         <p class="text-slate-500">{{ t('pay.receipt.paidBody') }}</p>

@@ -2003,7 +2003,9 @@
         "keyPlaceholder": "sk-ant-…",
         "keySet": "API-nøkkel er satt — skriv en ny verdi for å erstatte den",
         "keyActive": "Aktiv"
-      }
+      },
+      "boardNotificationEmail": "Varsler om medlemskap til",
+      "boardNotificationEmailHint": "Hit får styret beskjed om nye medlemmer og refunderte innmeldingsbetalinger. La feltet stå tomt for å bruke klubbens felles postkasse (post@), ellers sekretær eller leder."
     },
     "harborSettings": {
       "pageTitle": "Havn og bobil",
@@ -3104,7 +3106,10 @@
       "failedBody": "Betalingen ble avbrutt eller gikk ikke gjennom.",
       "tryAgain": "Prøv igjen",
       "notFoundTitle": "Fant ikke betalingen",
-      "notFoundBody": "Lenken er ugyldig eller utløpt. Ta kontakt med kassereren."
+      "notFoundBody": "Lenken er ugyldig eller utløpt. Ta kontakt med kassereren.",
+      "welcomeTitle": "Velkommen som medlem!",
+      "welcomeBody": "Betalingen er mottatt, og du er nå medlem. En velkomst-e-post er på vei.",
+      "welcomePortal": "Gå til medlemsportalen"
     },
     "belowMinimum": "Beløpet er for lite til å betale på denne måten.",
     "unsupportedCurrency": "Nettbetaling er bare tilgjengelig i norske kroner. Betal med bankoverføring eller ta kontakt med kassereren."

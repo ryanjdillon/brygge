@@ -302,6 +302,11 @@ type clubFinancialSettings struct {
 	// clearing as the club's system actor (ACC-13); off until the treasurer
 	// or an admin turns it on.
 	AutomaticBooking bool `json:"automatic_booking"`
+
+	// BoardNotificationEmail is where membership notices go (BRY-630); empty
+	// means the deployment default (the general shared mailbox, else the
+	// secretary or chair).
+	BoardNotificationEmail string `json:"board_notification_email"`
 }
 
 // HandleGetFinancialSettings returns the club's invoice-relevant
@@ -343,7 +348,8 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		        COALESCE(motorhome_cta_title, ''), COALESCE(motorhome_cta_description, ''),
 		        feature_bookings, feature_projects, feature_calendar,
 		        feature_commerce, feature_accounting,
-		        (anthropic_api_key IS NOT NULL AND anthropic_api_key != '')
+		        (anthropic_api_key IS NOT NULL AND anthropic_api_key != ''),
+		        board_notification_email
 		   FROM clubs WHERE id = $1`,
 		claims.ClubID,
 	).Scan(&s.Name, &s.OrgNumber, &s.Address,
@@ -372,7 +378,8 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		&s.MotorhomeCTATitle, &s.MotorhomeCTADescription,
 		&s.FeatureBookings, &s.FeatureProjects, &s.FeatureCalendar,
 		&s.FeatureCommerce, &s.FeatureAccounting,
-		&s.HasAnthropicKey); err != nil {
+		&s.HasAnthropicKey,
+		&s.BoardNotificationEmail); err != nil {
 		h.log.Error().Err(err).Msg("load financial settings")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
@@ -434,6 +441,10 @@ type updateFinancialSettingsRequest struct {
 	FeatureCommerce            *bool   `json:"feature_commerce,omitempty"`
 	FeatureAccounting          *bool   `json:"feature_accounting,omitempty"`
 	AnthropicAPIKey            *string `json:"anthropic_api_key,omitempty"`
+
+	// BoardNotificationEmail: omitted = keep; "" = use the deployment
+	// default; otherwise a bare mailbox.
+	BoardNotificationEmail *string `json:"board_notification_email,omitempty"`
 }
 
 // HandleUpdateFinancialSettings updates org_number, address, and
@@ -477,6 +488,10 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 			return
 		}
 		*p = norm
+	}
+	if !normalizeOptionalEmail(req.BoardNotificationEmail) {
+		Error(w, http.StatusBadRequest, "board_notification_email must be an email address")
+		return
 	}
 	msg, err := h.validateStripeSettings(ctx, claims.ClubID, &req)
 	if err != nil {
@@ -547,7 +562,8 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		   vipps_portal_url          = CASE
 		                                 WHEN $42::text IS NULL THEN vipps_portal_url
 		                                 ELSE NULLIF($42::text, '') END,
-		   automatic_booking         = COALESCE($43, automatic_booking)
+		   automatic_booking         = COALESCE($43, automatic_booking),
+		   board_notification_email  = COALESCE($44, board_notification_email)
 		 WHERE id = $1`,
 		claims.ClubID, req.OrgNumber, req.Address, req.Phone, req.VHFChannel,
 		req.Latitude, req.Longitude,
@@ -571,6 +587,7 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		req.StripeClearingAccount, req.StripePayoutDescriptor,
 		req.VippsPortalURL,
 		req.AutomaticBooking,
+		req.BoardNotificationEmail,
 	); err != nil {
 		h.log.Error().Err(err).Msg("update financial settings")
 		Error(w, http.StatusInternalServerError, "internal error")
@@ -588,6 +605,25 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		h.log.Error().Err(auditErr).Msg("audit financial settings")
 	}
 	JSON(w, http.StatusOK, map[string]string{"status": "updated"})
+}
+
+// normalizeOptionalEmail cleans an optional address setting in place: blank
+// becomes "" (unset), anything else must be a bare mailbox. It reports false
+// for a value that is neither.
+func normalizeOptionalEmail(p *string) bool {
+	if p == nil {
+		return true
+	}
+	if strings.TrimSpace(*p) == "" {
+		*p = ""
+		return true
+	}
+	addr, ok := parseBareEmail(*p)
+	if !ok {
+		return false
+	}
+	*p = addr
+	return true
 }
 
 // suppliedSettingFields names, sorted, the fields the request set. It reads

@@ -1766,6 +1766,10 @@
     },
     "columns": {
       "harborShare": "Quota del porto"
+    },
+    "siteSettings": {
+      "boardNotificationEmail": "Avvisi di adesione a",
+      "boardNotificationEmailHint": "Dove il consiglio riceve gli avvisi di nuovi soci e di quote di adesione rimborsate. Lascia vuoto per usare la casella condivisa del club (post@), altrimenti il segretario o il presidente."
     }
   },
   "projects": {
@@ -2173,7 +2177,10 @@
       "failedBody": "Il pagamento è stato annullato o non è andato a buon fine.",
       "tryAgain": "Riprova",
       "notFoundTitle": "Pagamento non trovato",
-      "notFoundBody": "Il link non è valido o è scaduto. Contatta il tesoriere."
+      "notFoundBody": "Il link non è valido o è scaduto. Contatta il tesoriere.",
+      "welcomeTitle": "Benvenuto come socio!",
+      "welcomeBody": "Il pagamento è stato ricevuto e ora sei socio. Un'e-mail di benvenuto è in arrivo.",
+      "welcomePortal": "Vai al portale soci"
     },
     "belowMinimum": "Questo importo è troppo basso per questo metodo di pagamento.",
     "unsupportedCurrency": "Il pagamento online è disponibile solo in corone norvegesi. Paga con bonifico bancario o contatta il tesoriere."

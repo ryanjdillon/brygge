@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
+	"github.com/brygge-klubb/brygge/internal/membership"
 	"github.com/brygge-klubb/brygge/internal/vipps"
 )
 
@@ -302,7 +303,9 @@ func (s orderSettlement) markAttemptCaptured(ctx context.Context, a paymentAttem
 // decision and the refund request take order then attempt and never a faktura,
 // which this order is consistent with. The decision's own transaction
 // (authorizeAttempt) has committed before the provider is called and so holds
-// nothing by now.
+// nothing by now. The membership grant comes last and writes only the payer's
+// roles and rows no other settlement locks (users, the delivery queue, the
+// audit log).
 func (s orderSettlement) settleCapture(ctx context.Context, a paymentAttempt, capturedAt time.Time) (orderPaid, firstCapture bool, err error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
@@ -331,6 +334,13 @@ func (s orderSettlement) settleCapture(ctx context.Context, a paymentAttempt, ca
 	if err := s.markInvoicesPaidOnline(ctx, tx, a, capturedAt); err != nil {
 		return false, false, err
 	}
+	// A captured join order (or join faktura) makes the applicant a member in
+	// this transaction, so no crash can leave the money taken and the grant
+	// undone. The grant runs in a savepoint: one that fails is rolled back
+	// alone and logged, and never keeps the capture from settling; the hourly
+	// sweep retries it. It runs on a replayed capture too: granting is
+	// idempotent, and the replay heals a grant an earlier delivery missed.
+	membership.GrantForOrderInSavepoint(ctx, tx, a.OrderID, membership.SourceOnline)
 	if err := tx.Commit(ctx); err != nil {
 		return false, false, err
 	}

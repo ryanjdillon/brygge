@@ -30,6 +30,7 @@ const viceChairmanEmail = ref('')
 const treasurerEmail = ref('')
 const secretaryEmail = ref('')
 const harborMasterEmail = ref('')
+const boardNotificationEmail = ref('')
 const hasSiteLogo = ref(false)
 const siteLogoMime = ref('')
 const siteLogoCacheBust = ref(0)
@@ -191,6 +192,7 @@ async function load() {
     treasurerEmail.value = body.treasurer_email ?? ''
     secretaryEmail.value = body.secretary_email ?? ''
     harborMasterEmail.value = body.harbor_master_email ?? ''
+    boardNotificationEmail.value = body.board_notification_email ?? ''
     hasSiteLogo.value = !!body.has_site_logo
     siteLogoMime.value = body.site_logo_mime ?? ''
     siteLogoCacheBust.value = Date.now()
@@ -289,6 +291,7 @@ async function save() {
         treasurer_email: treasurerEmail.value,
         secretary_email: secretaryEmail.value,
         harbor_master_email: harborMasterEmail.value,
+        board_notification_email: boardNotificationEmail.value,
         feature_bookings: features.bookings,
         feature_projects: features.projects,
         feature_calendar: features.calendar,
@@ -442,6 +445,17 @@ async function save() {
           </FormField>
           <FormField :label="t('admin.siteSettings.treasurerEmail')" :helper-text="t('admin.siteSettings.treasurerEmailHint')">
             <Input v-model="treasurerEmail" type="email" placeholder="kasserer@klubb.no" />
+          </FormField>
+          <FormField
+            :label="t('admin.siteSettings.boardNotificationEmail')"
+            :helper-text="t('admin.siteSettings.boardNotificationEmailHint')"
+          >
+            <Input
+              v-model="boardNotificationEmail"
+              type="email"
+              placeholder="post@klubb.no"
+              data-testid="board-notification-email"
+            />
           </FormField>
         </div>
       </fieldset>
