@@ -4,7 +4,7 @@ How Brygge charges a checkout order through a payment service, and the decisions
 
 ## The model
 
-Everything a payer can pay online is an **order** (`orders`): a faktura pay link (with `order_sources` rows pointing at the invoices it settles), a harbor QR guest payment, or a checkout with ad-hoc catalog lines (`order_lines`). An order is durable; a **payment attempt** (`payment_attempts`) is one short-lived payment at a provider to pay it. A payer who abandons an attempt clicks again and gets a fresh one on the same order; the earlier attempt keeps its row and reference, so if the payer completes it after all, its webhook still finds the order. The newest attempt with a provider reference is the order's **current** one.
+Everything a payer can pay online is an **order** (`orders`): a faktura pay link (with `order_sources` rows pointing at the invoices it settles), a harbor QR guest payment, a checkout with ad-hoc catalog lines (`order_lines`), or an applicant's join order (one line for the club's join price item, `purpose = 'membership_join'`; see [handlers/README.md](../../backend/internal/handlers/README.md#membership-join)). An order is durable; a **payment attempt** (`payment_attempts`) is one short-lived payment at a provider to pay it. A payer who abandons an attempt clicks again and gets a fresh one on the same order; the earlier attempt keeps its row and reference, so if the payer completes it after all, its webhook still finds the order. The newest attempt with a provider reference is the order's **current** one.
 
 ```
 /betal/{token} page, /qr/{token} page   payer picks a method (PayMethodButtons)

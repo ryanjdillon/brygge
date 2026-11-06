@@ -1881,6 +1881,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/join": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply for membership
+         * @description Emails a confirmation link (or, for an address that already belongs to the club, a login link). Every accepted request gets the same 202 whatever the address; the per-address work runs after the response. 400 on invalid fields or accept_terms false (code terms_not_accepted), 409 join_closed, 409 legal_document_stale (with the current versions) when consent_versions is not current, 415 unless Content-Type is application/json, 429 over the per-IP budget, 503 rate_limit_unavailable when the limiter cannot be read (fails closed).
+         */
+        post: operations["submit-join"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/join/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm a membership application
+         * @description Creates or reactivates the user as an applicant, records the consents, opens the pending join order, uses the token up and sets the session cookie. 410 with code join_token_invalid, join_token_used or join_token_expired; 409 join_closed or already_member; 415 unless Content-Type is application/json.
+         */
+        post: operations["confirm-join"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/join/confirm/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Check a confirmation link
+         * @description Read-only: never uses the token up, so a mail scanner's prefetch changes nothing.
+         */
+        get: operations["get-join-confirm-status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/join/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Whether joining is open
+         * @description Open when the club's join price item is set, active, flat and its own, and every required legal document is published. Missing lists coarse reasons only.
+         */
+        get: operations["get-join-status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/legal/{docType}": {
         parameters: {
             query?: never;
@@ -2854,6 +2934,8 @@ export interface components {
             phone: string;
             /** @description Postal code */
             postal_code: string;
+            /** @description The board's 'can't rejoin' mark: the self-service join form points this address to the board instead */
+            rejoin_blocked: boolean;
             /** @description Assigned roles */
             roles: string[] | null;
             /** @description permanent | seasonal | '' when unassigned */
@@ -2982,6 +3064,8 @@ export interface components {
             phone?: string;
             /** @description Postal code */
             postal_code?: string;
+            /** @description Set or clear the board's 'can't rejoin' mark (audited as user.rejoin_blocked_set) */
+            rejoin_blocked?: boolean;
         };
         AdminUsersResponse: {
             /**
@@ -4334,6 +4418,100 @@ export interface components {
              * @description Queue position
              */
             position: number;
+        };
+        JoinConfirmRequest: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/JoinConfirmRequest.json
+             */
+            readonly $schema?: string;
+            /** @description The token from the confirmation link */
+            token: string;
+        };
+        JoinConfirmResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/JoinConfirmResponse.json
+             */
+            readonly $schema?: string;
+            /** @description The pay page of the pending join order */
+            checkout_url: string;
+            /** @description The order's checkout token, as in /betal/{token} */
+            order_token: string;
+        };
+        JoinConfirmStatusResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/JoinConfirmStatusResponse.json
+             */
+            readonly $schema?: string;
+            /**
+             * @description Why the link cannot be confirmed
+             * @enum {string}
+             */
+            code?: "join_token_invalid" | "join_token_used" | "join_token_expired";
+            /** @description The applicant's first name, when valid */
+            first_name: string;
+            /** @description Whether the link can still be confirmed */
+            valid: boolean;
+        };
+        JoinPrice: {
+            /**
+             * Format: double
+             * @description Price of joining, in currency units
+             */
+            amount: number;
+            /** @example NOK */
+            currency: string;
+            /** @description The price item's description, else its name */
+            description: string;
+            /** @description The join price item's name */
+            name: string;
+        };
+        JoinRequest: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/JoinRequest.json
+             */
+            readonly $schema?: string;
+            /** @description Consent to the privacy policy, statutes, harbour rules and terms of sale; must be true */
+            accept_terms: boolean;
+            address_line?: string;
+            city: string;
+            /** @description The version of each required document (privacy, statutes, harbour_rules, terms_of_sale) the page showed. When sent, every one must be the club's current version, else 409 legal_document_stale */
+            consent_versions?: {
+                [key: string]: string;
+            };
+            /** Format: email */
+            email: string;
+            first_name: string;
+            /** @description Lives in the club's municipality */
+            is_local: boolean;
+            last_name: string;
+            /** @description Optional newsletter opt-in */
+            newsletter: boolean;
+            phone?: string;
+            postal_code: string;
+            /** @description Honeypot; leave empty. A non-empty value gets the answer a real submission would and is then dropped */
+            website?: string;
+        };
+        JoinStatusResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/JoinStatusResponse.json
+             */
+            readonly $schema?: string;
+            /** @description What keeps joining closed: club, price_item_unset, price_item_inactive, price_item_not_flat, price_item_other_club, or a legal document type not yet published (privacy, statutes, harbour_rules, terms_of_sale). Empty when open */
+            missing: string[] | null;
+            /** @description Whether the join form may be used */
+            open: boolean;
+            /** @description The price of joining; null unless open */
+            price: components["schemas"]["JoinPrice"];
         };
         LegalDocument: {
             /**
@@ -10298,6 +10476,133 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "submit-join": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JoinRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "confirm-join": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JoinConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JoinConfirmResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-join-confirm-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The token from the confirmation link */
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JoinConfirmStatusResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-join-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JoinStatusResponse"];
                 };
             };
             /** @description Error */

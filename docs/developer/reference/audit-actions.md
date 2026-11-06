@@ -40,6 +40,7 @@ The action string is the JSON wire format (`row.action`); the constant is the Go
 | `ActionUserDeactivated` | `user.deactivated` | user | Admin deactivates a member (reversible; hides + blocks login, keeps data, revokes their developer tokens) | — (ids only; the member is `resource_id`) |
 | `ActionUserReactivated` | `user.reactivated` | user | Admin reactivates a deactivated member | — (ids only) |
 | `ActionMemberPIIPurged` | `user.pii_purged` | user | Scheduled sweep erases a deactivated member's PII once retention clears (actor is NULL — system job) | `reason` |
+| `ActionUserRejoinBlockedSet` | `user.rejoin_blocked_set` | user | `PATCH /admin/users/{id}` set or cleared the board's "can't rejoin" mark (BRD-15), in the update's transaction; written whenever the field is sent | `rejoin_blocked` (bool, the new value) |
 | `ActionUserMailProvisioned` | `user.mail_provisioned` | user | Stalwart mailbox created for the user | `jmap_user` (the principal slug, no PII) |
 | `ActionUserMailDeprovisioned` | `user.mail_deprovisioned` | user | Stalwart mailbox removed | `jmap_user` |
 | `ActionUserHarborShareSet` | `user.harbor_share_set` | user | The harbor share import (BRY-139) set a member as owner or filled in a missing paid date; one row per member it changed, in the import's transaction. A PATCH of the same fields logs `update_user` instead. | `source` (`import`); never the values |
@@ -167,6 +168,13 @@ These don't have constants in `audit.go` — they're inlined as strings because 
 | `ActionInboxThreadArchived` | `inbox.thread_archived` | inbox | User archives a thread | `mailbox`, `thread_id` |
 | `ActionInboxMarkRead` | `inbox.mark_read` | inbox | User marks read in bulk (or via auto-mark on view) | `mailbox`, `count` |
 | `ActionInboxMessageSent` | `inbox.message_sent` | inbox | Compose flow successfully submits a message | `mailbox`, `to` |
+
+## Membership join
+
+| Constant | String | Resource | When | `extra` |
+|---|---|---|---|---|
+| `ActionMembershipJoinRequested` | `membership.join_requested` | membership_application | Once per accepted `POST /join` (not a honeypot hit), after the per-address work; actor NULL, `actor_ip` the visitor. `resource_id` is the application written, empty when none was | `email_hmac` (HMAC-SHA256 of the lowercased address, keyed from `TOTP_ENCRYPTION_KEY` via HKDF; never the address, a plain hash of it, or a name), `outcome`: `new`, `resent` (an unconfirmed application was replaced), `applicant` (an active applicant-only user), `reactivation` (a deactivated former user), `member` (an active user: login link sent, nothing created), `blocked` (the board has set `rejoin_blocked`: contact-board email sent, nothing created), `throttled` (per-recipient budget spent, nothing sent), `capped` (the club-wide daily cap is spent, nothing sent), `failed` (throttle unreadable or a write failed, nothing sent) |
+| `ActionMembershipJoinConfirmed` | `membership.join_confirmed` | user | `POST /join/confirm` created or reactivated the applicant, in the confirm's transaction; actor and `resource_id` are the applicant | `application_id`, `order_id` (the pending join order), `reactivated` (bool), `newsletter` (bool) |
 
 ## GDPR + legal
 

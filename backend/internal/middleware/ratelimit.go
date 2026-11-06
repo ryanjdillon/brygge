@@ -18,6 +18,9 @@ type RateLimiter struct {
 	limit  int
 	window time.Duration
 	keyFn  func(*http.Request) string
+	// failClosed refuses requests while the counter cannot be read, instead
+	// of letting them through. See FailClosed.
+	failClosed bool
 }
 
 func NewRateLimiter(rdb *redis.Client, log zerolog.Logger, limit int, window time.Duration, keyFn func(*http.Request) string) *RateLimiter {
@@ -30,6 +33,16 @@ func NewRateLimiter(rdb *redis.Client, log zerolog.Logger, limit int, window tim
 	}
 }
 
+// FailClosed makes the limiter answer 503 when Redis errors, instead of the
+// default of letting the request through. It is for a public route where each
+// request costs something real (an email to an address the visitor chose), so
+// an outage must not lift the budget; ordinary routes stay fail-open so a Redis
+// blip does not take the site down. It returns rl for chaining.
+func (rl *RateLimiter) FailClosed() *RateLimiter {
+	rl.failClosed = true
+	return rl
+}
+
 func (rl *RateLimiter) Handler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		key := rl.keyFn(r)
@@ -37,7 +50,16 @@ func (rl *RateLimiter) Handler(next http.Handler) http.Handler {
 
 		count, ttl, err := rl.increment(ctx, key)
 		if err != nil {
-			rl.log.Error().Err(err).Str("key", key).Msg("rate limiter redis error")
+			rl.log.Error().Err(err).Str("key", key).Bool("fail_closed", rl.failClosed).Msg("rate limiter redis error")
+			if rl.failClosed {
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("Retry-After", "60")
+				w.WriteHeader(http.StatusServiceUnavailable)
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"error": "rate_limit_unavailable",
+				})
+				return
+			}
 			next.ServeHTTP(w, r)
 			return
 		}

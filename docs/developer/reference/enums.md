@@ -321,7 +321,8 @@ ses   stalwart
 ### `email_sends.kind` (migration 000132, no CHECK)
 
 ```
-magic_link   invoice   invoice_reminder   credit_note   dispute   contact   other
+magic_link   invoice   invoice_reminder   credit_note   dispute   contact
+join_confirm   join_already_member   join_contact_board   other
 ```
 
 The `email.Kind` the sender passes; the vocabulary grows with it. `related_type` (also no CHECK) names the row a send is about, e.g. `invoice`.
@@ -520,6 +521,29 @@ The `/admin/users` writes answer these as `{error, code}` (BRD-9, BRD-10). The S
 | `last_admin` | 409 | The change (delete, deactivate, demote, or processing the GDPR deletion) would leave the club with no active admin. Nothing is changed. |
 | `admin_required` | 403 | A non-admin caller acted on a member who holds `admin`, or granted the role (role change, create). The delete route itself is admin-only and answers the gate's plain 403. |
 | `mailbox_deprovision_failed` | 502 | `DELETE /admin/users/{id}`: the member's Stalwart mailbox could not be removed, so the erasure was rolled back. Retry. |
+
+### Membership join codes (no column, BRY-629)
+
+The public join routes (`handlers/join.go`) answer refusals as `{error, code}`.
+
+| `code` | Status | Route | Meaning |
+|---|---|---|---|
+| `terms_not_accepted` | 400 | `POST /join` | `accept_terms` was not true. |
+| `legal_document_stale` | 409 | `POST /join` | `consent_versions` was sent and a required document's version in it is not the club's current one (or is missing). The body carries the current `versions`; nothing is stored. Same code as `POST /members/me/consent`. |
+| `unsupported_media_type` | 415 | `POST /join`, `POST /join/confirm` | The body is not declared `application/json`. |
+| `join_closed` | 409 | `POST /join`, `POST /join/confirm` | Joining is not open (see the reasons below). A confirm refused this way leaves the token usable until it expires. |
+| `join_token_invalid` | 410 | `POST /join/confirm` | No application of this club has the token (never issued, another club's, or purged). |
+| `join_token_used` | 410 | `POST /join/confirm` | The application was already confirmed. |
+| `join_token_expired` | 410 | `POST /join/confirm` | The 24 hours are up. |
+| `rejoin_blocked` | 409 | `POST /join/confirm` | The board marked the address "can't rejoin" (`users.rejoin_blocked`, BRD-15) after the request; nothing is changed and the token is spent. |
+| `already_member` | 409 | `POST /join/confirm` | The address became an active user with another role after the request; nothing is created and the token is spent. |
+| `rate_limit_unavailable` | 503 | `POST /join` | The per-IP limiter could not read Redis; the route fails closed. |
+
+The public checkout answers 409 `order_locked` to `POST /checkout/{token}/lines` and `DELETE /checkout/{token}/lines/{lineID}` on an order with a `purpose` (fixed content; see invariants.md).
+
+`GET /join/confirm/{token}` answers 200 `{valid: false, code}` with the three `join_token_*` codes instead of refusing.
+
+`GET /join/status` lists why joining is closed in `missing`: `club` (no clubs row for `CLUB_SLUG`), `price_item_unset` (`clubs.join_price_item_id` is NULL), `price_item_other_club`, `price_item_inactive`, `price_item_not_flat` (`pricing_kind` is not `flat`), and the type of every required legal document (`privacy`, `statutes`, `harbour_rules`, `terms_of_sale`) the club has not published. Empty when open. The `membership.join_requested` audit `outcome` values are listed in [audit-actions.md](audit-actions.md#membership-join).
 
 ### Club settings 400 codes (no column)
 

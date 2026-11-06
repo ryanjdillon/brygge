@@ -71,6 +71,11 @@ type Config struct {
 	// sync.
 	FreshTOTPWindow time.Duration
 
+	// JoinDailyMailCap is how many emails the public join form may send per
+	// club in a rolling day, across every address (BRY-629). 0 or less uses
+	// the handler's default. Tunable via JOIN_DAILY_MAIL_CAP.
+	JoinDailyMailCap int
+
 	// Throttle between bulk-reminder sends (per recipient). The bulk
 	// handler enqueues jobs; a single in-process worker drains the
 	// queue with this sleep between iterations. Tunable via
@@ -183,6 +188,7 @@ func Load() Config {
 		TOTPEncryptionKey: envStr("TOTP_ENCRYPTION_KEY", ""),
 		FreshTOTPWindow:   envDuration("AUTH_FRESH_TOTP_WINDOW", 10*time.Minute),
 		BulkSendThrottle:  envDuration("BULK_SEND_THROTTLE", 1*time.Second),
+		JoinDailyMailCap:  envInt("JOIN_DAILY_MAIL_CAP", 0),
 
 		SMTPHost:        envStr("SMTP_HOST", ""),
 		SMTPPort:        envInt("SMTP_PORT", 587),

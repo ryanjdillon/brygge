@@ -96,7 +96,7 @@ Unqualified names (`users`) resolve to the view through the role's search_path;
 
 | Table | NULL-masked (identity / credential / free text / blob) | Derived hint |
 |-------|--------------------------------------------------------|--------------|
-| `users` | email, phone, address_line, postal_code, city, first_name, last_name, full_name, admin_notes, totp_secret_encrypted, webauthn_handle, payables_token, membership_cancel_reason (member-typed) | `has_email` (`kind`, `harbor_share_owner`, `harbor_share_paid_on`, `member_since`, `membership_cancelled_at`, `membership_ends_on` pass through) |
+| `users` | email, phone, address_line, postal_code, city, first_name, last_name, full_name, admin_notes, totp_secret_encrypted, webauthn_handle, payables_token, membership_cancel_reason (member-typed) | `has_email` (`kind`, `harbor_share_owner`, `harbor_share_paid_on`, `member_since`, `membership_cancelled_at`, `membership_ends_on`, `rejoin_blocked` pass through) |
 | `membership_applications` | first_name, last_name, email, phone, address_line, postal_code, city, token_hash (credential) | — (`is_local`, `newsletter`, `consent_versions`, the timestamps pass through) |
 | `clubs` | config, faktura_logo_data, site_logo_data, all `*_email` (board), phone, feedback_linear_* + anthropic_api_key (secrets) | — |
 | `billing_recipients` | contact_person, email | `has_email` |

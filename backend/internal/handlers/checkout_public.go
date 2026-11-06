@@ -67,6 +67,27 @@ type checkoutResp struct {
 	Providers []string `json:"providers"`
 }
 
+// codeOrderLocked answers an add-on change to an order whose content is fixed
+// (any orders.purpose): settling such an order has a side effect tied to what
+// it charges, so its lines are not the payer's to change.
+const codeOrderLocked = "order_locked"
+
+// orderContentFixed reports whether the order carries a purpose, which fixes
+// its lines: no add-ons may be added or removed and no catalog is offered.
+func (h *InvoiceHandler) orderContentFixed(ctx context.Context, orderID string) (bool, error) {
+	var fixed bool
+	err := h.db.QueryRow(ctx, `SELECT purpose IS NOT NULL FROM orders WHERE id = $1`, orderID).Scan(&fixed)
+	return fixed, err
+}
+
+// writeOrderLocked answers 409 order_locked.
+func writeOrderLocked(w http.ResponseWriter) {
+	JSON(w, http.StatusConflict, map[string]string{
+		"error": "this order's content cannot be changed",
+		"code":  codeOrderLocked,
+	})
+}
+
 // checkoutByToken loads the order behind a pay token.
 func (h *InvoiceHandler) checkoutByToken(ctx context.Context, token string) (orderID, clubID, status string, ok bool) {
 	if token == "" {
@@ -150,29 +171,11 @@ func (h *InvoiceHandler) buildCheckoutResp(ctx context.Context, orderID, clubID,
 	}
 	resp.Total = total
 
-	// Addable catalog: active price_items minus billing-only categories.
-	catRows, err := h.db.Query(ctx,
-		`SELECT id, name, description, amount, category
-		   FROM price_items
-		  WHERE club_id = $1 AND is_active = true
-		    AND category <> ALL($2)
-		  ORDER BY sort_order, name`,
-		clubID, checkoutCatalogExcludedCategories,
-	)
+	catalog, err := h.checkoutCatalog(ctx, orderID, clubID)
 	if err != nil {
 		return nil, err
 	}
-	defer catRows.Close()
-	for catRows.Next() {
-		var c checkoutCatalogItem
-		if err := catRows.Scan(&c.PriceItemID, &c.Name, &c.Description, &c.Amount, &c.Category); err != nil {
-			return nil, err
-		}
-		resp.Catalog = append(resp.Catalog, c)
-	}
-	if err := catRows.Err(); err != nil {
-		return nil, err
-	}
+	resp.Catalog = append(resp.Catalog, catalog...)
 
 	// If an unpaid source isn't payable online, the page must steer to bank
 	// transfer: flag it so no pay button shows (BRY-283). With no provider to
@@ -202,6 +205,40 @@ func (h *InvoiceHandler) buildCheckoutResp(ctx context.Context, orderID, clubID,
 	}
 
 	return resp, nil
+}
+
+// checkoutCatalog is what the payer may add to the order: active price_items
+// minus billing-only categories and the club's join price item, which only a
+// join order may charge. An order with a purpose has fixed content, so it
+// offers none.
+func (h *InvoiceHandler) checkoutCatalog(ctx context.Context, orderID, clubID string) ([]checkoutCatalogItem, error) {
+	fixed, err := h.orderContentFixed(ctx, orderID)
+	if err != nil || fixed {
+		return nil, err
+	}
+	rows, err := h.db.Query(ctx,
+		`SELECT id, name, description, amount, category
+		   FROM price_items
+		  WHERE club_id = $1 AND is_active = true
+		    AND category <> ALL($2)
+		    AND id NOT IN (SELECT join_price_item_id FROM clubs
+		                    WHERE id = $1 AND join_price_item_id IS NOT NULL)
+		  ORDER BY sort_order, name`,
+		clubID, checkoutCatalogExcludedCategories,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []checkoutCatalogItem
+	for rows.Next() {
+		var c checkoutCatalogItem
+		if err := rows.Scan(&c.PriceItemID, &c.Name, &c.Description, &c.Amount, &c.Category); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
 }
 
 // checkoutInvoice loads the faktura a checkout settles (phase 1: a single
@@ -269,6 +306,14 @@ func (h *InvoiceHandler) HandleAddCheckoutLine(w http.ResponseWriter, r *http.Re
 		Error(w, http.StatusConflict, "checkout is already settled")
 		return
 	}
+	if fixed, err := h.orderContentFixed(ctx, orderID); err != nil {
+		h.log.Error().Err(err).Msg("checkout: load order purpose failed")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	} else if fixed {
+		writeOrderLocked(w)
+		return
+	}
 
 	var req addCheckoutLineRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -286,9 +331,12 @@ func (h *InvoiceHandler) HandleAddCheckoutLine(w http.ResponseWriter, r *http.Re
 		amount   float64
 		category string
 	)
+	// The club's join price item is never an add-on: only a join order
+	// charges it, and settling that order is what grants membership.
 	err := h.db.QueryRow(ctx,
-		`SELECT name, amount, category FROM price_items
-		  WHERE id = $1 AND club_id = $2 AND is_active = true`,
+		`SELECT name, amount, category FROM price_items p
+		  WHERE p.id = $1 AND p.club_id = $2 AND p.is_active = true
+		    AND NOT EXISTS (SELECT 1 FROM clubs c WHERE c.id = $2 AND c.join_price_item_id = p.id)`,
 		req.PriceItemID, clubID,
 	).Scan(&name, &amount, &category)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -338,6 +386,14 @@ func (h *InvoiceHandler) HandleRemoveCheckoutLine(w http.ResponseWriter, r *http
 	}
 	if status != "pending" {
 		Error(w, http.StatusConflict, "checkout is already settled")
+		return
+	}
+	if fixed, err := h.orderContentFixed(ctx, orderID); err != nil {
+		h.log.Error().Err(err).Msg("checkout: load order purpose failed")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	} else if fixed {
+		writeOrderLocked(w)
 		return
 	}
 	lineID := chi.URLParam(r, "lineID")

@@ -21,12 +21,21 @@ const (
 	KindCreditNote      Kind = "credit_note"
 	KindDispute         Kind = "dispute"
 	KindContact         Kind = "contact"
-	KindOther           Kind = "other"
+	// KindJoinConfirm is the link that confirms a membership application;
+	// KindJoinAlreadyMember is the login link sent instead when the address
+	// already belongs to the club.
+	KindJoinConfirm       Kind = "join_confirm"
+	KindJoinAlreadyMember Kind = "join_already_member"
+	// KindJoinContactBoard is sent instead when the board has marked the
+	// address "can't rejoin": it points the person to the board.
+	KindJoinContactBoard Kind = "join_contact_board"
+	KindOther            Kind = "other"
 )
 
 var allKinds = []Kind{
 	KindMagicLink, KindInvoice, KindInvoiceReminder,
-	KindCreditNote, KindDispute, KindContact, KindOther,
+	KindCreditNote, KindDispute, KindContact,
+	KindJoinConfirm, KindJoinAlreadyMember, KindJoinContactBoard, KindOther,
 }
 
 const (

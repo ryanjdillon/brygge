@@ -558,9 +558,11 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   the SHA-256 `token_hash` of the link token (UNIQUE), `consent_versions`
   (JSONB, consent type to document version), `expires_at` and `consumed_at`
   (single use). `club_id` cascades; `idx_membership_applications_expires`
-  serves the purge, `idx_membership_applications_club_email`
-  (`club_id, lower(email)`) the per-address rate limit and erasure, which
-  deletes a member's requests by address. `clubs.join_price_item_id` (UUID,
+  serves the hourly purge (`JoinHandler.PurgeExpired`),
+  `idx_membership_applications_club_email` (`club_id, lower(email)`) the join
+  request replacing an address's unconfirmed one (BRY-629) and erasure, which
+  deletes a member's requests by address. The per-address send budget lives
+  in Redis, not here. `clubs.join_price_item_id` (UUID,
   `ON DELETE SET NULL`) is the price item a join is charged from; NULL means
   joining is closed. `orders.purpose` and `invoices.purpose` (TEXT, NULL by
   default, CHECKs `orders_purpose_check` / `invoices_purpose_check`) mark what
@@ -577,6 +579,11 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   doc_type, published_at DESC)`, for the per-club lookup of a type's current
   published version (`GET /legal/{docType}`, `POST /members/me/consent`,
   `handlers.LatestLegalVersions`). Index only; **the down** drops it.
+- **Rejoin block.** 000137 (BRY-629, BRD-15) adds `users.rejoin_blocked`
+  (BOOLEAN NOT NULL DEFAULT false), the board's "can't rejoin" mark that the
+  self-service join flow reads. `dev_masked.users` passes it through (a board
+  flag, not identity). **The down** drops `dev_masked.users` first (the
+  repeatable file rebuilds it), then the column.
 - `invoice_pdf_archive` (migration 000050) — preserves prior PDF bytes when
   `invoices.pdf_data` is regenerated, so Norwegian bokføringsloven §13's
   5-year retention requirement is satisfied.

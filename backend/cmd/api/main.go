@@ -402,6 +402,7 @@ func main() {
 	slipSharesHandler := handlers.NewSlipSharesHandler(db, &cfg, log)
 	notificationsHandler := handlers.NewNotificationsHandler(db, &cfg, log)
 	gdprHandler := handlers.NewGDPRHandler(db, &cfg, log)
+	joinHandler := handlers.NewJoinHandler(db, rdb, &cfg, emailClient, sessionService, auditService, log)
 	feedbackHandler := handlers.NewFeedbackHandler(db, log)
 
 	r := newRouter(routeDeps{
@@ -446,6 +447,7 @@ func main() {
 		harborHandler:           harborHandler,
 		healthHandler:           healthHandler,
 		invoiceHandler:          invoiceHandler,
+		joinHandler:             joinHandler,
 		magicLinkHandler:        magicLinkHandler,
 		mapHandler:              mapHandler,
 		membersHandler:          membersHandler,
@@ -579,6 +581,13 @@ func main() {
 					log.Warn().Err(err).Msg("developer token purge failed")
 				} else if n > 0 {
 					log.Info().Int64("rows", n).Msg("purged expired developer tokens")
+				}
+				// Join applications live 24 hours; the form data of one never
+				// confirmed must not outlast that (BRY-629).
+				if n, err := joinHandler.PurgeExpired(ctx); err != nil {
+					log.Warn().Err(err).Msg("membership application purge failed")
+				} else if n > 0 {
+					log.Info().Int64("rows", n).Msg("purged expired membership applications")
 				}
 				n, err := sessionService.PurgeExpired(ctx)
 				if err != nil {

@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/email"
 	"github.com/brygge-klubb/brygge/internal/finance"
 	"github.com/brygge-klubb/brygge/internal/middleware"
@@ -284,11 +285,21 @@ func (h *InvoiceHandler) orderPayURL(token string) string {
 // frontendBase is the trimmed public site origin used to build member-facing
 // links: the configured FrontendURL, falling back to https://<Domain>.
 func (h *InvoiceHandler) frontendBase() string {
-	base := h.config.FrontendURL
+	return publicSiteBase(h.config)
+}
+
+// publicSiteBase is frontendBase for handlers other than InvoiceHandler.
+func publicSiteBase(cfg *config.Config) string {
+	base := cfg.FrontendURL
 	if base == "" {
-		base = "https://" + h.config.Domain
+		base = "https://" + cfg.Domain
 	}
 	return strings.TrimRight(base, "/")
+}
+
+// checkoutURL is the /betal/{token} pay page of the order with that token.
+func checkoutURL(cfg *config.Config, token string) string {
+	return publicSiteBase(cfg) + "/betal/" + token
 }
 
 type invoicePayLinkResponse struct {
@@ -785,7 +796,7 @@ func (h *InvoiceHandler) receiptURL(token string) string {
 
 // checkoutPageURL is the order's /betal/{token} pay page.
 func (h *InvoiceHandler) checkoutPageURL(token string) string {
-	return h.frontendBase() + "/betal/" + token
+	return checkoutURL(h.config, token)
 }
 
 // genCheckoutToken returns an unguessable token for the public pay link.

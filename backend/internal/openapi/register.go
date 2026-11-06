@@ -22,6 +22,7 @@ func RegisterAllOperations(api huma.API) {
 	registerAuthOps(api)
 	registerPasskeyOps(api)
 	registerPublicContentOps(api)
+	registerJoinOps(api)
 	registerMapOps(api)
 	registerBookingOps(api)
 	registerCalendarOps(api)
@@ -190,6 +191,47 @@ func registerPasskeyOps(api huma.API) {
 	}, stub[struct {
 		UserID string `path:"userID"`
 	}, struct{ Body PasskeyAdminResetResponse }]())
+}
+
+func registerJoinOps(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "get-join-status",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/join/status",
+		Tags:        []string{"Join"},
+		Summary:     "Whether joining is open",
+		Description: "Open when the club's join price item is set, active, flat and its own, and every required legal document is published. Missing lists coarse reasons only.",
+	}, stub[struct{}, struct{ Body JoinStatusResponse }]())
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "submit-join",
+		Method:        http.MethodPost,
+		Path:          "/api/v1/join",
+		Tags:          []string{"Join"},
+		Summary:       "Apply for membership",
+		Description:   "Emails a confirmation link (or, for an address that already belongs to the club, a login link). Every accepted request gets the same 202 whatever the address; the per-address work runs after the response. 400 on invalid fields or accept_terms false (code terms_not_accepted), 409 join_closed, 409 legal_document_stale (with the current versions) when consent_versions is not current, 415 unless Content-Type is application/json, 429 over the per-IP budget, 503 rate_limit_unavailable when the limiter cannot be read (fails closed).",
+		DefaultStatus: http.StatusAccepted,
+	}, stub[struct{ Body JoinRequest }, struct{ Body StatusResponse }]())
+
+	huma.Register(api, huma.Operation{
+		OperationID: "get-join-confirm-status",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/join/confirm/{token}",
+		Tags:        []string{"Join"},
+		Summary:     "Check a confirmation link",
+		Description: "Read-only: never uses the token up, so a mail scanner's prefetch changes nothing.",
+	}, stub[struct {
+		Token string `path:"token" doc:"The token from the confirmation link"`
+	}, struct{ Body JoinConfirmStatusResponse }]())
+
+	huma.Register(api, huma.Operation{
+		OperationID: "confirm-join",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/join/confirm",
+		Tags:        []string{"Join"},
+		Summary:     "Confirm a membership application",
+		Description: "Creates or reactivates the user as an applicant, records the consents, opens the pending join order, uses the token up and sets the session cookie. 410 with code join_token_invalid, join_token_used or join_token_expired; 409 join_closed or already_member; 415 unless Content-Type is application/json.",
+	}, stub[struct{ Body JoinConfirmRequest }, struct{ Body JoinConfirmResponse }]())
 }
 
 func registerPublicContentOps(api huma.API) {

@@ -126,6 +126,52 @@ type StatusResponse struct {
 	Status string `json:"status" example:"received" doc:"Operation status"`
 }
 
+// --- Membership join (BRY-629) ---
+
+type JoinPrice struct {
+	Amount      float64 `json:"amount" doc:"Price of joining, in currency units"`
+	Currency    string  `json:"currency" example:"NOK"`
+	Name        string  `json:"name" doc:"The join price item's name"`
+	Description string  `json:"description" doc:"The price item's description, else its name"`
+}
+
+type JoinStatusResponse struct {
+	Open    bool       `json:"open" doc:"Whether the join form may be used"`
+	Price   *JoinPrice `json:"price" doc:"The price of joining; null unless open"`
+	Missing []string   `json:"missing" doc:"What keeps joining closed: club, price_item_unset, price_item_inactive, price_item_not_flat, price_item_other_club, or a legal document type not yet published (privacy, statutes, harbour_rules, terms_of_sale). Empty when open"`
+}
+
+type JoinRequest struct {
+	FirstName   string `json:"first_name" minLength:"1" maxLength:"100"`
+	LastName    string `json:"last_name" minLength:"1" maxLength:"100"`
+	Email       string `json:"email" format:"email" maxLength:"254"`
+	Phone       string `json:"phone,omitempty" maxLength:"40"`
+	AddressLine string `json:"address_line,omitempty" maxLength:"200"`
+	PostalCode  string `json:"postal_code" minLength:"1" maxLength:"20"`
+	City        string `json:"city" minLength:"1" maxLength:"100"`
+	IsLocal     bool   `json:"is_local" doc:"Lives in the club's municipality"`
+	Newsletter  bool   `json:"newsletter" doc:"Optional newsletter opt-in"`
+	AcceptTerms bool   `json:"accept_terms" doc:"Consent to the privacy policy, statutes, harbour rules and terms of sale; must be true"`
+	// ConsentVersions is what the page showed; optional.
+	ConsentVersions map[string]string `json:"consent_versions,omitempty" doc:"The version of each required document (privacy, statutes, harbour_rules, terms_of_sale) the page showed. When sent, every one must be the club's current version, else 409 legal_document_stale"`
+	Website         string            `json:"website,omitempty" doc:"Honeypot; leave empty. A non-empty value gets the answer a real submission would and is then dropped"`
+}
+
+type JoinConfirmStatusResponse struct {
+	Valid     bool   `json:"valid" doc:"Whether the link can still be confirmed"`
+	FirstName string `json:"first_name" doc:"The applicant's first name, when valid"`
+	Code      string `json:"code,omitempty" enum:"join_token_invalid,join_token_used,join_token_expired" doc:"Why the link cannot be confirmed"`
+}
+
+type JoinConfirmRequest struct {
+	Token string `json:"token" minLength:"1" doc:"The token from the confirmation link"`
+}
+
+type JoinConfirmResponse struct {
+	CheckoutURL string `json:"checkout_url" doc:"The pay page of the pending join order"`
+	OrderToken  string `json:"order_token" doc:"The order's checkout token, as in /betal/{token}"`
+}
+
 // --- Auth ---
 
 type UserProfile struct {
@@ -802,6 +848,7 @@ type AdminUser struct {
 	CreatedAt          time.Time             `json:"created_at" doc:"Creation timestamp"`
 	HarborShareOwner   bool                  `json:"harbor_share_owner" doc:"Owns a paid-up harbor share (moloandel). The only is-owner predicate (BRD-14)."`
 	HarborSharePaidOn  *string               `json:"harbor_share_paid_on" format:"date" doc:"Date the harbor share was paid (YYYY-MM-DD); null when not an owner or the date is unknown"`
+	RejoinBlocked      bool                  `json:"rejoin_blocked" doc:"The board's 'can't rejoin' mark: the self-service join form points this address to the board instead"`
 }
 
 // AdminEmailBounce is a member's last hard delivery outcome to their
@@ -881,6 +928,7 @@ type AdminUserUpdate struct {
 	AdminNotes        *string `json:"admin_notes,omitempty" doc:"Free-text admin notes (admin-only, never returned to the member themselves)"`
 	HarborShareOwner  *bool   `json:"harbor_share_owner,omitempty" doc:"Harbor share owner; false also clears harbor_share_paid_on"`
 	HarborSharePaidOn *string `json:"harbor_share_paid_on,omitempty" doc:"Paid date YYYY-MM-DD, or empty string to clear (date unknown). A date for a non-owner is a 400."`
+	RejoinBlocked     *bool   `json:"rejoin_blocked,omitempty" doc:"Set or clear the board's 'can't rejoin' mark (audited as user.rejoin_blocked_set)"`
 }
 
 type AdminUsersResponse struct {

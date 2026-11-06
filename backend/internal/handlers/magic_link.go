@@ -17,11 +17,17 @@ import (
 	"github.com/brygge-klubb/brygge/internal/auth"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/email"
-	"github.com/brygge-klubb/brygge/internal/mail"
 	"github.com/brygge-klubb/brygge/internal/middleware"
+	"github.com/brygge-klubb/brygge/internal/roles"
 )
 
 const magicLinkExpiry = 15 * time.Minute
+
+// MailPrincipalEnsurer creates a user's Stalwart principal if it is missing.
+// *mail.UserProvisioner is the implementation.
+type MailPrincipalEnsurer interface {
+	EnsureUserPrincipal(ctx context.Context, userID, email string) (string, error)
+}
 
 type MagicLinkHandler struct {
 	db       *pgxpool.Pool
@@ -33,7 +39,8 @@ type MagicLinkHandler struct {
 	// MailProvisioner, when set, lazily ensures a Stalwart principal
 	// exists for the user on first successful login (DIL-321).
 	// Detached goroutine — failures are logged but don't block login.
-	MailProvisioner *mail.UserProvisioner
+	// Applicant-only users are skipped: they are not members yet.
+	MailProvisioner MailPrincipalEnsurer
 }
 
 func NewMagicLinkHandler(
@@ -80,12 +87,12 @@ func (h *MagicLinkHandler) HandleRequestMagicLink(w http.ResponseWriter, r *http
 	resp := magicLinkResponse{Message: "If this email is registered, a login link has been sent"}
 
 	// Check if user exists
-	var userID string
+	var userID, clubID string
 	err := h.db.QueryRow(ctx,
-		`SELECT id FROM users WHERE email = $1 AND club_id = (SELECT id FROM clubs WHERE slug = $2)
+		`SELECT id, club_id FROM users WHERE email = $1 AND club_id = (SELECT id FROM clubs WHERE slug = $2)
 		   AND kind = 'person' AND deactivated_at IS NULL`,
 		req.Email, h.config.ClubSlug,
-	).Scan(&userID)
+	).Scan(&userID, &clubID)
 
 	if err == pgx.ErrNoRows {
 		// User doesn't exist — return 200 without sending email
@@ -99,21 +106,7 @@ func (h *MagicLinkHandler) HandleRequestMagicLink(w http.ResponseWriter, r *http
 		return
 	}
 
-	// Generate token
-	token, err := generateToken()
-	if err != nil {
-		h.log.Error().Err(err).Msg("failed to generate magic link token")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	// Store magic link
-	expiresAt := time.Now().Add(magicLinkExpiry)
-	_, err = h.db.Exec(ctx,
-		`INSERT INTO magic_links (token, email, club_id, expires_at)
-		 VALUES ($1, $2, (SELECT id FROM clubs WHERE slug = $3), $4)`,
-		token, req.Email, h.config.ClubSlug, expiresAt,
-	)
+	loginURL, err := issueMagicLink(ctx, h.db, h.config, clubID, req.Email)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to store magic link")
 		Error(w, http.StatusInternalServerError, "internal error")
@@ -122,10 +115,6 @@ func (h *MagicLinkHandler) HandleRequestMagicLink(w http.ResponseWriter, r *http
 
 	// Send email
 	if h.email != nil {
-		// Point at the backend verify endpoint. It consumes the token,
-		// sets the session cookie, and 302-redirects to /portal in one
-		// request — no frontend-side glue needed.
-		loginURL := fmt.Sprintf("%s/api/v1/auth/verify?token=%s", h.config.FrontendURL, token)
 		locale := email.DetectLocale(r)
 		subject := email.MagicLinkSubject(locale, h.config.ClubName, time.Now())
 		htmlBody := email.MagicLinkBody(locale, h.config.ClubName, h.config.Domain, loginURL)
@@ -201,8 +190,10 @@ func (h *MagicLinkHandler) HandleVerifyMagicLink(w http.ResponseWriter, r *http.
 	// Lazy Stalwart provisioning (DIL-321). Detached so login
 	// latency isn't affected; reconciler picks up the new principal
 	// at most 5 min later if it was needed before this goroutine
-	// finished.
-	if h.MailProvisioner != nil {
+	// finished. An applicant has not paid and gets no club mailbox; one
+	// whose roles cannot be read is skipped too, and is provisioned on a
+	// later login.
+	if h.MailProvisioner != nil && h.mayProvisionMail(ctx, userID, clubID) {
 		// WithoutCancel keeps the request's trace/log values while
 		// outliving the response that ends the request context.
 		detached := context.WithoutCancel(r.Context())
@@ -217,6 +208,40 @@ func (h *MagicLinkHandler) HandleVerifyMagicLink(w http.ResponseWriter, r *http.
 
 	// Redirect to frontend
 	http.Redirect(w, r, h.config.FrontendURL+"/portal", http.StatusFound)
+}
+
+// mayProvisionMail reports whether a login may create the user's Stalwart
+// principal: not for an applicant-only user, and not when the roles cannot be
+// read.
+func (h *MagicLinkHandler) mayProvisionMail(ctx context.Context, userID, clubID string) bool {
+	var userRoles []string
+	if err := h.db.QueryRow(ctx,
+		`SELECT COALESCE(array_agg(role::text), '{}') FROM user_roles WHERE user_id = $1 AND club_id = $2`,
+		userID, clubID,
+	).Scan(&userRoles); err != nil {
+		h.log.Warn().Err(err).Str("user_id", userID).Msg("stalwart provisioning skipped: roles unreadable")
+		return false
+	}
+	return !roles.IsApplicantOnly(userRoles)
+}
+
+// issueMagicLink stores a single-use login link for email in clubID and
+// returns its URL. The URL is the backend verify endpoint: it consumes the
+// token, sets the session cookie and redirects to /portal in one request.
+// email must be the address as stored on the user, which verify matches
+// exactly.
+func issueMagicLink(ctx context.Context, db *pgxpool.Pool, cfg *config.Config, clubID, email string) (string, error) {
+	token, err := generateToken()
+	if err != nil {
+		return "", fmt.Errorf("generate magic link token: %w", err)
+	}
+	if _, err := db.Exec(ctx,
+		`INSERT INTO magic_links (token, email, club_id, expires_at) VALUES ($1, $2, $3, $4)`,
+		token, email, clubID, time.Now().Add(magicLinkExpiry),
+	); err != nil {
+		return "", fmt.Errorf("store magic link: %w", err)
+	}
+	return fmt.Sprintf("%s/api/v1/auth/verify?token=%s", cfg.FrontendURL, token), nil
 }
 
 // HandleSessionLogout destroys the current session and clears the cookie.

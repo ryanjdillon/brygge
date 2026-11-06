@@ -223,3 +223,40 @@ func TestRateLimitDifferentIPsIndependent(t *testing.T) {
 		t.Fatalf("IP1 second: expected 429, got %d", rec3.Code)
 	}
 }
+
+// A limiter is fail-open by default: with Redis gone the request goes
+// through. FailClosed turns the same outage into a 503 that never reaches the
+// handler, for routes where every request costs something real.
+func TestRateLimitRedisErrorFailOpenAndClosed(t *testing.T) {
+	rdb, mr := testRedis(t)
+	log := zerolog.Nop()
+	mr.Close()
+
+	reached := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reached = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	rec := httptest.NewRecorder()
+	NewRateLimiter(rdb, log, 5, time.Minute, IPKey).Handler(next).
+		ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/test", nil))
+	if rec.Code != http.StatusOK || !reached {
+		t.Fatalf("fail-open limiter: got %d, reached=%v; want 200 and the handler reached", rec.Code, reached)
+	}
+
+	reached = false
+	rec = httptest.NewRecorder()
+	NewRateLimiter(rdb, log, 5, time.Minute, IPKey).FailClosed().Handler(next).
+		ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/test", nil))
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("fail-closed limiter: got %d, want 503", rec.Code)
+	}
+	if reached {
+		t.Fatal("fail-closed limiter let the request through on a Redis error")
+	}
+	var body map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil || body["error"] != "rate_limit_unavailable" {
+		t.Fatalf("fail-closed body = %v (err %v), want error rate_limit_unavailable", body, err)
+	}
+}

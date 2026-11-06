@@ -50,6 +50,7 @@ SELECT
     harbor_share_paid_on,                -- ownership date, not identity
     member_since, membership_cancelled_at, membership_ends_on,
     NULL::text  AS membership_cancel_reason, -- member-typed free text
+    rejoin_blocked,                      -- board flag, not identity
     (email IS NOT NULL) AS has_email
 FROM public.users;
 

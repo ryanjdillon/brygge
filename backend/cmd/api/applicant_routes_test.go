@@ -74,6 +74,7 @@ func inertRouter(t *testing.T, sessions *auth.SessionService, wrapOptional func(
 		harborHandler:           &handlers.HarborHandler{},
 		healthHandler:           &handlers.HealthHandler{},
 		invoiceHandler:          &handlers.InvoiceHandler{},
+		joinHandler:             &handlers.JoinHandler{},
 		magicLinkHandler:        &handlers.MagicLinkHandler{},
 		mapHandler:              &handlers.MapHandler{},
 		membersHandler:          &handlers.MembersHandler{},

@@ -15,6 +15,7 @@ An interface (`Sender`), the SMTP transport (Stalwart or the Amazon SES SMTP int
 | `instrument.go` | `Instrument(Sender, Provider)` decorator counting `brygge.email.send{kind,provider,result}`; the `Kind` set; `WithKind(ctx, Kind)`. See [instrumentation.md](../../../docs/developer/otel/instrumentation.md#app-email-sends). |
 | `mock.go` | `MockSender` — records every call in a slice for tests. Use with `&MockSender{}` and assert against `mock.Calls`. |
 | `templates.go` | `Subject(...)`, `Body(...)` helpers + `html/template` definitions for invoice, reminder, magic-link emails, on one shared layout (`emailBaseLayout`, light colour scheme only) with shared partials (`button`, `payButton`, `invoiceDetails`, `invoiceLines`). Plus `DetectLocale`, `formatNOK`. |
+| `join.go` | The two membership-join emails (BRY-629): `JoinConfirmSubject`/`Body` (the confirmation link) and `JoinAlreadyMemberSubject`/`Body` (a login link for an address that already belongs to the club), in Bokmål or Nynorsk by the club's default language (`JoinLocale`). They go to an address a visitor typed, so they carry no visitor-typed text. `JoinContactBoardSubject`/`Body` is the third: for an address the board marked "can't rejoin", a mailto button to the club's contact address (or only the reply hint when there is none). Kinds `join_confirm`, `join_already_member` and `join_contact_board`. |
 | `export_test.go` | Exposes `buildMessage` to the external `email_test` package, whose attachment round-trip test renders a real faktura with `finance.GeneratePDF`. |
 
 ## Template pattern

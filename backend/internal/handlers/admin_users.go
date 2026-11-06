@@ -23,6 +23,7 @@ import (
 
 	"github.com/brygge-klubb/brygge/internal/accounting"
 	"github.com/brygge-klubb/brygge/internal/audit"
+	"github.com/brygge-klubb/brygge/internal/auth"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/finance"
 	brmail "github.com/brygge-klubb/brygge/internal/mail"
@@ -283,7 +284,8 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		        COALESCE(boat_summary.boats, '[]'::jsonb),
 		        u.deactivated_at,
 		        u.harbor_share_owner,
-		        to_char(u.harbor_share_paid_on, 'YYYY-MM-DD')
+		        to_char(u.harbor_share_paid_on, 'YYYY-MM-DD'),
+		        u.rejoin_blocked
 		 FROM users u
 		 LEFT JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
 		 LEFT JOIN LATERAL (
@@ -423,12 +425,13 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		DeactivatedAt      *time.Time      `json:"deactivated_at,omitempty"`
 		HarborShareOwner   bool            `json:"harbor_share_owner"`
 		HarborSharePaidOn  *string         `json:"harbor_share_paid_on"`
+		RejoinBlocked      bool            `json:"rejoin_blocked"`
 	}
 
 	var users []userRow
 	for rows.Next() {
 		var u userRow
-		if err := rows.Scan(&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.FullName, &u.Phone, &u.AddressLine, &u.PostalCode, &u.City, &u.IsLocal, &u.AdminNotes, &u.CreatedAt, &u.UpdatedAt, &u.Roles, &u.SlipID, &u.SlipNumber, &u.SlipSection, &u.SlipAssignmentType, &u.Slips, &u.MembershipStatus, &u.SlipFeeStatus, &u.Boats, &u.DeactivatedAt, &u.HarborShareOwner, &u.HarborSharePaidOn); err != nil {
+		if err := rows.Scan(&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.FullName, &u.Phone, &u.AddressLine, &u.PostalCode, &u.City, &u.IsLocal, &u.AdminNotes, &u.CreatedAt, &u.UpdatedAt, &u.Roles, &u.SlipID, &u.SlipNumber, &u.SlipSection, &u.SlipAssignmentType, &u.Slips, &u.MembershipStatus, &u.SlipFeeStatus, &u.Boats, &u.DeactivatedAt, &u.HarborShareOwner, &u.HarborSharePaidOn, &u.RejoinBlocked); err != nil {
 			h.log.Error().Err(err).Msg("failed to scan user row")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
@@ -495,6 +498,8 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 		// YYYY-MM-DD, or null when the member is not an owner or the
 		// paid date is unknown.
 		HarborSharePaidOn *string `json:"harbor_share_paid_on"`
+		// RejoinBlocked is the board's "can't rejoin" mark (BRY-476).
+		RejoinBlocked bool `json:"rejoin_blocked"`
 	}
 
 	var u userDetail
@@ -517,7 +522,8 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 		             WHERE sa.user_id = u.id AND sa.club_id = u.club_id AND sa.released_at IS NULL
 		        ), '[]'::jsonb),
 		        u.harbor_share_owner,
-		        to_char(u.harbor_share_paid_on, 'YYYY-MM-DD')
+		        to_char(u.harbor_share_paid_on, 'YYYY-MM-DD'),
+		        u.rejoin_blocked
 		 FROM users u
 		 LEFT JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
 		 WHERE u.id = $1 AND u.club_id = $2 AND u.kind = 'person'
@@ -526,7 +532,7 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 	).Scan(&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.FullName,
 		&u.Phone, &u.Address, &u.PostalCd, &u.City,
 		&u.IsLocal, &u.AdminNotes, &u.CreatedAt, &u.UpdatedAt, &u.Roles, &slipsJSON,
-		&u.HarborShareOwner, &u.HarborSharePaidOn)
+		&u.HarborShareOwner, &u.HarborSharePaidOn, &u.RejoinBlocked)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "user not found")
 		return
@@ -1578,6 +1584,10 @@ type adminUserUpdateRequest struct {
 	HarborShareOwner *bool `json:"harbor_share_owner,omitempty"`
 	// YYYY-MM-DD sets the harbor share paid date; "" clears it (date unknown).
 	HarborSharePaidOn *string `json:"harbor_share_paid_on,omitempty"`
+	// RejoinBlocked is the board's "can't rejoin" mark: true makes the
+	// self-service join form point the address to the board instead
+	// (owner decision 2026-11-06, BRY-476).
+	RejoinBlocked *bool `json:"rejoin_blocked,omitempty"`
 }
 
 // updatedFields lists the JSON names of the fields a partial update carries.
@@ -1595,6 +1605,7 @@ func updatedFields(req adminUserUpdateRequest) []string {
 		"admin_notes":          req.AdminNotes != nil,
 		"harbor_share_owner":   req.HarborShareOwner != nil,
 		"harbor_share_paid_on": writesHarborSharePaidOn(req),
+		"rejoin_blocked":       req.RejoinBlocked != nil,
 	} {
 		if set {
 			fields = append(fields, name)
@@ -1753,6 +1764,9 @@ func (h *AdminUsersHandler) HandleUpdateUser(w http.ResponseWriter, r *http.Requ
 	if !addHarborShareSets(w, req, add) {
 		return
 	}
+	if req.RejoinBlocked != nil {
+		add("rejoin_blocked", *req.RejoinBlocked)
+	}
 	if len(sets) == 0 {
 		Error(w, http.StatusBadRequest, "no fields to update")
 		return
@@ -1765,17 +1779,7 @@ func (h *AdminUsersHandler) HandleUpdateUser(w http.ResponseWriter, r *http.Requ
 		strings.Join(sets, ", "), len(args)-1, len(args),
 	)
 
-	tag, err := h.db.Exec(ctx, q, args...)
-	if err != nil {
-		if writeUpdateUserConstraintError(w, err) {
-			return
-		}
-		h.log.Error().Err(err).Str("user_id", userID).Msg("failed to update user")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-	if tag.RowsAffected() == 0 {
-		Error(w, http.StatusNotFound, "user not found")
+	if !h.writeUserUpdate(ctx, w, claims, r.RemoteAddr, userID, q, args, req.RejoinBlocked) {
 		return
 	}
 
@@ -1796,6 +1800,51 @@ func (h *AdminUsersHandler) HandleUpdateUser(w http.ResponseWriter, r *http.Requ
 		Msg("user updated")
 
 	JSON(w, http.StatusOK, map[string]any{"id": userID, "updated": true})
+}
+
+// writeUserUpdate runs a profile PATCH's UPDATE and, when the rejoin block is
+// sent, its user.rejoin_blocked_set audit row in one transaction, so the
+// board's mark is never set without its trail. It reports success, having
+// written the error response otherwise.
+func (h *AdminUsersHandler) writeUserUpdate(ctx context.Context, w http.ResponseWriter, claims *auth.Claims, actorIP, userID, q string, args []any, rejoinBlocked *bool) bool {
+	tx, err := h.db.Begin(ctx)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to begin transaction")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return false
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after commit
+
+	tag, err := tx.Exec(ctx, q, args...)
+	if err != nil {
+		if !writeUpdateUserConstraintError(w, err) {
+			h.log.Error().Err(err).Str("user_id", userID).Msg("failed to update user")
+			Error(w, http.StatusInternalServerError, "internal error")
+		}
+		return false
+	}
+	if tag.RowsAffected() == 0 {
+		Error(w, http.StatusNotFound, "user not found")
+		return false
+	}
+	if rejoinBlocked != nil {
+		blockData, _ := json.Marshal(map[string]any{"rejoin_blocked": *rejoinBlocked})
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO audit_log (club_id, actor_id, actor_ip, action, resource, resource_id, details)
+			 VALUES ($1, $2, $3, $4, 'user', $5, $6)`,
+			claims.ClubID, claims.UserID, actorIP, audit.ActionUserRejoinBlockedSet, userID, blockData,
+		); err != nil {
+			h.log.Error().Err(err).Msg("failed to write audit log for user.rejoin_blocked_set")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return false
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		h.log.Error().Err(err).Msg("failed to commit user update")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return false
+	}
+	return true
 }
 
 // adminBoatSlipUpdateRequest is the body for PUT

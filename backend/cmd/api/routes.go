@@ -72,6 +72,7 @@ type routeDeps struct {
 	harborHandler           *handlers.HarborHandler
 	healthHandler           *handlers.HealthHandler
 	invoiceHandler          *handlers.InvoiceHandler
+	joinHandler             *handlers.JoinHandler
 	magicLinkHandler        *handlers.MagicLinkHandler
 	mapHandler              *handlers.MapHandler
 	membersHandler          *handlers.MembersHandler
@@ -140,6 +141,7 @@ func newRouter(d routeDeps) *chi.Mux {
 	harborHandler := d.harborHandler
 	healthHandler := d.healthHandler
 	invoiceHandler := d.invoiceHandler
+	joinHandler := d.joinHandler
 	magicLinkHandler := d.magicLinkHandler
 	mapHandler := d.mapHandler
 	membersHandler := d.membersHandler
@@ -267,6 +269,23 @@ func newRouter(d routeDeps) *chi.Mux {
 			r.Use(contactRL.Handler)
 			r.Post("/contact", contactHandler.HandleContactForm)
 		})
+
+		// Self-service join (BRY-629). POST /join sends an email to an
+		// address the visitor chose, so it has its own strict per-IP budget
+		// that fails closed: a Redis outage refuses joins rather than lifting
+		// the limit. The handler adds a per-recipient throttle on top. The
+		// confirm routes are token-addressed and cost no mail; their own key
+		// keeps them off the magic-link budget.
+		joinRL := middleware.NewRateLimiter(rdb, log, 5, time.Minute, func(r *http.Request) string {
+			return "join:" + r.RemoteAddr
+		}).FailClosed()
+		joinConfirmRL := middleware.NewRateLimiter(rdb, log, 10, time.Minute, func(r *http.Request) string {
+			return "join-confirm:" + r.RemoteAddr
+		})
+		r.With(standardRL).Get("/join/status", joinHandler.HandleJoinStatus)
+		r.With(joinRL.Handler).Post("/join", joinHandler.HandleJoin)
+		r.With(joinConfirmRL.Handler).Get("/join/confirm/{token}", joinHandler.HandleJoinConfirmStatus)
+		r.With(joinConfirmRL.Handler).Post("/join/confirm", joinHandler.HandleJoinConfirm)
 
 		r.Group(func(r chi.Router) {
 			r.Use(standardRL)

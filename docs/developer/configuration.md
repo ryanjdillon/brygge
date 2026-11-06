@@ -29,7 +29,8 @@ Sessions are server-side rows in Postgres (`auth.SessionService`); there are no 
 
 | Variable              | Required | Default | Description                                                        |
 |----------             |----------|---------|-------------                                                       |
-| `TOTP_ENCRYPTION_KEY` | For TOTP | —       | 64 hex chars (32 bytes) for AES-256-GCM encryption of TOTP secrets |
+| `TOTP_ENCRYPTION_KEY` | For TOTP | —       | 64 hex chars (32 bytes) for AES-256-GCM encryption of TOTP secrets. The join form also derives its email-HMAC key from it (HKDF, info `brygge/join-email-hmac`); without it the API uses a random per-process key, so the join throttle restarts with the process and audit `email_hmac` values don't match across restarts |
+| `JOIN_DAILY_MAIL_CAP` | No       | `100`   | Club-wide cap on emails the public join form sends in a rolling 24 hours, both kinds together (BRY-629). Over it the form still answers 202 and sends nothing; the API logs a warning. Not a secret: set it in the NixOS `environment`, never in `/etc/brygge/env` |
 | `AUTH_FRESH_TOTP_WINDOW` | No    | `10m`   | Per-action TOTP freshness window for sensitive operations (Go duration; surfaced to the SPA on `/session/me` as `fresh_totp_window_ms` so the in-context countdown stays in sync) |
 | `BULK_SEND_THROTTLE`     | No    | `1s`    | Sleep between consecutive sends in the bulk-reminder worker (Go duration). Lower = faster drain, higher = friendlier to Stalwart submission limits and destination MX rate limits. Set `0s` to disable in tests. See [invariants.md](reference/invariants.md#bulk-reminder-queue-is-durable-throttled-and-retried). |
 

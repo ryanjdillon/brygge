@@ -11,7 +11,7 @@ Where chi route gating lives. Roughly one middleware per concern, ordered carefu
 | `session.go` | `RequireAdminTOTP`, `RequireFreshTOTP`, `RequireFreshTOTPDefault`, `IsFreshTOTP`, `SetFreshTOTPWindow`, `FreshTOTPWindow`. |
 | `devtoken.go` | `RequireDevToken(svc, scope)` — developer bearer-token auth for `/api/v1/dev/query` (BRY-115). Ignores cookies, refuses a token whose minter is deactivated or no longer admin (`devtoken.Authenticate`, BRY-540), injects role-less claims plus the token id (`GetDevTokenID`); `DevTokenKey` buckets the rate limiter per token. Must never be combined with session auth on the same route. |
 | `clientip.go` | `ClientIP(trusted)` rewrites `r.RemoteAddr` to the client IP from `X-Forwarded-For`, only when the peer is a trusted proxy (`TRUSTED_PROXY_CIDRS`, default loopback); otherwise to the peer's IP. Always a bare IP, no port. Replaces chi's deprecated `RealIP`, which believed `True-Client-IP` / `X-Real-IP` from anyone. Handlers read `r.RemoteAddr` and never forwarding headers. |
-| `ratelimit.go` | Per-IP / per-user sliding-window rate limit using Redis. |
+| `ratelimit.go` | Per-IP / per-user sliding-window rate limit using Redis. Fails open on a Redis error unless built with `.FailClosed()`, which answers 503 `rate_limit_unavailable` instead (`POST /join`). |
 | `metrics.go` | Prometheus / OTel HTTP request metrics. |
 
 ## Middleware order

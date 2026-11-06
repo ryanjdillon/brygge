@@ -88,7 +88,8 @@ func StatusFor(r Record) string {
 // the metric's cardinality.
 var Kinds = []string{
 	"magic_link", "invoice", "invoice_reminder", "credit_note",
-	"dispute", "contact", "other",
+	"dispute", "contact", "join_confirm", "join_already_member",
+	"join_contact_board", "other",
 }
 
 func normaliseKind(k string) string {

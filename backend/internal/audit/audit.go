@@ -31,6 +31,9 @@ const (
 	ActionMemberPIIPurged       = "user.pii_purged"
 	ActionUserMailProvisioned   = "user.mail_provisioned"
 	ActionUserMailDeprovisioned = "user.mail_deprovisioned"
+	// ActionUserRejoinBlockedSet is the board setting or clearing a member's
+	// "can't rejoin" mark through the admin PATCH (BRY-476).
+	ActionUserRejoinBlockedSet = "user.rejoin_blocked_set"
 
 	// Harbor share import (BRY-139): one row per member it changed and a
 	// summary of the counts. A PATCH logs the same change as update_user.
@@ -167,6 +170,11 @@ const (
 	ActionAccountingPeriodReferenceSet     = "accounting.period_reference_set"
 	ActionAccountingPeriodReferenceCleared = "accounting.period_reference_cleared"
 	ActionBankRowUndismissed               = "bank_row.undismissed"
+
+	// Self-service membership join (BRY-629). The request is logged with a
+	// hash of the address only; the confirmation names the user it created.
+	ActionMembershipJoinConfirmed = "membership.join_confirmed"
+	ActionMembershipJoinRequested = "membership.join_requested"
 
 	// GDPR operations
 	ActionGDPRExportRequested       = "gdpr.export_requested"
