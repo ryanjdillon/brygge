@@ -194,7 +194,9 @@ SELECT
     recipient_domain,                     -- domain only, for provider diagnosis
     related_type, related_id, provider, status, ses_message_id,
     regexp_replace(error, '[^][:space:]<>()",;:''@]+@[^][:space:]<>()",;:''@]+', '[email]', 'g') AS error,
-    created_at, updated_at, last_event_at
+    created_at, updated_at, last_event_at,
+    regexp_replace(outcome_detail, '[^][:space:]<>()",;:''@]+@[^][:space:]<>()",;:''@]+', '[email]', 'g') AS outcome_detail,
+    outcome_checked_at, outcome_final_at
 FROM public.email_sends;
 
 CREATE VIEW dev_masked.mail_delivery_events AS

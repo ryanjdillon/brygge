@@ -246,27 +246,28 @@ func TestDevMaskedViews(t *testing.T) {
 		// Outgoing mail: the address is NULL, the domain stays, and an address
 		// quoted inside SMTP text or a send error is replaced.
 		send := "88888888-0000-0000-0000-000000000001"
-		mustExec(t, pool, ctx, `INSERT INTO email_sends (id, club_id, user_id, kind, recipient, recipient_domain, status, ses_message_id, error)
-			VALUES ($1, $2, $3, 'invoice', 'ola@example.test', 'example.test', 'rejected', 'synthetic-msg-1', 'smtp: 550 <ola@example.test> refused')`,
+		mustExec(t, pool, ctx, `INSERT INTO email_sends (id, club_id, user_id, kind, recipient, recipient_domain, status, ses_message_id, error, outcome_detail)
+			VALUES ($1, $2, $3, 'invoice', 'ola@example.test', 'example.test', 'rejected', 'synthetic-msg-1', 'smtp: 550 <ola@example.test> refused',
+			        '550 5.1.1 <ola@example.test>: Recipient address rejected')`,
 			send, club, user)
 		mustExec(t, pool, ctx, `INSERT INTO mail_delivery_events (send_id, ses_message_id, event_type, event_at, recipient, recipient_domain, diagnostic, raw)
 			VALUES ($1, 'synthetic-msg-1', 'bounce', now(), 'ola@example.test', 'example.test', 'smtp; 550 5.1.1 <ola@example.test>: user unknown',
 			        '{"mail":{"destination":["ola@example.test"],"tags":{"send_id":["88888888-0000-0000-0000-000000000001"]}},"bounce":{"feedbackId":"fb-1"}}')`,
 			send)
-		var sendRecipient, sendErr, evRecipient, diag *string
+		var sendRecipient, sendErr, outcomeDetail, evRecipient, diag *string
 		var sendDomain, feedback string
 		var raw []byte
 		var destCount int
-		if err := rolePool.QueryRow(ctx, `SELECT s.recipient, s.recipient_domain, s.error, e.recipient, e.diagnostic,
+		if err := rolePool.QueryRow(ctx, `SELECT s.recipient, s.recipient_domain, s.error, s.outcome_detail, e.recipient, e.diagnostic,
 				e.raw::text, e.raw_feedback_id, e.raw_destination_count
 			FROM email_sends s JOIN mail_delivery_events e ON e.send_id = s.id WHERE s.id = $1`, send,
-		).Scan(&sendRecipient, &sendDomain, &sendErr, &evRecipient, &diag, &raw, &feedback, &destCount); err != nil {
+		).Scan(&sendRecipient, &sendDomain, &sendErr, &outcomeDetail, &evRecipient, &diag, &raw, &feedback, &destCount); err != nil {
 			t.Fatalf("role select from masked mail tables: %v", err)
 		}
 		if sendRecipient != nil || evRecipient != nil || raw != nil {
 			t.Errorf("address or raw event leaked: send %v, event %v, raw %s", sendRecipient, evRecipient, raw)
 		}
-		for _, s := range []*string{sendErr, diag} {
+		for _, s := range []*string{sendErr, outcomeDetail, diag} {
 			if s == nil || strings.Contains(*s, "ola@") || !strings.Contains(*s, "[email]") {
 				t.Errorf("address not redacted from %v", s)
 			}

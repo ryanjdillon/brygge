@@ -595,6 +595,16 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   erasure deletes them (`accounting.DeleteMemberMailLog`), and rows are kept
   13 months (`email_sends.created_at`, `mail_delivery_events.received_at`),
   see [invariants.md](reference/invariants.md#the-mail-log-names-people-and-lives-13-months).
+  Migration 000134 (BRY-615) adds the journal outcome sweep's columns, all
+  nullable and never backfilled: `outcome_detail` (the remote server's
+  answer, e.g. `550 5.4.1 Recipient address rejected`, at most 500 bytes),
+  `outcome_checked_at` (the sweep's last journal read, for back-off) and
+  `outcome_final_at` (set once the journal showed a terminal event; the
+  sweep stops looking then), plus the partial index
+  `idx_email_sends_stalwart_open` for the sweep's candidate scan and
+  `idx_email_sends_lower_recipient` (`lower(recipient), created_at`) for the
+  sweep's per-recipient read and the member bounce list's address match. See
+  [stalwart-internals.md § Outcome sweep](mail/stalwart-internals.md#outcome-sweep-journalsweep).
 
 Every table has `created_at` / `updated_at` `TIMESTAMPTZ` columns and a
 `gen_random_uuid()` primary key.
