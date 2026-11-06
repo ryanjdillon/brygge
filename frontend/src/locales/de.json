@@ -837,6 +837,16 @@
           "ambiguous": "Wählen Sie, welches Mitglied die Zeile meint.",
           "error": "Korrigieren Sie die Zeile in der Datei und laden Sie erneut hoch."
         }
+      },
+      "emailBounce": {
+        "badge": "E-Mail abgewiesen",
+        "badgeComplaint": "Als Spam markiert",
+        "badgeSuppressed": "E-Mail blockiert",
+        "badgeTitle": "Mitglied öffnen für Details",
+        "alert": "Die letzte E-Mail an diese Adresse wurde am {date} abgewiesen: {detail}. Fragen Sie das Mitglied nach einer aktuellen Adresse.",
+        "alertNoDetail": "Die letzte E-Mail an diese Adresse wurde am {date} abgewiesen. Fragen Sie das Mitglied nach einer aktuellen Adresse.",
+        "alertComplaint": "Das Mitglied hat E-Mails des Vereins am {date} als Spam markiert. Senden Sie keine weiteren E-Mails an diese Adresse; kontaktieren Sie das Mitglied auf anderem Weg.",
+        "alertSuppressed": "An diese Adresse werden keine E-Mails gesendet, weil sie früher E-Mails abgewiesen hat (blockiert am {date}). Fragen Sie das Mitglied nach einer aktuellen Adresse."
       }
     },
     "waitingList": {
@@ -1237,7 +1247,7 @@
             "submitted": "Der Maildienst hat die Nachricht; der Zustellbericht folgt meist innerhalb weniger Minuten.",
             "failed": "Der Maildienst hat die Nachricht abgelehnt, bevor er sie annahm; es wurde nichts gesendet. Senden Sie die Rechnung erneut.",
             "unknown": "Die Verbindung brach während der Übergabe ab; die Nachricht ist vielleicht verschickt worden. Fragen Sie den Empfänger, bevor Sie erneut senden, um ein Duplikat zu vermeiden.",
-            "rejected_temporary": "Der Server des Empfängers bat so lange um einen späteren Versuch, bis Amazon SES aufgab. Prüfen Sie die Adresse und senden Sie später erneut.",
+            "rejected_temporary": "Der Server des Empfängers bat so lange um einen späteren Versuch, bis der E-Mail-Dienst aufgab. Prüfen Sie die Adresse und senden Sie später erneut.",
             "suppressed": "Amazon SES hat diese Mail nicht gesendet: Die Adresse hatte früher einen harten Bounce (oder der Empfänger meldete Spam) und steht auf der Sperrliste des Clubs. Ist die Adresse richtig und wiederholt sich der Bounce nicht (ein inzwischen geleertes volles Postfach oder ein Fehler auf Club-Seite), entfernen Sie sie aus der Liste und senden Sie die Rechnung erneut.",
             "complaint": "Der Empfänger hat die Mail als Spam markiert. Nicht erneut senden und die Adresse nicht von der Sperrliste entfernen; kontaktieren Sie das Mitglied auf anderem Weg."
           },

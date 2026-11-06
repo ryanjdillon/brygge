@@ -837,6 +837,16 @@
           "ambiguous": "Kies welk lid de rij bedoelt.",
           "error": "Corrigeer de rij in het bestand en upload opnieuw."
         }
+      },
+      "emailBounce": {
+        "badge": "E-mail geweigerd",
+        "badgeComplaint": "Gemarkeerd als spam",
+        "badgeSuppressed": "E-mail geblokkeerd",
+        "badgeTitle": "Open het lid voor details",
+        "alert": "De laatste e-mail naar dit adres werd op {date} geweigerd: {detail}. Vraag het lid om een actueel adres.",
+        "alertNoDetail": "De laatste e-mail naar dit adres werd op {date} geweigerd. Vraag het lid om een actueel adres.",
+        "alertComplaint": "Het lid heeft e-mail van de club op {date} als spam gemarkeerd. Stuur geen e-mail meer naar dit adres; neem op een andere manier contact op.",
+        "alertSuppressed": "E-mail naar dit adres wordt niet verzonden omdat het eerder e-mail heeft geweigerd (geblokkeerd op {date}). Vraag het lid om een actueel adres."
       }
     },
     "waitingList": {
@@ -1237,7 +1247,7 @@
             "submitted": "De maildienst heeft het bericht; het afleverrapport volgt meestal binnen enkele minuten.",
             "failed": "De maildienst weigerde het bericht voordat hij het aannam, dus er is niets verzonden. Verstuur de factuur opnieuw.",
             "unknown": "De verbinding viel weg tijdens het overdragen; het bericht is misschien verzonden. Vraag het de ontvanger voordat je opnieuw verstuurt, om een dubbele te voorkomen.",
-            "rejected_temporary": "De server van de ontvanger vroeg steeds om het later te proberen tot Amazon SES opgaf. Controleer het adres en verstuur later opnieuw.",
+            "rejected_temporary": "De server van de ontvanger vroeg steeds om het later te proberen tot de e-maildienst opgaf. Controleer het adres en verstuur later opnieuw.",
             "suppressed": "Amazon SES heeft deze mail niet verzonden: het adres gaf eerder een harde bounce (of de ontvanger meldde spam) en staat daarom op de onderdrukkingslijst van de club. Is het adres juist en herhaalt de bounce zich niet (een volle mailbox die is geleegd, of een fout aan de kant van de club), haal het dan van de lijst en verstuur de factuur opnieuw.",
             "complaint": "De ontvanger markeerde de mail als spam. Verstuur niet opnieuw en haal het adres niet van de onderdrukkingslijst; neem op een andere manier contact op met het lid."
           },

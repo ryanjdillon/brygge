@@ -829,7 +829,7 @@
             "submitted": "The mail service has the message; its delivery report usually follows within minutes.",
             "failed": "The mail service refused the message before taking it, so nothing was sent. Resend the invoice.",
             "unknown": "The connection broke while the message was being handed over, so it may or may not have gone out. Ask the recipient before resending, to avoid a duplicate.",
-            "rejected_temporary": "The recipient's server kept asking to try later until Amazon SES gave up. Check the address and resend later.",
+            "rejected_temporary": "The recipient's server kept asking to try later until the mail service gave up. Check the address and resend later.",
             "suppressed": "Amazon SES did not send this mail: the address bounced hard earlier (or the recipient reported spam), so it is on the club's suppression list. If the address is right and the bounce will not repeat (a full mailbox that has been emptied, or a fault on the club's side), remove it from the list and resend the invoice.",
             "complaint": "The recipient marked the mail as spam. Do not resend, and do not remove the address from the suppression list; contact the member another way."
           },
@@ -1475,6 +1475,16 @@
           "ambiguous": "Choose which member the row means.",
           "error": "Fix the row in the file and upload again."
         }
+      },
+      "emailBounce": {
+        "badge": "Email rejected",
+        "badgeComplaint": "Marked as spam",
+        "badgeSuppressed": "Email blocked",
+        "badgeTitle": "Open the member for details",
+        "alert": "Last email to this address was rejected {date}: {detail}. Get a current address from the member.",
+        "alertNoDetail": "Last email to this address was rejected {date}. Get a current address from the member.",
+        "alertComplaint": "The member marked email from the club as spam {date}. Do not send more email to this address; contact the member another way.",
+        "alertSuppressed": "Email to this address is not sent because it rejected email before (blocked {date}). Get a current address from the member."
       }
     },
     "waitingList": {

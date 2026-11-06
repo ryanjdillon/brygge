@@ -837,6 +837,16 @@
           "ambiguous": "Scegli a quale socio si riferisce la riga.",
           "error": "Correggi la riga nel file e caricalo di nuovo."
         }
+      },
+      "emailBounce": {
+        "badge": "Email respinta",
+        "badgeComplaint": "Segnalata come spam",
+        "badgeSuppressed": "Email bloccata",
+        "badgeTitle": "Apri il socio per i dettagli",
+        "alert": "L'ultima email a questo indirizzo è stata respinta il {date}: {detail}. Chiedi al socio un indirizzo aggiornato.",
+        "alertNoDetail": "L'ultima email a questo indirizzo è stata respinta il {date}. Chiedi al socio un indirizzo aggiornato.",
+        "alertComplaint": "Il socio ha segnalato le email del club come spam il {date}. Non inviare altre email a questo indirizzo; contatta il socio in un altro modo.",
+        "alertSuppressed": "Le email a questo indirizzo non vengono inviate perché in passato ha respinto delle email (bloccato il {date}). Chiedi al socio un indirizzo aggiornato."
       }
     },
     "waitingList": {
@@ -1237,7 +1247,7 @@
             "submitted": "Il servizio di posta ha il messaggio; il rapporto di consegna arriva di solito entro pochi minuti.",
             "failed": "Il servizio di posta ha rifiutato il messaggio prima di prenderlo, quindi non è stato inviato nulla. Reinvia la fattura.",
             "unknown": "La connessione si è interrotta durante la consegna; il messaggio potrebbe essere partito. Chiedi al destinatario prima di reinviare, per evitare un doppione.",
-            "rejected_temporary": "Il server del destinatario ha chiesto di riprovare più tardi finché Amazon SES ha rinunciato. Controlla l'indirizzo e reinvia più tardi.",
+            "rejected_temporary": "Il server del destinatario ha chiesto di riprovare più tardi finché il servizio di posta ha rinunciato. Controlla l'indirizzo e reinvia più tardi.",
             "suppressed": "Amazon SES non ha inviato questo messaggio: l'indirizzo ha dato in passato un rimbalzo definitivo (o il destinatario ha segnalato spam), quindi è nella lista di soppressione del club. Se l'indirizzo è corretto e il rimbalzo non si ripeterà (casella piena poi svuotata, o un errore del club), rimuovilo dalla lista e reinvia la fattura.",
             "complaint": "Il destinatario ha segnalato il messaggio come spam. Non reinviare e non rimuovere l'indirizzo dalla lista di soppressione; contatta il socio in altro modo."
           },

@@ -827,6 +827,16 @@
           "ambiguous": "Wybierz, którego członka dotyczy wiersz.",
           "error": "Popraw wiersz w pliku i prześlij ponownie."
         }
+      },
+      "emailBounce": {
+        "badge": "E-mail odrzucony",
+        "badgeComplaint": "Oznaczono jako spam",
+        "badgeSuppressed": "E-mail zablokowany",
+        "badgeTitle": "Otwórz członka, aby zobaczyć szczegóły",
+        "alert": "Ostatni e-mail na ten adres został odrzucony {date}: {detail}. Poproś członka o aktualny adres.",
+        "alertNoDetail": "Ostatni e-mail na ten adres został odrzucony {date}. Poproś członka o aktualny adres.",
+        "alertComplaint": "Członek oznaczył e-maile od klubu jako spam {date}. Nie wysyłaj więcej e-maili na ten adres; skontaktuj się z członkiem w inny sposób.",
+        "alertSuppressed": "E-maile na ten adres nie są wysyłane, ponieważ wcześniej odrzucał wiadomości (zablokowano {date}). Poproś członka o aktualny adres."
       }
     },
     "waitingList": {
@@ -1211,7 +1221,7 @@
             "submitted": "Usługa pocztowa ma wiadomość; raport doręczenia zwykle przychodzi w ciągu kilku minut.",
             "failed": "Usługa pocztowa odrzuciła wiadomość, zanim ją przyjęła, więc nic nie wysłano. Wyślij fakturę ponownie.",
             "unknown": "Połączenie zerwało się w trakcie przekazywania; wiadomość mogła zostać wysłana. Zapytaj odbiorcę przed ponownym wysłaniem, aby uniknąć duplikatu.",
-            "rejected_temporary": "Serwer odbiorcy prosił o ponowienie później, aż Amazon SES zrezygnował. Sprawdź adres i wyślij ponownie później.",
+            "rejected_temporary": "Serwer odbiorcy prosił o ponowienie później, aż usługa poczty zrezygnowała. Sprawdź adres i wyślij ponownie później.",
             "suppressed": "Amazon SES nie wysłał tej wiadomości: adres wcześniej dał trwały zwrot (lub odbiorca zgłosił spam), więc jest na liście blokad klubu. Jeśli adres jest poprawny, a zwrot się nie powtórzy (pełna skrzynka, którą opróżniono, lub błąd po stronie klubu), usuń go z listy i wyślij fakturę ponownie.",
             "complaint": "Odbiorca oznaczył wiadomość jako spam. Nie wysyłaj ponownie i nie usuwaj adresu z listy blokad; skontaktuj się z członkiem w inny sposób."
           },

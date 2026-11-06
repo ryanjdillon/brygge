@@ -319,7 +319,7 @@ Since the club sends faktura mail through Amazon SES, each send carries the deli
 | Handed to the mail service | SES has the mail; its delivery report usually arrives within minutes. | Check again shortly. |
 | Queued, no answer yet | SES has started delivering, no answer from the member's server yet. | Check again in a few minutes. |
 | Delayed, will retry | The member's server asked to try later. SES retries on its own. | Wait and check again later. |
-| Gave up after retries | The member's server kept asking to try later until SES gave up. | Check the address and resend later. |
+| Gave up after retries | The member's server kept asking to try later until the mail service (SES, or the club's mail server) gave up. | Check the address and resend later. |
 | Rejected | The member's server refused it (for example no such mailbox), or SES refused the message. | Check the address, correct it, and resend. If it was a hard bounce of a correct address, see *Blocked* below. |
 | Blocked: on the suppression list | SES did not send the mail at all: the address bounced hard before (or the member reported spam), so it is on the club's suppression list. | See below. |
 | Marked as spam | The member clicked "this is spam" on the mail. SES puts the address on the suppression list. | Do **not** resend and do **not** remove the block. Contact the member another way. |
@@ -346,6 +346,10 @@ Do **not** use it:
 - after **Marked as spam**: the member asked not to get the mail, and sending again risks the club's account. Brygge does not offer the button for any send to an address that was marked as spam, and refuses the removal if Amazon SES says the address is blocked because of a spam report;
 - when the address itself is wrong: correct the address on the member or the faktura instead, then resend;
 - repeatedly for the same address: if it bounces again it goes straight back on the list, and every hard bounce counts against the club with SES.
+
+### Sends through the club's mail server
+
+While the club sends app mail through its own mail server instead of Amazon SES, Brygge reads that server's log every few minutes and records the outcome on each send. The badge on the Sent tab then works the same way: a faktura whose latest email was **Delayed, will retry**, **Rejected** or **Gave up after retries** shows it, usually within 5–10 minutes of the answer from the member's server. A **Rejected** send also gives the member an **E-post avvist** badge on the Members page (see [members.md](members.md#email-rejected-badge)). A **Rejected** send that the member's server later accepts on a retry turns into **Accepted** on its own. These sends never show *Blocked* or *Marked as spam*: only SES reports those.
 
 ### Sends from before Amazon SES
 

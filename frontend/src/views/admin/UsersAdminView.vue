@@ -15,6 +15,7 @@ import SortableTh from '@/components/admin/SortableTh.vue'
 import SlipCell from '@/components/admin/SlipCell.vue'
 import ColumnSelector, { type ColumnDef } from '@/components/admin/ColumnSelector.vue'
 import InvoiceStatusChip, { type InvoiceState } from '@/components/admin/InvoiceStatusChip.vue'
+import DeliveryStatusBadge from '@/components/admin/DeliveryStatusBadge.vue'
 import { UserPlus, Upload, Download, X, Pencil, Ban, RotateCcw, Link2 } from 'lucide-vue-next'
 import BoatForm, { type BoatFormValue } from '@/components/boats/BoatForm.vue'
 import BoatCard from '@/components/boats/BoatCard.vue'
@@ -149,6 +150,32 @@ const { data: usersResponse, isLoading, isError } = useQuery({
       }),
     ),
 })
+
+// Members whose current address hard-bounced, for the badge by the email
+// and the alert in the detail modal. Club-wide, so one fetch per list load;
+// the ['admin', 'users'] prefix makes a saved edit refetch it, which is
+// what clears the flag once the address is corrected.
+type EmailBounce = components['schemas']['AdminEmailBounce']
+const { data: bouncesResponse } = useQuery({
+  queryKey: ['admin', 'users', 'email-bounces'],
+  queryFn: async () => unwrap(await client.GET('/api/v1/admin/users/email-bounces')),
+})
+function emailBounce(userId: string): EmailBounce | undefined {
+  return bouncesResponse.value?.bounces?.[userId]
+}
+function bounceBadgeLabel(b: EmailBounce): string {
+  if (b.status === 'complaint') return t('admin.users.emailBounce.badgeComplaint')
+  if (b.status === 'suppressed') return t('admin.users.emailBounce.badgeSuppressed')
+  return t('admin.users.emailBounce.badge')
+}
+function bounceAlert(b: EmailBounce): string {
+  const date = formatDate(b.at, locale.value)
+  if (b.status === 'complaint') return t('admin.users.emailBounce.alertComplaint', { date })
+  if (b.status === 'suppressed') return t('admin.users.emailBounce.alertSuppressed', { date })
+  return b.detail
+    ? t('admin.users.emailBounce.alert', { date, detail: b.detail })
+    : t('admin.users.emailBounce.alertNoDetail', { date })
+}
 
 function onSpotFilterChange() {
   offset.value = 0
@@ -452,6 +479,7 @@ type UserBoat = {
   boat_model_id: string | null
 }
 const detailUser = ref<User | null>(null)
+const detailBounce = computed(() => (detailUser.value ? emailBounce(detailUser.value.id) : undefined))
 const userBoats = ref<UserBoat[]>([])
 const boatsLoading = ref(false)
 // 'new' = adding, otherwise the boat id being edited
@@ -1096,7 +1124,16 @@ function harborSharesImported() {
               >{{ t('admin.users.deactivatedBadge') }}</span>
             </td>
             <td v-if="visible.has('last_name')" class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{{ user.last_name }}</td>
-            <td v-if="visible.has('email')" class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ user.email }}</td>
+            <td v-if="visible.has('email')" class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">
+              {{ user.email }}
+              <DeliveryStatusBadge
+                v-if="emailBounce(user.id)"
+                class="ml-1.5"
+                :status="emailBounce(user.id)!.status"
+                :label="bounceBadgeLabel(emailBounce(user.id)!)"
+                :title="t('admin.users.emailBounce.badgeTitle')"
+              />
+            </td>
             <td v-if="visible.has('phone')" class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">{{ user.phone }}</td>
             <td v-if="visible.has('slip')" class="whitespace-nowrap px-4 py-3 text-sm">
               <template v-if="user.slip_id">
@@ -1260,7 +1297,15 @@ function harborSharesImported() {
             <dt class="text-xs font-medium text-gray-500">{{ t('admin.users.lastName') }}</dt>
             <dd class="col-span-2 text-gray-900">{{ detailUser.last_name || '—' }}</dd>
             <dt class="text-xs font-medium text-gray-500">{{ t('admin.users.email') }}</dt>
-            <dd class="col-span-2 text-gray-900">{{ detailUser.email }}</dd>
+            <dd class="col-span-2 break-all text-gray-900">{{ detailUser.email }}</dd>
+            <dd
+              v-if="detailBounce"
+              class="col-span-3 rounded-md bg-red-50 px-2 py-1.5 text-xs text-red-800 ring-1 ring-inset ring-red-200"
+              role="alert"
+              data-testid="email-bounce-alert"
+            >
+              {{ bounceAlert(detailBounce) }}
+            </dd>
             <dt class="text-xs font-medium text-gray-500">{{ t('admin.users.phone') }}</dt>
             <dd class="col-span-2 text-gray-900">{{ detailUser.phone || '—' }}</dd>
             <dt class="text-xs font-medium text-gray-500">{{ t('admin.users.address') }}</dt>
@@ -1346,6 +1391,14 @@ function harborSharesImported() {
             <div class="mt-1">
               <Input id="ed-email" v-model="editForm.email" type="email" />
             </div>
+            <p
+              v-if="detailBounce"
+              class="mt-1.5 rounded-md bg-red-50 px-2 py-1.5 text-xs text-red-800 ring-1 ring-inset ring-red-200"
+              role="alert"
+              data-testid="email-bounce-alert"
+            >
+              {{ bounceAlert(detailBounce) }}
+            </p>
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>

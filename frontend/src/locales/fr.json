@@ -837,6 +837,16 @@
           "ambiguous": "Choisissez le membre visé par la ligne.",
           "error": "Corrigez la ligne dans le fichier et téléversez à nouveau."
         }
+      },
+      "emailBounce": {
+        "badge": "E-mail rejeté",
+        "badgeComplaint": "Signalé comme spam",
+        "badgeSuppressed": "E-mail bloqué",
+        "badgeTitle": "Ouvrir le membre pour les détails",
+        "alert": "Le dernier e-mail envoyé à cette adresse a été rejeté le {date} : {detail}. Demandez une adresse à jour au membre.",
+        "alertNoDetail": "Le dernier e-mail envoyé à cette adresse a été rejeté le {date}. Demandez une adresse à jour au membre.",
+        "alertComplaint": "Le membre a signalé les e-mails du club comme spam le {date}. N'envoyez plus d'e-mails à cette adresse ; contactez le membre autrement.",
+        "alertSuppressed": "Aucun e-mail n'est envoyé à cette adresse car elle a déjà rejeté des e-mails (bloquée le {date}). Demandez une adresse à jour au membre."
       }
     },
     "waitingList": {
@@ -1236,7 +1246,7 @@
             "submitted": "Le service d'envoi a le message ; son rapport de remise suit en général en quelques minutes.",
             "failed": "Le service d'envoi a refusé le message avant de le prendre ; rien n'a été envoyé. Renvoyez la facture.",
             "unknown": "La connexion a été coupée pendant la remise ; le message est peut-être parti. Demandez au destinataire avant de renvoyer, pour éviter un doublon.",
-            "rejected_temporary": "Le serveur du destinataire a demandé de réessayer plus tard jusqu'à ce qu'Amazon SES abandonne. Vérifiez l'adresse et renvoyez plus tard.",
+            "rejected_temporary": "Le serveur du destinataire a demandé de réessayer plus tard jusqu'à ce que le service de messagerie abandonne. Vérifiez l'adresse et renvoyez plus tard.",
             "suppressed": "Amazon SES n'a pas envoyé ce message : l'adresse a déjà provoqué un rebond définitif (ou le destinataire a signalé du spam), elle est donc sur la liste de suppression du club. Si l'adresse est correcte et que le rebond ne se reproduira pas (boîte pleine depuis vidée, ou erreur côté club), retirez-la de la liste et renvoyez la facture.",
             "complaint": "Le destinataire a signalé le message comme spam. Ne renvoyez pas et ne retirez pas l'adresse de la liste de suppression ; contactez le membre autrement."
           },

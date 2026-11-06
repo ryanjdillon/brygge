@@ -821,7 +821,7 @@
             "submitted": "E-posttenesta har teke imot meldinga; leveringsrapporten kjem vanlegvis innan nokre minutt.",
             "failed": "E-posttenesta avviste meldinga før ho tok imot ho, så ingenting vart sendt. Send fakturaen på nytt.",
             "unknown": "Sambandet brot medan meldinga vart levert, så ho kan ha gått ut eller ikkje. Spør mottakaren før du sender på nytt, så ho ikkje kjem to gonger.",
-            "rejected_temporary": "Serveren til mottakaren bad om nye forsøk heilt til Amazon SES gav opp. Sjekk adressa og send på nytt seinare.",
+            "rejected_temporary": "Serveren til mottakaren bad om nye forsøk heilt til e-posttenesta gav opp. Sjekk adressa og send på nytt seinare.",
             "suppressed": "Amazon SES sende ikkje denne e-posten: adressa gav ein hard retur tidlegare (eller mottakaren melde søppelpost), så ho står på blokkeringslista til klubben. Er adressa rett og returen ikkje vil gjenta seg (ein full innboks som er tømd, eller ein feil hos klubben), fjern ho frå lista og send fakturaen på nytt.",
             "complaint": "Mottakaren merkte e-posten som søppelpost. Ikkje send på nytt, og ikkje fjern adressa frå blokkeringslista; kontakt medlemen på ein annan måte."
           },
@@ -1435,6 +1435,16 @@
           "ambiguous": "Vel kva medlem rada gjeld.",
           "error": "Rett rada i fila og last opp på nytt."
         }
+      },
+      "emailBounce": {
+        "badge": "E-post avvist",
+        "badgeComplaint": "Merka som søppelpost",
+        "badgeSuppressed": "E-post blokkert",
+        "badgeTitle": "Opne medlemmen for detaljar",
+        "alert": "Siste e-post til denne adressa vart avvist {date}: {detail}. Få ei oppdatert adresse frå medlemmen.",
+        "alertNoDetail": "Siste e-post til denne adressa vart avvist {date}. Få ei oppdatert adresse frå medlemmen.",
+        "alertComplaint": "Medlemmen merka e-post frå klubben som søppelpost {date}. Ikkje send meir e-post til adressa; kontakt medlemmen på ein annan måte.",
+        "alertSuppressed": "E-post til denne adressa blir ikkje sendt fordi ho tidlegare har avvist e-post (blokkert {date}). Få ei oppdatert adresse frå medlemmen."
       }
     },
     "waitingList": {

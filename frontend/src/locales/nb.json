@@ -825,7 +825,7 @@
             "submitted": "E-posttjenesten har tatt imot meldingen; leveringsrapporten kommer vanligvis i løpet av noen minutter.",
             "failed": "E-posttjenesten avviste meldingen før den tok imot den, så ingenting ble sendt. Send fakturaen på nytt.",
             "unknown": "Forbindelsen brøt mens meldingen ble levert, så den kan ha gått ut eller ikke. Spør mottakeren før du sender på nytt, så den ikke kommer to ganger.",
-            "rejected_temporary": "Mottakerens server ba om nye forsøk helt til Amazon SES ga opp. Sjekk adressen og send på nytt senere.",
+            "rejected_temporary": "Mottakerens server ba om nye forsøk helt til e-posttjenesten ga opp. Sjekk adressen og send på nytt senere.",
             "suppressed": "Amazon SES sendte ikke denne e-posten: adressen ga en hard retur tidligere (eller mottakeren meldte søppelpost), så den står på klubbens blokkeringsliste. Er adressen riktig og returen ikke vil gjenta seg (en full innboks som er tømt, eller en feil hos klubben), fjern den fra listen og send fakturaen på nytt.",
             "complaint": "Mottakeren merket e-posten som søppelpost. Ikke send på nytt, og ikke fjern adressen fra blokkeringslisten; kontakt medlemmet på en annen måte."
           },
@@ -1471,6 +1471,16 @@
           "ambiguous": "Velg hvilket medlem raden gjelder.",
           "error": "Rett raden i filen og last opp på nytt."
         }
+      },
+      "emailBounce": {
+        "badge": "E-post avvist",
+        "badgeComplaint": "Merket som søppelpost",
+        "badgeSuppressed": "E-post blokkert",
+        "badgeTitle": "Åpne medlemmet for detaljer",
+        "alert": "Siste e-post til denne adressen ble avvist {date}: {detail}. Få en oppdatert adresse fra medlemmet.",
+        "alertNoDetail": "Siste e-post til denne adressen ble avvist {date}. Få en oppdatert adresse fra medlemmet.",
+        "alertComplaint": "Medlemmet merket e-post fra klubben som søppelpost {date}. Ikke send mer e-post til adressen; kontakt medlemmet på en annen måte.",
+        "alertSuppressed": "E-post til denne adressen blir ikke sendt fordi den tidligere har avvist e-post (blokkert {date}). Få en oppdatert adresse fra medlemmet."
       }
     },
     "waitingList": {
