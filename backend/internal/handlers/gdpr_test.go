@@ -104,8 +104,7 @@ func TestHandleRecordConsentMissingFields(t *testing.T) {
 		body string
 	}{
 		{"missing consent_type", `{"version":"1.0"}`},
-		{"missing version", `{"consent_type":"privacy"}`},
-		{"both empty", `{}`},
+		{"empty", `{}`},
 	}
 
 	for _, tt := range tests {
@@ -125,8 +124,8 @@ func TestHandleRecordConsentMissingFields(t *testing.T) {
 			if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 				t.Fatalf("failed to decode response: %v", err)
 			}
-			if resp.Error != "consent_type and version are required" {
-				t.Errorf("expected error 'consent_type and version are required', got %q", resp.Error)
+			if resp.Error != "consent_type is required" {
+				t.Errorf("expected error 'consent_type is required', got %q", resp.Error)
 			}
 		})
 	}

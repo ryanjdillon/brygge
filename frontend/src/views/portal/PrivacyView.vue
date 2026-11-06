@@ -122,7 +122,7 @@ function formatDate(d: string): string {
 
       <ul v-else class="divide-y divide-gray-100">
         <li v-for="c in consents" :key="c.id" class="flex items-center justify-between py-2 text-sm">
-          <span class="text-gray-700">{{ t(`gdpr.consentType.${c.consent_type}`) }} v{{ c.version }}</span>
+          <span class="text-gray-700">{{ t(`gdpr.consentType.${c.consent_type}`) }}<template v-if="c.version"> v{{ c.version }}</template></span>
           <span class="text-gray-400">{{ formatDate(c.granted_at) }}</span>
         </li>
       </ul>

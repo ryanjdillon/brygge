@@ -1207,13 +1207,17 @@ func registerGDPROps(api huma.API) {
 		Path:        "/api/v1/members/me/consent",
 		Tags:        []string{"GDPR"},
 		Summary:     "Record consent",
-		Security:    BearerSecurity,
+		Description: "Records consent to the caller's club's latest published version of the document, resolved on the server; newsletter records an empty version. " +
+			"Returns 409 with code `legal_document_unpublished` when the club has published no version of the document, " +
+			"and 409 with code `legal_document_stale` (and the current `version`) when the expected version is not the current one. Nothing is written on a 409.",
+		DefaultStatus: http.StatusCreated,
+		Security:      BearerSecurity,
 	}, stub[struct {
 		Body struct {
 			ConsentType string `json:"consent_type" enum:"terms,privacy,statutes,harbour_rules,terms_of_sale,newsletter" doc:"Type of consent"`
-			Version     string `json:"version" doc:"Consent version"`
+			Version     string `json:"version,omitempty" doc:"Expected version: the version shown to the member. 409 legal_document_stale if it is not the club's current version. Omit to consent to the current version; ignored for newsletter."`
 		}
-	}, struct{ Body StatusResponse }]())
+	}, struct{ Body Consent }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "get-my-consents",

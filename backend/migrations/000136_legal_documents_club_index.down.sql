@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS idx_legal_documents_club_type_published;

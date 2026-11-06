@@ -82,10 +82,25 @@ export function useRecordConsent() {
   const client = useApiClient()
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (payload: { consent_type: string; version: string }) =>
+    // version is the text the member was shown; the server records the club's
+    // current version and refuses (409) when the two differ.
+    mutationFn: async (payload: { consent_type: string; version?: string }) =>
       unwrap(await client.POST('/api/v1/members/me/consent', { body: payload as any })),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['my-consents'] }),
   })
+}
+
+/**
+ * True for the 409s POST /members/me/consent answers when the document the
+ * member was shown is no longer the club's current one: replaced by a newer
+ * version (`legal_document_stale`) or withdrawn (`legal_document_unpublished`).
+ */
+export function isLegalConsentConflict(err: unknown): boolean {
+  return (
+    err instanceof ApiError &&
+    err.status === 409 &&
+    (err.code === 'legal_document_stale' || err.code === 'legal_document_unpublished')
+  )
 }
 
 export function useAdminDeletionRequests() {

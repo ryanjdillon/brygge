@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { RouterLink, useRoute } from 'vue-router'
 import { useApiClient, unwrap } from '@/lib/apiClient'
-import { useLegalDocument, useMyConsents, useRecordConsent } from '@/composables/useGdpr'
+import { isLegalConsentConflict, useLegalDocument, useMyConsents, useRecordConsent } from '@/composables/useGdpr'
 import Input from '@/components/ui/form/Input.vue'
 import Checkbox from '@/components/ui/form/Checkbox.vue'
 import FormField from '@/components/ui/form/FormField.vue'
@@ -108,7 +108,17 @@ const { mutate: saveProfile, isPending: isSaving } = useMutation({
     toast.value = { type: 'success', message: t('portal.profile.saveSuccess') }
     setTimeout(() => (toast.value = null), 3000)
   },
-  onError: () => {
+  onError: (err) => {
+    if (isLegalConsentConflict(err)) {
+      // The board changed the privacy policy after this page loaded, so the
+      // member agreed to a text that is no longer current. Load the current
+      // one and have them accept it before saving again.
+      privacyAgreed.value = false
+      queryClient.invalidateQueries({ queryKey: ['legal-document', 'privacy'] })
+      toast.value = { type: 'error', message: t('portal.profile.privacyChanged') }
+      setTimeout(() => (toast.value = null), 6000)
+      return
+    }
     toast.value = { type: 'error', message: t('portal.profile.saveError') }
     setTimeout(() => (toast.value = null), 3000)
   },

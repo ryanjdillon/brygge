@@ -332,6 +332,7 @@
       "nonLocal": "Non-local",
       "saveSuccess": "Profil mis à jour",
       "saveError": "Impossible d'enregistrer le profil",
+      "privacyChanged": "La politique de confidentialité a changé depuis l'ouverture de cette page. Lisez la version actuelle, acceptez-la et enregistrez à nouveau.",
       "saving": "Enregistrement...",
       "hideInDirectoryLabel": "Me masquer dans l'annuaire des membres",
       "hideInDirectoryHint": "Votre nom, votre téléphone et votre e-mail ne sont pas affichés aux autres membres dans l'annuaire ni sur la carte du port. Les administrateurs voient toujours vos coordonnées pour l'exploitation du port.",

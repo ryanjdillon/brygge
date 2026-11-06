@@ -403,6 +403,7 @@
       "languageDefault": "Klubbstandard",
       "saveSuccess": "Profilen er oppdatert",
       "saveError": "Kunne ikke lagre profilen",
+      "privacyChanged": "Personvernerklæringen er endret etter at du åpnet siden. Les den gjeldende versjonen, godta den og lagre på nytt.",
       "saving": "Lagrer...",
       "privacyTitle": "Personvern",
       "hideInDirectoryLabel": "Skjul meg i medlemskatalogen",

@@ -332,6 +332,7 @@
       "nonLocal": "Non residente",
       "saveSuccess": "Profilo aggiornato",
       "saveError": "Impossibile salvare il profilo",
+      "privacyChanged": "L'informativa sulla privacy è cambiata da quando hai aperto questa pagina. Leggi la versione attuale, accettala e salva di nuovo.",
       "saving": "Salvataggio...",
       "hideInDirectoryLabel": "Nascondimi dall'elenco dei soci",
       "hideInDirectoryHint": "Il tuo nome, telefono ed e-mail non vengono mostrati agli altri soci nell'elenco né sulla mappa del porto. Gli amministratori continuano a vedere i tuoi dati per la gestione del porto.",

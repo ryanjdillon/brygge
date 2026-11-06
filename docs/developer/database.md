@@ -572,6 +572,11 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   `dev_masked` views first, then the CHECKs, columns and table. The current
   repeatable file names what the down drops, so rebuilding the views after a
   down needs the code reverted with it.
+- **Legal documents per club.** 000136 (BRY-637) adds
+  `idx_legal_documents_club_type_published` on `legal_documents (club_id,
+  doc_type, published_at DESC)`, for the per-club lookup of a type's current
+  published version (`GET /legal/{docType}`, `POST /members/me/consent`,
+  `handlers.LatestLegalVersions`). Index only; **the down** drops it.
 - `invoice_pdf_archive` (migration 000050) — preserves prior PDF bytes when
   `invoices.pdf_data` is regenerated, so Norwegian bokføringsloven §13's
   5-year retention requirement is satisfied.

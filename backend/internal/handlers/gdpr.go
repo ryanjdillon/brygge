@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -47,6 +48,70 @@ var consentTypes = map[string]bool{
 	"harbour_rules": true,
 	"terms_of_sale": true,
 	"newsletter":    true,
+}
+
+// newsletterConsentVersion is what a newsletter opt-in records as its version:
+// there is no document behind it, so there is nothing to version.
+const newsletterConsentVersion = ""
+
+// codeLegalDocumentUnpublished answers a consent to a document type the
+// caller's club has not published, so there is no version to consent to.
+const codeLegalDocumentUnpublished = "legal_document_unpublished"
+
+// codeLegalDocumentStale answers a consent whose expected version is no longer
+// the club's current one: the member was shown a text the board has since
+// replaced, and must read the new one before consenting to it.
+const codeLegalDocumentStale = "legal_document_stale"
+
+// latestLegalOrder decides which published row is a type's current version,
+// shared by the public read and LatestLegalVersions so the text a visitor
+// reads is the version a consent records. created_at, then id, break a tie
+// between two rows published in the same instant.
+const latestLegalOrder = `published_at DESC, created_at DESC, id DESC`
+
+// LatestLegalVersions returns the latest published version of each of
+// docTypes for clubID, and the types among docTypes the club has not
+// published (in the order asked). An unknown type is an error, not a missing
+// one, so a caller's typo cannot pass as an unpublished document.
+func LatestLegalVersions(ctx context.Context, q dbQuerier, clubID string, docTypes []string) (versions map[string]string, missing []string, err error) {
+	for _, t := range docTypes {
+		if !legalDocTypes[t] {
+			return nil, nil, fmt.Errorf("unknown legal document type %q", t)
+		}
+	}
+	versions = make(map[string]string, len(docTypes))
+	if len(docTypes) == 0 {
+		return versions, nil, nil
+	}
+
+	rows, err := q.Query(ctx,
+		`SELECT DISTINCT ON (doc_type) doc_type, version
+		 FROM legal_documents
+		 WHERE club_id = $1 AND doc_type = ANY($2) AND published_at IS NOT NULL
+		 ORDER BY doc_type, `+latestLegalOrder,
+		clubID, docTypes,
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("query latest legal versions: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var docType, version string
+		if err := rows.Scan(&docType, &version); err != nil {
+			return nil, nil, fmt.Errorf("scan latest legal version: %w", err)
+		}
+		versions[docType] = version
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, fmt.Errorf("iterate latest legal versions: %w", err)
+	}
+
+	for _, t := range docTypes {
+		if _, ok := versions[t]; !ok && !slices.Contains(missing, t) {
+			missing = append(missing, t)
+		}
+	}
+	return versions, missing, nil
 }
 
 type GDPRHandler struct {
@@ -293,6 +358,15 @@ func (h *GDPRHandler) HandleGetDeletionStatus(w http.ResponseWriter, r *http.Req
 	})
 }
 
+// HandleRecordConsent records the caller's consent to the current version of
+// a legal document, or their newsletter opt-in. The version is resolved here
+// from the caller's club, never taken from the body: a client could otherwise
+// record consent to a version the club never published. The body's version
+// is optional and only an expectation: the version the client showed the
+// member. When it is not the current one the board has published a new text
+// since, so the consent is refused (409) rather than recorded against a text
+// the member never saw. A newsletter opt-in has no document, so its version
+// is not checked.
 func (h *GDPRHandler) HandleRecordConsent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -310,13 +384,40 @@ func (h *GDPRHandler) HandleRecordConsent(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if req.ConsentType == "" || req.Version == "" {
-		Error(w, http.StatusBadRequest, "consent_type and version are required")
+	if req.ConsentType == "" {
+		Error(w, http.StatusBadRequest, "consent_type is required")
 		return
 	}
 	if !consentTypes[req.ConsentType] {
 		Error(w, http.StatusBadRequest, "unknown consent_type")
 		return
+	}
+
+	version := newsletterConsentVersion
+	if legalDocTypes[req.ConsentType] {
+		versions, _, err := LatestLegalVersions(ctx, h.db, claims.ClubID, []string{req.ConsentType})
+		if err != nil {
+			h.log.Error().Err(err).Msg("failed to resolve legal document version")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		v, ok := versions[req.ConsentType]
+		if !ok {
+			JSON(w, http.StatusConflict, map[string]any{
+				"error": "the club has not published this document",
+				"code":  codeLegalDocumentUnpublished,
+			})
+			return
+		}
+		if req.Version != "" && req.Version != v {
+			JSON(w, http.StatusConflict, map[string]any{
+				"error":   "the document has a newer version",
+				"code":    codeLegalDocumentStale,
+				"version": v,
+			})
+			return
+		}
+		version = v
 	}
 
 	var id string
@@ -325,7 +426,7 @@ func (h *GDPRHandler) HandleRecordConsent(w http.ResponseWriter, r *http.Request
 		`INSERT INTO user_consents (user_id, club_id, consent_type, version)
 		 VALUES ($1, $2, $3, $4)
 		 RETURNING id, granted_at`,
-		claims.UserID, claims.ClubID, req.ConsentType, req.Version,
+		claims.UserID, claims.ClubID, req.ConsentType, version,
 	).Scan(&id, &grantedAt)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to record consent")
@@ -336,7 +437,7 @@ func (h *GDPRHandler) HandleRecordConsent(w http.ResponseWriter, r *http.Request
 	JSON(w, http.StatusCreated, map[string]any{
 		"id":           id,
 		"consent_type": req.ConsentType,
-		"version":      req.Version,
+		"version":      version,
 		"granted_at":   grantedAt,
 	})
 }
@@ -390,6 +491,9 @@ func (h *GDPRHandler) HandleGetMyConsents(w http.ResponseWriter, r *http.Request
 	JSON(w, http.StatusOK, map[string]any{"consents": consents})
 }
 
+// HandleGetLegalDocument serves the deploy's club's latest published version of
+// a document. The route is public, so the club comes from the static config
+// (one club per deploy), like the other public endpoints.
 func (h *GDPRHandler) HandleGetLegalDocument(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	docType := chi.URLParam(r, "docType")
@@ -403,12 +507,13 @@ func (h *GDPRHandler) HandleGetLegalDocument(w http.ResponseWriter, r *http.Requ
 	err := h.db.QueryRow(ctx,
 		`SELECT id, version, content, published_at
 		 FROM legal_documents
-		 WHERE doc_type = $1 AND published_at IS NOT NULL
-		 ORDER BY published_at DESC
+		 WHERE club_id = (SELECT id FROM clubs WHERE slug = $2)
+		   AND doc_type = $1 AND published_at IS NOT NULL
+		 ORDER BY `+latestLegalOrder+`
 		 LIMIT 1`,
-		docType,
+		docType, h.config.ClubSlug,
 	).Scan(&id, &version, &content, &publishedAt)
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		Error(w, http.StatusNotFound, "document not found")
 		return
 	}

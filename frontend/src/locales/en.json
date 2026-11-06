@@ -407,6 +407,7 @@
       "languageDefault": "Club default",
       "saveSuccess": "Profile updated",
       "saveError": "Could not save profile",
+      "privacyChanged": "The privacy policy has changed since you opened this page. Read the current version, accept it, and save again.",
       "saving": "Saving...",
       "privacyTitle": "Privacy",
       "hideInDirectoryLabel": "Hide me from the member directory",

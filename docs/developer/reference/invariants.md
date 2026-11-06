@@ -545,6 +545,12 @@ A payer with one matching open faktura (`member_invoice`) is never reclassified 
 
 **Failure mode:** the query filtered on the task id alone, so any session that knew a task UUID read another club's participants, and every member saw the full name of members who had asked to be hidden.
 
+### Legal documents and consents are the club's own; a consent's version is the server's
+
+**Rule (BRY-637):** every read of `legal_documents` filters `club_id`: the public `GET /legal/{docType}` by the deploy's club (`clubs.slug = cfg.ClubSlug`, as the other public routes), the admin editor and `POST /members/me/consent` by `claims.ClubID`. A type's current version is its latest published row for the club (`published_at DESC, created_at DESC, id DESC`, the one `latestLegalOrder` constant both queries compose), and `handlers.LatestLegalVersions(ctx, q, clubID, docTypes)` is the one helper that resolves it for other code (the join flow), returning the versions and the types the club has not published. A consent to a document records that version, resolved on the server. The client's `version` is only the version it showed the member: when it is sent and is not the current one, the consent answers 409 `legal_document_stale` (with the current `version`), and a type the club has not published answers 409 `legal_document_unpublished`; neither writes anything. The SPA answers both by reloading the document and asking for consent again. `newsletter` has no document, records an empty version and never checks one.
+
+**Failure mode:** with two clubs on one database, the public read served whichever club published last, so a member could be shown, and consent to, another club's privacy policy or statutes; a client could record consent to a version the club never published, and a member who loaded the page before the board published a new text was recorded as consenting to a text they never saw.
+
 ### Board viewing never widens a write
 
 **Rule (BRY-372):** every board role and admin (`roles.CanViewAdmin`) may read every admin page except Developer and Site. Reads open through `middleware.RequireRoleOrBoardRead(<write roles>)`, which admits viewers only on `GET`/`HEAD` and applies `RequireRole(<write roles>)` to every other method, so a surface's write roles are the ones it had before. A handler mounted on `GET` behind it must not write, mint a credential or send anything; such a `GET` keeps its own `RequireRole` (the pay-link endpoints do). In the SPA, write controls on viewable pages hide behind `useCan()`.

@@ -332,6 +332,7 @@
       "nonLocal": "Zamiejscowy",
       "saveSuccess": "Profil zaktualizowany",
       "saveError": "Nie udało się zapisać profilu",
+      "privacyChanged": "Polityka prywatności zmieniła się od otwarcia tej strony. Przeczytaj aktualną wersję, zaakceptuj ją i zapisz ponownie.",
       "saving": "Zapisywanie...",
       "hideInDirectoryLabel": "Ukryj mnie w katalogu członków",
       "hideInDirectoryHint": "Twoje imię i nazwisko, telefon oraz adres e-mail nie są pokazywane innym członkom w katalogu ani na mapie portu. Administratorzy nadal widzą Twoje dane na potrzeby obsługi portu.",

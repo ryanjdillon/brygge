@@ -2035,7 +2035,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Record consent */
+        /**
+         * Record consent
+         * @description Records consent to the caller's club's latest published version of the document, resolved on the server; newsletter records an empty version. Returns 409 with code `legal_document_unpublished` when the club has published no version of the document, and 409 with code `legal_document_stale` (and the current `version`) when the expected version is not the current one. Nothing is written on a 409.
+         */
         post: operations["record-consent"];
         delete?: never;
         options?: never;
@@ -3493,6 +3496,12 @@ export interface components {
             name: string;
         };
         Consent: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/Consent.json
+             */
+            readonly $schema?: string;
             /** @description Type of consent */
             consent_type: string;
             /**
@@ -5339,8 +5348,8 @@ export interface components {
              * @enum {string}
              */
             consent_type: "terms" | "privacy" | "statutes" | "harbour_rules" | "terms_of_sale" | "newsletter";
-            /** @description Consent version */
-            version: string;
+            /** @description Expected version: the version shown to the member. 409 legal_document_stale if it is not the club's current version. Omit to consent to the current version; ignored for newsletter. */
+            version?: string;
         };
         ReissuedInvoice: {
             /**
@@ -10651,13 +10660,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
-            200: {
+            /** @description Created */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["StatusResponse"];
+                    "application/json": components["schemas"]["Consent"];
                 };
             };
             /** @description Error */

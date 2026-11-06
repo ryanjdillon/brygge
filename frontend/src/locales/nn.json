@@ -400,6 +400,7 @@
       "languageDefault": "Klubbstandard",
       "saveSuccess": "Profilen er oppdatert",
       "saveError": "Kunne ikkje lagre profilen",
+      "privacyChanged": "Personvernerklæringa er endra etter at du opna sida. Les den gjeldande versjonen, godta han og lagre på nytt.",
       "saving": "Lagrar...",
       "privacyTitle": "Personvern",
       "hideInDirectoryLabel": "Skjul meg i medlemskatalogen",

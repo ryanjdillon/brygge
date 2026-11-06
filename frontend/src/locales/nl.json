@@ -332,6 +332,7 @@
       "nonLocal": "Niet-lokaal",
       "saveSuccess": "Profiel bijgewerkt",
       "saveError": "Kon profiel niet opslaan",
+      "privacyChanged": "Het privacybeleid is gewijzigd sinds je deze pagina hebt geopend. Lees de huidige versie, accepteer deze en sla opnieuw op.",
       "saving": "Opslaan...",
       "hideInDirectoryLabel": "Verberg mij in het ledenoverzicht",
       "hideInDirectoryHint": "Je naam, telefoonnummer en e-mailadres worden niet aan andere leden getoond in het overzicht of op de havenkaart. Beheerders zien je gegevens nog steeds voor het havenbeheer.",
