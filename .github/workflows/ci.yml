@@ -11,7 +11,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      # Temporary, until BRY-614 moves procedure sections out of AGENTS.md.
       - uses: ryanjdillon/workflows/check-instructions@eb0eae46c65049d246c8c84471206619c38f0115 # main
+        with:
+          byte-limit: "20480"
       - uses: DeterminateSystems/nix-installer-action@main
       - run: nix develop --command just lint-go
       # lint-vue runs the project's eslint from node_modules.

@@ -7,3 +7,6 @@ repos:
     rev: eb0eae46c65049d246c8c84471206619c38f0115 # main
     hooks:
       - id: check-instructions
+        exclude: ^backend/vendor/
+        # Temporary, until BRY-614 moves procedure sections out of AGENTS.md.
+        args: [--byte-limit, "20480"]
