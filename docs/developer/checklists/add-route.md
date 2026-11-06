@@ -30,7 +30,7 @@ Use `Error(w, status, msg)` for failures; never bare `http.Error`. Use `JSON(w, 
 
 ## 2. Route registration
 
-Register in `backend/cmd/api/main.go` under the right route group (ledger routes — journal, sync, bank import — go in `AccountingHandler.MountLedgerRoutes`, whose test fails on an ungated write unless you allowlist it). Pattern:
+Register in `backend/cmd/api/routes.go` (`newRouter`; `main.go` builds the handlers it is wired from) under the right route group (ledger routes — journal, sync, bank import — go in `AccountingHandler.MountLedgerRoutes`, whose test fails on an ungated write unless you allowlist it). Pattern:
 
 ```go
 r.With(
@@ -43,6 +43,7 @@ r.With(
 - Admin routes live under `/admin` (inherits the 12-hour `RequireAdminTOTP`). A route outside it that returns member PII or changes who gets what skips that step-up (the waiting list did until BRY-477)
 - TOTP gate for any mutation more sensitive than a lookup
 - Use `RequireFreshTOTPDefault()` (configured window) unless you specifically need a custom duration
+- A session route is closed to applicant-only sessions by `AuthenticateSession`. If an unpaid applicant must reach it (their own profile, fakturas, consents, or the path to paying), add it to `middleware.ApplicantRoutes`; `TestApplicantRouteTable` walks the router and fails on a route an applicant reaches off the list
 
 ## 3. Audit action
 
@@ -73,7 +74,7 @@ Update the subsystem README in `backend/internal/<pkg>/README.md` if the new rou
 
 - **A route that issues a faktura reuses the create form's tail.** Number it through `accounting.CreateInvoiceTx` (under the per-club lock), then render the PDF (`ensureInvoicePDF`) and send, stamp and book it through `InvoiceHandler.emailNewInvoice`, after the commit, so it ends as an ordinary sent faktura. "Ny faktura" after a refund (`invoice_reissue.go`) is the example; a copy of that block drifts from the form.
 - **A once-only action stores its marker in the same transaction, under the row's lock** (`invoices.reissued_as_invoice_id`, checked after `FOR UPDATE`), so two clicks issue one document; test it with concurrent requests.
-- **A public route that sends mail or otherwise costs something goes on the strict limiter.** `main.go` has `strictRL` (5/min per IP), `standardRL` (30/min) and `authedRL`; the contact form (`POST /contact`) sits in its own group because each submission sends an email. Give such a route its own limiter key (`middleware.NewRateLimiter(..., func(r) string { return "contact:" + r.RemoteAddr })`; `RemoteAddr` is already the client IP after `middleware.ClientIP`), because `strictRL` keys on the bare IP and a shared bucket would let abuse of one route lock the same IP out of magic-link login. The limiter fails open when Redis errors (existing behaviour of all limiters), so it is a budget, not a guarantee.
+- **A public route that sends mail or otherwise costs something goes on the strict limiter.** `routes.go` has `strictRL` (5/min per IP), `standardRL` (30/min) and `authedRL`; the contact form (`POST /contact`) sits in its own group because each submission sends an email. Give such a route its own limiter key (`middleware.NewRateLimiter(..., func(r) string { return "contact:" + r.RemoteAddr })`; `RemoteAddr` is already the client IP after `middleware.ClientIP`), because `strictRL` keys on the bare IP and a shared bucket would let abuse of one route lock the same IP out of magic-link login. The limiter fails open when Redis errors (existing behaviour of all limiters), so it is a budget, not a guarantee.
 - **A CSV upload goes through `readCSVUpload`** (`handlers/csv_upload.go`). It drops Excel's BOM (left in, it hides the first column), rejects anything that is not UTF-8 (Excel's default Norwegian CSV is Windows-1252, which would garble æ, ø and å), and reads ',' or ';'. The user import and the harbor share import both use it.
 - **A preview-then-apply import applies what was previewed.** The dry run returns a token of its plan; the apply re-plans in its transaction and answers 409 `plan_changed` if the token differs, and each UPDATE repeats its precondition in the `WHERE` so a change that lands mid-transaction is caught too. The harbor share import (`POST /admin/users/harbor-shares/import`) is the example. Its audit rows are written in the same transaction, so a refused apply leaves none.
 - **Forgot to gate on role**: route works for any authenticated user. Test with a member-tier session to catch it.

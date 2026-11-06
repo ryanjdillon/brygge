@@ -71,3 +71,24 @@ func CanReadBoardDocuments(userRoles []string) bool {
 	}
 	return false
 }
+
+// Applicant is the role of someone who has confirmed a membership application
+// but not yet paid. It grants nothing on its own: see IsApplicantOnly.
+const Applicant = "applicant"
+
+// IsApplicantOnly reports whether userRoles hold the applicant role and no
+// other. Such a session may only finish joining (see
+// middleware.ApplicantMayReach). Any other role lifts the restriction, member
+// or not: a board role is valid without member, so a board member who is also
+// an applicant is never held back.
+func IsApplicantOnly(userRoles []string) bool {
+	if len(userRoles) == 0 {
+		return false
+	}
+	for _, r := range userRoles {
+		if r != Applicant {
+			return false
+		}
+	}
+	return true
+}

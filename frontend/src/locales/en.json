@@ -3422,5 +3422,14 @@
       "coffee": "Coffee",
       "ticket": "Ticket"
     }
+  },
+  "applicant": {
+    "complete": {
+      "title": "Your membership is not complete yet",
+      "body": "You have confirmed your application, but your membership starts once the dues are paid. Until then you can see your invoices and your profile.",
+      "invoices": "See your invoices",
+      "profile": "Your profile",
+      "navLabel": "Complete membership"
+    }
   }
 }

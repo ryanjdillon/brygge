@@ -2230,5 +2230,14 @@
       "coffee": "Kawa",
       "ticket": "Bilet"
     }
+  },
+  "applicant": {
+    "complete": {
+      "title": "Twoje członkostwo nie jest jeszcze zakończone",
+      "body": "Potwierdziłeś wniosek, ale członkostwo zaczyna się po opłaceniu składki. Do tego czasu możesz przeglądać swoje faktury i profil.",
+      "invoices": "Zobacz swoje faktury",
+      "profile": "Twój profil",
+      "navLabel": "Dokończ członkostwo"
+    }
   }
 }

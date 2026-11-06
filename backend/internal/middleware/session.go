@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/brygge-klubb/brygge/internal/auth"
+	"github.com/brygge-klubb/brygge/internal/roles"
 )
 
 const (
@@ -23,7 +24,9 @@ type sessionContextKey struct{}
 // to read (e.g. /me).
 type sessionInfoContextKey struct{}
 
-// AuthenticateSession validates the session cookie and injects claims into context.
+// AuthenticateSession validates the session cookie and injects claims into
+// context. A session holding only the applicant role is refused (403
+// ErrMembershipNotCompleted) everywhere except ApplicantRoutes.
 func AuthenticateSession(sessionService *auth.SessionService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -38,6 +41,12 @@ func AuthenticateSession(sessionService *auth.SessionService) func(http.Handler)
 				writeError(w, http.StatusUnauthorized, "invalid or expired session")
 				return
 			}
+			// Here rather than as a separate gate on each route group, so
+			// every session route is closed to an unpaid applicant by
+			// default, including routes added later.
+			if refuseApplicant(w, r, claims) {
+				return
+			}
 
 			ctx := context.WithValue(r.Context(), contextKey{}, claims)
 			ctx = context.WithValue(ctx, sessionContextKey{}, cookie.Value)
@@ -47,7 +56,11 @@ func AuthenticateSession(sessionService *auth.SessionService) func(http.Handler)
 	}
 }
 
-// OptionalSessionAuth extracts session claims if present but does not require authentication.
+// OptionalSessionAuth extracts session claims if present but does not require
+// authentication. A session holding only the applicant role is passed on
+// without claims: these routes switch to member behaviour on any claims (the
+// harbor layout names occupants, a booking is tied to the user), so an unpaid
+// applicant is served exactly as an anonymous visitor.
 func OptionalSessionAuth(sessionService *auth.SessionService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -58,7 +71,7 @@ func OptionalSessionAuth(sessionService *auth.SessionService) func(http.Handler)
 			}
 
 			claims, info, err := sessionService.ValidateSession(r.Context(), cookie.Value)
-			if err != nil {
+			if err != nil || roles.IsApplicantOnly(claims.Roles) {
 				next.ServeHTTP(w, r)
 				return
 			}

@@ -1,5 +1,5 @@
 // Who may see and who may change what in the admin area. The server is
-// the hard gate (cmd/api/main.go); this mirrors it so the SPA shows
+// the hard gate (cmd/api/routes.go); this mirrors it so the SPA shows
 // board members every page they may read and hides the controls they
 // could not use (BRY-372).
 
@@ -22,7 +22,7 @@ export function canViewAdmin(roles: readonly string[]): boolean {
 /**
  * Write areas and the roles the server accepts for their writes. Each
  * list is the role set of the matching RequireRole / moneyGate in
- * cmd/api/main.go; keep the two in step.
+ * cmd/api/routes.go; keep the two in step.
  */
 export const WRITE_ROLES = {
   /** Faktura, Tildel, imports, syncs, pricing, economy and bank settings, Vipps aliases. */

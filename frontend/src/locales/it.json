@@ -2259,5 +2259,14 @@
       "coffee": "Caffè",
       "ticket": "Biglietto"
     }
+  },
+  "applicant": {
+    "complete": {
+      "title": "La tua iscrizione non è ancora completa",
+      "body": "Hai confermato la domanda, ma l'iscrizione inizia quando la quota è pagata. Fino ad allora puoi vedere le tue fatture e il tuo profilo.",
+      "invoices": "Vedi le tue fatture",
+      "profile": "Il tuo profilo",
+      "navLabel": "Completa l'iscrizione"
+    }
   }
 }

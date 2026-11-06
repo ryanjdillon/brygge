@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import { useTotpGateStore } from '@/stores/totpGate'
 import { setLocale, hasExplicitLocale } from '@/i18n'
 import { canViewAdmin } from '@/lib/adminAccess'
+import { isApplicantOnly } from '@/lib/applicantAccess'
 
 interface User {
   id: string
@@ -59,6 +60,10 @@ export const useAuthStore = defineStore('auth', () => {
   const loginError = ref<string | null>(null)
 
   const isAuthenticated = computed(() => user.value !== null)
+
+  // Joined but not paid: the server refuses such a session everything but
+  // finishing the join, so the nav and the router steer it there.
+  const isApplicant = computed(() => !!user.value && isApplicantOnly(user.value.roles))
 
   const hasAdminRole = computed(() => {
     if (!user.value) return false
@@ -193,6 +198,7 @@ export const useAuthStore = defineStore('auth', () => {
     loginError,
     isAuthenticated,
     hasAdminRole,
+    isApplicant,
     canAccessAdmin,
     hasFreshTotp,
     ready,

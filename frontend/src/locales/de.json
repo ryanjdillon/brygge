@@ -2259,5 +2259,14 @@
       "coffee": "Kaffee",
       "ticket": "Ticket"
     }
+  },
+  "applicant": {
+    "complete": {
+      "title": "Ihre Mitgliedschaft ist noch nicht abgeschlossen",
+      "body": "Sie haben Ihren Antrag bestätigt, aber die Mitgliedschaft beginnt erst, wenn der Beitrag bezahlt ist. Bis dahin können Sie Ihre Rechnungen und Ihr Profil sehen.",
+      "invoices": "Ihre Rechnungen",
+      "profile": "Ihr Profil",
+      "navLabel": "Mitgliedschaft abschließen"
+    }
   }
 }

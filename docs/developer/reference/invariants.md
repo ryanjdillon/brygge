@@ -482,7 +482,7 @@ A payer with one matching open faktura (`member_invoice`) is never reclassified 
 
 ### Anything that can post a journal entry is treasurer/admin with fresh TOTP
 
-**Rule (BRY-370):** every accounting route that can create or post a journal entry — manual entries, post, void, delete draft, the GL syncs (payments, invoices, resplit, Vipps drafts), bank and Vipps imports, bank sync, Vipps resync and the bank-row Vipps reconcile confirm — goes through `moneyGate` in `cmd/api/main.go`: `RequireRole("treasurer", "admin")` plus `RequireFreshTOTPDefault()`. The refund button's `POST /admin/orders/{orderID}/refund` has the same gate (`OrderRefundHandler.Mount`): it moves money, and the booking it leads to posts entries. Previews stay read-only and ungated. The SPA calls `ensureFreshTotp()` when the button is clicked.
+**Rule (BRY-370):** every accounting route that can create or post a journal entry — manual entries, post, void, delete draft, the GL syncs (payments, invoices, resplit, Vipps drafts), bank and Vipps imports, bank sync, Vipps resync and the bank-row Vipps reconcile confirm — goes through `moneyGate` in `cmd/api/routes.go`: `RequireRole("treasurer", "admin")` plus `RequireFreshTOTPDefault()`. The refund button's `POST /admin/orders/{orderID}/refund` has the same gate (`OrderRefundHandler.Mount`): it moves money, and the booking it leads to posts entries. Previews stay read-only and ungated. The SPA calls `ensureFreshTotp()` when the button is clicked.
 
 **Failure mode:** with only the accounting-router role check, a board member with a stale session could post or void entries, import statements that auto-book, or run syncs that book a whole period.
 
@@ -491,6 +491,12 @@ A payer with one matching open faktura (`member_invoice`) is never reclassified 
 **Rule (BRY-477):** a route that returns members' contact details or changes who is offered a slip is mounted in the `/admin` group, so it inherits `RequireAdminTOTP` (the 12-hour step-up). The waiting list's admin side is `/admin/waiting-list` (`WaitingListHandler.MountAdminRoutes`): the list takes the step-up alone, and enroll, offer and reorder add `RequireFreshTOTPDefault()`, like slip assignment. The member routes (`/waiting-list/join`, `me`, `portal`, `withdraw`, `{entryID}/accept`, `decline`) stay outside it. `TestWaitingListAdminRouteGates` pins every route's gate.
 
 **Failure mode:** the admin routes sat under `/waiting-list` behind a role check only, so a board member whose step-up had lapsed still read every entry's name, email and phone and could change queue positions with a stale session.
+
+### An applicant-only session reaches only what finishes joining
+
+**Rule:** a session whose roles are exactly `{applicant}` (`roles.IsApplicantOnly`) is refused with 403 `membership_not_completed` by `AuthenticateSession` itself, on every route except `middleware.ApplicantRoutes`: `/auth/*` (the session, logout, passkeys), `GET`/`PUT /members/me` and `/members/me/email-preferences` (the profile page), the applicant's own fakturas (`/members/me/invoices`, `updated-at`, `{id}/pdf`), the consent endpoints and the GDPR export and deletion request. Paying runs through the public token routes (`/betal`, `/checkout`), which take no session. Any other role lifts the restriction, `member` or not: board roles are valid without `member`. On the optional-session routes (`OptionalSessionAuth`: `GET /harbor/layout`, `POST /bookings`) an applicant-only session is passed on **without claims**, so it is served exactly as an anonymous visitor: those handlers switch to member behaviour (occupant names, the booking tied to the user) on any claims. The gate matches the path chi routes on (`r.URL.RawPath` when set), so an encoded `%2F` cannot make it and the router disagree. The check lives in `AuthenticateSession` so a route added later is closed to applicants until someone lists it; `TestApplicantRouteTable` (`cmd/api`) walks the real router (`newRouter`) and fails on a session route an applicant reaches off the list, on a list entry that is no route, and on an optional-session route that hands an applicant its claims (a probe inside that middleware records them). The SPA mirrors it: routes without `meta.applicantAllowed` send an applicant-only user to `/bli-medlem/fullfor` (`guardRoute`), and the portal sidebar shows only the pages they may open. That is UX only.
+
+**Failure mode:** member routes checked only for a session, so anyone who started joining but never paid read the member directory (names, emails, phones) and the club's documents, joined the waiting list and created slip shares.
 
 ### A booking is read by its owner and its club's booking staff only
 
@@ -865,17 +871,17 @@ A new group is created just before the faktura built-in and the positions are re
 
 **Failure mode:** an erased member's address stays queryable in the delivery log (and in the developer query role, if unmasked) long after GDPR erasure, or forever without the retention sweep.
 
-### An app send is logged before the relay sees it
-
-**Rule (BRY-589, [MAIL-3](../../adr/mail.md#mail-3-app-mail-goes-through-amazon-ses-stalwart-keeps-inbound-and-the-club-mailboxes)):** `email.Record` writes the `email_sends` row (status `sending`, a fresh `id` that becomes the `send_id` message tag) before the SMTP client dials, and sets `submitted`, `failed` or `unknown` after. Every app sender is wrapped in it. See [backend/internal/email/README.md](../../../backend/internal/email/README.md).
-
-**Failure mode:** a row written after DATA is lost when the process dies in between: SES has the message and publishes its events, but they can only be stored unlinked, and the Leveringslogg shows the faktura as never sent.
-
 ### Erasure clears the cancellation reason and the join requests
 
 **Rule (migration 000135):** `users.membership_cancel_reason` is the member's own free text and `membership_applications` rows hold an applicant's identity; neither has a retention obligation. Every path that erases a member's identity (`HandleDeleteUser`, `HandleProcessDeletion` in both outcomes, `purgeOneMember`) calls `accounting.EraseMemberMembershipData` in its transaction, **before** the address is overwritten: it NULLs the reason and deletes the club's join requests whose address matches the member's, case-insensitively. The membership dates stay; they are not identity. `dev_masked` NULLs the reason and every identity column of `membership_applications`, and the token hash.
 
 **Failure mode:** a deferred or erased member's own words about why they left, or the name and address they typed into the join form, outlive the erasure.
+
+### An app send is logged before the relay sees it
+
+**Rule (BRY-589, [MAIL-3](../../adr/mail.md#mail-3-app-mail-goes-through-amazon-ses-stalwart-keeps-inbound-and-the-club-mailboxes)):** `email.Record` writes the `email_sends` row (status `sending`, a fresh `id` that becomes the `send_id` message tag) before the SMTP client dials, and sets `submitted`, `failed` or `unknown` after. Every app sender is wrapped in it. See [backend/internal/email/README.md](../../../backend/internal/email/README.md).
+
+**Failure mode:** a row written after DATA is lost when the process dies in between: SES has the message and publishes its events, but they can only be stored unlinked, and the Leveringslogg shows the faktura as never sent.
 
 ### An ambiguous send is never retried automatically
 

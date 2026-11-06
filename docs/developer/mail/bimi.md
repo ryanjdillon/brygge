@@ -250,7 +250,7 @@ If the service fails on first run, the most likely causes (in rough order of lik
 - DMARC walkthrough: [setup.md](setup.md)
 - Stalwart 0.15 protocol quirks: [stalwart-internals.md](stalwart-internals.md)
 - Role-gated shared inbox: [inbox.md](inbox.md)
-- Backend route: `backend/cmd/api/main.go` — `r.Get("/club/logo.svg", …)`
+- Backend route: `backend/cmd/api/routes.go` — `r.Get("/club/logo.svg", …)`
 - DNS record: `terraform/hetzner/dns.nix` — `bimi`
 - DKIM systemd unit: `nix/host.nix` — `systemd.services.stalwart-dkim-config`
 - SVG storage column: migration `000032_split_club_logos`

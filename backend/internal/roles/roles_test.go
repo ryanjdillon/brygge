@@ -51,3 +51,22 @@ func TestCanViewAdminIsEveryBoardRoleAndAdmin(t *testing.T) {
 		t.Error("no roles must not view the admin area")
 	}
 }
+
+func TestIsApplicantOnly(t *testing.T) {
+	for _, tc := range []struct {
+		roles []string
+		want  bool
+	}{
+		{[]string{"applicant"}, true},
+		{[]string{"applicant", "applicant"}, true},
+		{nil, false},
+		{[]string{"member"}, false},
+		{[]string{"applicant", "member"}, false},
+		{[]string{"applicant", "treasurer"}, false},
+		{[]string{"board"}, false},
+	} {
+		if got := IsApplicantOnly(tc.roles); got != tc.want {
+			t.Errorf("IsApplicantOnly(%v) = %v, want %v", tc.roles, got, tc.want)
+		}
+	}
+}

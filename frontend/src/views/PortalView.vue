@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { RouterView, useRoute } from 'vue-router'
+import { RouterView, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useClubStore } from '@/stores/club'
@@ -10,6 +10,7 @@ import ErrorBoundary from '@/components/ui/ErrorBoundary.vue'
 import FeedbackWidget from '@/components/ui/FeedbackWidget.vue'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import type { NavGroup } from '@/components/layout/navTypes'
+import { APPLICANT_COMPLETE_PATH } from '@/lib/applicantAccess'
 import {
   LayoutDashboard,
   User,
@@ -23,12 +24,14 @@ import {
   Receipt,
   Map,
   Menu,
+  UserPlus,
 } from 'lucide-vue-next'
 
 const { t } = useI18n()
 const auth = useAuthStore()
 const club = useClubStore()
 const route = useRoute()
+const router = useRouter()
 const breadcrumb = useBreadcrumbStore()
 const { isEnabled } = useFeatures()
 club.ensureLoaded()
@@ -77,10 +80,21 @@ const navGroups = computed<NavGroup[]>(() => {
     },
   ]
 
+  // An applicant sees only the pages the router lets them open, plus the
+  // way to finish joining.
+  if (auth.isApplicant) {
+    groups.unshift({
+      items: [{ to: APPLICANT_COMPLETE_PATH, icon: UserPlus, label: t('applicant.complete.navLabel') }],
+    })
+  }
+
   return groups
     .map((group) => ({
       ...group,
       items: group.items.filter((item) => {
+        if (auth.isApplicant && item.to !== APPLICANT_COMPLETE_PATH && !router.resolve(item.to).meta.applicantAllowed) {
+          return false
+        }
         if (item.feature && !isEnabled(item.feature)) return false
         if (!item.roles) return true
         return item.roles.some((role) => auth.hasRole(role))
@@ -148,5 +162,5 @@ function closeSidebar() {
       </main>
     </div>
   </div>
-  <FeedbackWidget />
+  <FeedbackWidget v-if="!auth.isApplicant" />
 </template>

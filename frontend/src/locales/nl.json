@@ -2259,5 +2259,14 @@
       "coffee": "Koffie",
       "ticket": "Kaartje"
     }
+  },
+  "applicant": {
+    "complete": {
+      "title": "Je lidmaatschap is nog niet rond",
+      "body": "Je hebt je aanvraag bevestigd, maar het lidmaatschap begint zodra de contributie is betaald. Tot die tijd kun je je facturen en je profiel bekijken.",
+      "invoices": "Bekijk je facturen",
+      "profile": "Je profiel",
+      "navLabel": "Lidmaatschap afronden"
+    }
   }
 }

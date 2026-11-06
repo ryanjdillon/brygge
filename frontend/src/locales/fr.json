@@ -2258,5 +2258,14 @@
       "coffee": "Café",
       "ticket": "Billet"
     }
+  },
+  "applicant": {
+    "complete": {
+      "title": "Votre adhésion n'est pas encore finalisée",
+      "body": "Vous avez confirmé votre demande, mais l'adhésion commence une fois la cotisation payée. D'ici là, vous pouvez consulter vos factures et votre profil.",
+      "invoices": "Voir vos factures",
+      "profile": "Votre profil",
+      "navLabel": "Finaliser l'adhésion"
+    }
   }
 }

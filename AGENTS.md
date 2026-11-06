@@ -142,7 +142,7 @@ For single-test examples and full dev workflow, see [CONTRIBUTING.md](CONTRIBUTI
 ### Backend (`backend/`)
 
 - **Go 1.25** with **chi/v5** router, **PostgreSQL 16** (pgx/v5 + sqlc), **Redis 7** (cache/sessions)
-- Routes in `cmd/api/main.go`, one handler struct per domain, auth via JWT middleware
+- Routes in `cmd/api/routes.go` (`newRouter`), one handler struct per domain, auth via JWT middleware
 - Claims: `middleware.GetClaims(ctx)` → `*middleware.Claims` (UserID, ClubID, Roles)
 - Pagination: `shared.PaginatedResponse` → `{ items, limit, offset, has_more }`
 - Feature flags: `cfg.Features.{Bookings, Projects, Calendar, Commerce, Communications}`

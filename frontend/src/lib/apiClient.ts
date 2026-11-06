@@ -2,6 +2,7 @@ import createClient from 'openapi-fetch'
 import type { paths } from '@/types/api'
 import { ApiError } from '@/lib/errors'
 import { useTotpGateStore } from '@/stores/totpGate'
+import { routeIfMembershipIncomplete } from '@/lib/membershipGate'
 
 export { ApiError }
 
@@ -46,6 +47,8 @@ function getClient() {
       } catch {
         return
       }
+
+      if (await routeIfMembershipIncomplete(response.status, body?.error)) return
 
       if (body?.error === 'totp_required') {
         if (typeof window !== 'undefined') {

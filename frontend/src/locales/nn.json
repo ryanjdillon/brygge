@@ -3301,5 +3301,14 @@
       "coffee": "Kaffi",
       "ticket": "Billett"
     }
+  },
+  "applicant": {
+    "complete": {
+      "title": "Innmeldinga er ikkje fullført enno",
+      "body": "Du har stadfesta søknaden, men medlemskapet startar når kontingenten er betalt. Til då kan du sjå fakturaene og profilen din.",
+      "invoices": "Sjå fakturaene dine",
+      "profile": "Profilen din",
+      "navLabel": "Fullfør innmeldinga"
+    }
   }
 }

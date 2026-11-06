@@ -47,11 +47,11 @@ case "new_module":
 
 The DB value beats the env value when present. Lookup fallback handles fresh clubs that haven't been backfilled.
 
-## 4. Route gating in `main.go`
+## 4. Route gating in `routes.go`
 
-Most flags only gate UI visibility (the frontend hides the entry, but the routes still exist server-side). For most modules, do nothing in `main.go` — the SPA hides what it shouldn't show, and direct API access returns empty data when the module is off.
+Most flags only gate UI visibility (the frontend hides the entry, but the routes still exist server-side). For most modules, do nothing in `routes.go` — the SPA hides what it shouldn't show, and direct API access returns empty data when the module is off.
 
-⚠️ **The accounting flag is asymmetric** — it gates **route registration** in `main.go`:
+⚠️ **The accounting flag is asymmetric** — it gates **route registration** in `routes.go`:
 
 ```go
 if cfg.Features.Accounting {

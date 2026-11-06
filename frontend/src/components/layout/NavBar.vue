@@ -9,6 +9,7 @@ import { LogIn, LogOut, User, Shield, ShieldAlert, Bell, ChevronRight } from 'lu
 import LanguageSwitcher from '@/components/layout/LanguageSwitcher.vue'
 import InboxIndicator from '@/components/layout/InboxIndicator.vue'
 import { useBreadcrumbStore } from '@/stores/breadcrumb'
+import { APPLICANT_COMPLETE_PATH } from '@/lib/applicantAccess'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -133,9 +134,9 @@ async function handleLogout() {
         </div>
 
         <div class="flex flex-none items-center gap-1 sm:gap-2">
-          <InboxIndicator v-if="auth.isAuthenticated && !isHero" />
+          <InboxIndicator v-if="auth.isAuthenticated && !auth.isApplicant && !isHero" />
           <RouterLink
-            v-if="auth.isAuthenticated && !isHero"
+            v-if="auth.isAuthenticated && !auth.isApplicant && !isHero"
             to="/portal/notifications"
             class="inline-flex items-center rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
             :title="t('notifications.title')"
@@ -163,7 +164,7 @@ async function handleLogout() {
               <ShieldAlert class="h-4 w-4" />
               <span class="hidden md:inline">{{ t('nav.enable2fa') }}</span>
             </RouterLink>
-            <RouterLink to="/portal" :class="portalClass">
+            <RouterLink :to="auth.isApplicant ? APPLICANT_COMPLETE_PATH : '/portal'" :class="portalClass">
               <User class="h-4 w-4" />
               <span class="hidden sm:inline">{{ t('nav.portal') }}</span>
             </RouterLink>

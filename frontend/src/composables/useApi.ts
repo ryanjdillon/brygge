@@ -1,6 +1,7 @@
 import { useAuthStore } from '@/stores/auth'
 import { useTotpGateStore } from '@/stores/totpGate'
 import { ApiError } from '@/lib/errors'
+import { routeIfMembershipIncomplete } from '@/lib/membershipGate'
 
 export { ApiError }
 
@@ -36,6 +37,10 @@ export function useApi() {
       if (response.status === 401) {
         auth.logout()
         throw new ApiError(response.status, message, code)
+      }
+
+      if (await routeIfMembershipIncomplete(response.status, body?.error)) {
+        throw new ApiError(response.status, message, body?.error)
       }
 
       // Step-up flows: distinguish session-level (12h) from per-action

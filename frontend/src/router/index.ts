@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory, type RouteLocationNormalized, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { canOpenAdminRoute } from '@/lib/adminAccess'
+import { APPLICANT_COMPLETE_PATH, isApplicantOnly } from '@/lib/applicantAccess'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -10,6 +11,14 @@ declare module 'vue-router' {
     adminOnly?: boolean
     /** Renders without the navbar and footer, e.g. print sheets. */
     bare?: boolean
+    /**
+     * An applicant who has not paid may open it. Every other requiresAuth
+     * route sends them to APPLICANT_COMPLETE_PATH, as the server refuses
+     * what the page would load.
+     */
+    applicantAllowed?: boolean
+    /** Only for applicants; anyone else is sent to the portal. */
+    applicantOnly?: boolean
   }
 }
 
@@ -105,9 +114,18 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/portal/PortalDashboard.vue'),
       },
       {
+        // An absolute child path: keeps the Norwegian address while
+        // rendering inside the portal layout, so the sidebar stays.
+        path: APPLICANT_COMPLETE_PATH,
+        name: 'applicant-complete',
+        component: () => import('@/views/ApplicantCompleteView.vue'),
+        meta: { applicantAllowed: true, applicantOnly: true },
+      },
+      {
         path: 'profile',
         name: 'portal-profile',
         component: () => import('@/views/portal/ProfileView.vue'),
+        meta: { applicantAllowed: true },
       },
       {
         path: 'boats',
@@ -118,6 +136,7 @@ const routes: RouteRecordRaw[] = [
         path: 'invoices',
         name: 'portal-invoices',
         component: () => import('@/views/portal/InvoicesView.vue'),
+        meta: { applicantAllowed: true },
       },
       {
         path: 'directory',
@@ -178,11 +197,13 @@ const routes: RouteRecordRaw[] = [
         path: 'privacy',
         name: 'portal-privacy',
         component: () => import('@/views/portal/PrivacyView.vue'),
+        meta: { applicantAllowed: true },
       },
       {
         path: 'privacy-policy',
         name: 'portal-privacy-policy',
         component: () => import('@/views/portal/PrivacyPolicyView.vue'),
+        meta: { applicantAllowed: true },
       },
       {
         path: 'security',
@@ -507,10 +528,18 @@ export async function guardRoute(to: RouteLocationNormalized) {
     return { path: '/login' }
   }
 
+  const roles = auth.user?.roles ?? []
+  if (to.meta.requiresAuth && isApplicantOnly(roles) && !to.meta.applicantAllowed) {
+    return { path: APPLICANT_COMPLETE_PATH }
+  }
+  if (to.meta.applicantOnly && !isApplicantOnly(roles)) {
+    return { path: '/portal' }
+  }
+
   // Board roles may view the admin area; Developer and Site pages
   // (meta.adminOnly) stay with site admins (BRY-372). Matched-route meta
   // is merged, so a child inherits requiresAdmin from /admin.
-  if (!canOpenAdminRoute(to.meta, auth.user?.roles ?? [])) {
+  if (!canOpenAdminRoute(to.meta, roles)) {
     return { path: auth.hasAdminRole ? '/admin' : '/' }
   }
 }
