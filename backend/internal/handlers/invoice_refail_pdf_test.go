@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog"
 
 	bcast "github.com/brygge-klubb/brygge/internal/broadcast"
 	"github.com/brygge-klubb/brygge/internal/email"
@@ -167,6 +168,27 @@ func TestRefailInvoiceIsNotOwedAndResendsAsPaid(t *testing.T) {
 	}
 	if !strings.Contains(mock.Calls[1].HTML, faktura.KID) {
 		t.Errorf("ordinary faktura email lacks its KID: %s", mock.Calls[1].HTML)
+	}
+	if !strings.Contains(mock.Calls[1].HTML, ">Gjelder</p>") || !strings.Contains(mock.Calls[1].HTML, "Synthetic slip_fee") {
+		t.Errorf("ordinary faktura email does not list its lines: %s", mock.Calls[1].HTML)
+	}
+}
+
+// Without a database the faktura email still renders, only without its
+// Gjelder list.
+func TestInvoiceMessageWithoutDBOmitsLines(t *testing.T) {
+	h := &InvoiceHandler{log: zerolog.Nop()}
+	if got := h.invoiceEmailLines(context.Background(), "inv"); got != nil {
+		t.Errorf("lines with a nil db = %+v, want nil", got)
+	}
+	due := time.Date(2026, 3, 31, 0, 0, 0, 0, time.UTC)
+	_, body := h.invoiceMessage(context.Background(), "nb", "club", "inv", "Test Medlem", "Test Båtlag",
+		291, due, 450, "0000002912", "1234.56.78903", false)
+	if !strings.Contains(body, "0000002912") || !strings.Contains(body, "Fakturanummer") {
+		t.Errorf("faktura email lacks its payment details: %s", body)
+	}
+	if strings.Contains(body, "Gjelder") {
+		t.Error("Gjelder list rendered without lines")
 	}
 }
 

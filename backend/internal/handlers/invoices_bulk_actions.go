@@ -298,7 +298,8 @@ func (h *InvoiceHandler) sendOneReminder(
 	// ensureFakturaOrderToken, BRY-283). The copy keeps bank transfer preferred;
 	// an empty URL just renders the KID-only reminder.
 	payURL := h.orderPayURL(h.ensureFakturaOrderToken(ctx, clubID, invoiceID, true))
-	body := email.InvoiceReminderBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, defaultBank, payURL, h.emailPayMethods(payURL, total))
+	body := email.InvoiceReminderBody(locale, memberName, clubName, invoiceNumber, dueDate, total, kid, defaultBank, payURL, h.emailPayMethods(payURL, total),
+		h.invoiceEmailLines(ctx, invoiceID))
 	filename := buildSimpleReminderFilename(invoiceNumber)
 	mailCtx := h.invoiceMailContext(ctx, email.KindInvoiceReminder, clubID, invoiceID, "", total)
 	if err := h.email.SendWithAttachment(mailCtx, deliverTo, subject, body, filename, pdfData); err != nil {
@@ -915,5 +916,5 @@ func (h *InvoiceHandler) loadInvoiceLinesForPDF(ctx context.Context, invoiceID s
 		}
 		out = append(out, l)
 	}
-	return out, nil
+	return out, rows.Err()
 }

@@ -174,6 +174,8 @@ Bulk actions on the selection:
 > It's a default, not a hard rule: each Sent-tab row has a small **Online payment** selector — *Auto* (follow the amount limit), *On* (always offer, even over the limit), or *Off* (never) — so you can make an exception for a specific invoice either way.
 
 > **What the member sees.** The faktura and reminder emails have a **Betal nå** button with the ways to pay online underneath ("Vipps", "Kort", or "Vipps eller kort", depending on what the club has set up). The button opens the faktura's pay page, which lists what is being paid. When both Vipps and card are set up, the member picks one there: **Vipps**, or **Kort · Apple Pay · Google Pay**; with only one there is a single button. Over the limit, or with online payment off, the page shows the account number and KID for bank transfer instead.
+>
+> The faktura and reminder emails also list what the faktura is for under **Gjelder**: each line with its description, the detail under it (such as the slip and boat) and its amount. Exemption lines show with a minus sign and a line of 0 kr shows as **kr 0,00**. After ten lines the email says how many more there are ("+ 3 til (se PDF-vedlegget)"); the attached PDF always has them all.
 
 **Typical incident recovery flow** (we built this for the operator who issued a batch of fakturas with the wrong bank account):
 

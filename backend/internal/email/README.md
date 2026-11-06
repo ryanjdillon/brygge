@@ -14,7 +14,7 @@ An interface (`Sender`), the SMTP transport (Stalwart or the Amazon SES SMTP int
 | `fallback.go` | `WithMagicLinkFallback(primary, fallback, logger)` — second relay for login links only. |
 | `instrument.go` | `Instrument(Sender, Provider)` decorator counting `brygge.email.send{kind,provider,result}`; the `Kind` set; `WithKind(ctx, Kind)`. See [instrumentation.md](../../../docs/developer/otel/instrumentation.md#app-email-sends). |
 | `mock.go` | `MockSender` — records every call in a slice for tests. Use with `&MockSender{}` and assert against `mock.Calls`. |
-| `templates.go` | `Subject(...)`, `Body(...)` helpers + `html/template` definitions for invoice, reminder, magic-link emails. Plus `DetectLocale`, `formatNOK`. |
+| `templates.go` | `Subject(...)`, `Body(...)` helpers + `html/template` definitions for invoice, reminder, magic-link emails, on one shared layout (`emailBaseLayout`, light colour scheme only) with shared partials (`button`, `payButton`, `invoiceDetails`, `invoiceLines`). Plus `DetectLocale`, `formatNOK`. |
 | `export_test.go` | Exposes `buildMessage` to the external `email_test` package, whose attachment round-trip test renders a real faktura with `finance.GeneratePDF`. |
 
 ## Template pattern
@@ -27,10 +27,11 @@ func InvoiceSubject(_, clubName string, invoiceNumber int) string {
     return fmt.Sprintf("Du har mottatt en ny faktura fra %s [Faktura %d]", clubName, invoiceNumber)
 }
 
-func InvoiceBody(_ string, memberName, clubName string, invoiceNumber int, dueDate time.Time, total float64, kid, bankAccount string) string {
+func InvoiceBody(_ string, memberName, clubName string, invoiceNumber int, dueDate time.Time, total float64,
+    kid, bankAccount, payURL, payMethods string, lines []InvoiceLine) string {
     // Defaults for empty inputs
     // Execute invoiceHTMLTpl with a struct value
-    // Fall back to a flat <p>-tag summary on template error
+    // Fall back to a flat <p>-tag summary on template error (invoicePaymentFallback)
 }
 ```
 
@@ -39,6 +40,7 @@ Notes:
 - The `locale` parameter is currently ignored — every email goes out in Norwegian. Multi-locale email is tracked separately
 - Always provide a fallback path that doesn't depend on the template parsing — a template bug in production shouldn't drop the email
 - Sender attaches the PDF separately; templates don't embed binary data
+- The faktura and reminder emails list the faktura's lines under **Gjelder** (description, sub-description, signed amount), at most `maxEmailLines` (10) and then "+ N til (se PDF-vedlegget)". The handler loads them once in `invoiceMessage` / `sendOneReminder` via `invoiceEmailLines`; a failed load sends the email without the list. Credit-note and refund-document emails do not list lines yet
 
 ## Money formatting
 
@@ -46,7 +48,10 @@ Always use `formatNOK(amount)`:
 
 ```go
 "kr 1 234,50"  // Norwegian thousands grouping, decimal comma
+"kr -650,00"   // negative amounts (exemption lines) keep their sign
 ```
+
+It rounds to whole øre before splitting kroner and øre.
 
 Never `fmt.Sprintf("%.2f kr", amount)` — the format is different (decimal point vs comma) and inconsistency is jarring for recipients.
 
@@ -81,7 +86,7 @@ if h.email == nil {
 
 - **New email type** (e.g. password reset, board announcement) → add `XSubject`, `XBody`, `xHTMLTpl` in `templates.go`. Mirror the InvoiceBody pattern: fallback on template error, sensible defaults for empty fields. The caller calls `SendWithAttachment` for attachments or `Send` for plain, passing `email.WithSendMeta(ctx, email.SendMeta{Kind, ClubID, UserID, RelatedType, RelatedID})` so the `email_sends` row names the club, the member (GDPR erasure follows `user_id`) and the record the mail carries. Add a `Kind` constant (to `allKinds` **and** `sesevents.Kinds`, which a test keeps equal) if none fits, otherwise the send is counted as `other`. Kinds are a closed set: never derive one from request data.
 - **Localize an existing template** → introduce a `switch locale { ... }` inside the helper. The helper signature already takes locale; today's implementations just ignore it.
-- **New rendering field** → add to the `data struct` literal, the template's `{{...}}` references, AND the fallback string. Forgetting the fallback is the most common miss.
+- **New rendering field** → add to the `data struct` literal, the template's `{{...}}` references, AND the fallback string. Forgetting the fallback is the most common miss. The exception is free text from the club or member (line descriptions): keep it out of the `Sprintf` fallbacks, which do not go through `html/template`.
 
 ## Metrics
 
@@ -114,3 +119,5 @@ The row's id is the SES `send_id` message tag, so delivery events find it direct
 ## Common misses
 
 - **Attachments must be line-wrapped base64.** One unbroken base64 line runs past the 998-byte line limit of RFC 5322 (a one-page faktura is ~3 KB of base64); relays may fold or cut it and the PDF arrives corrupt. `TestFakturaAttachmentRoundTrip` builds a message around a real `finance.GeneratePDF` output and checks every line and the decoded bytes; a short stub attachment would not catch a regression.
+- **Escape in the flat fallbacks.** `invoicePaymentFallback`, `invoiceNoPaymentFallback` and `CreditNoteBody` are built with `fmt.Sprintf`, so each value goes through `html.EscapeString` there; only `html/template` escapes for you.
+- **Value cells repeat the font stack.** Some clients reset the font inside tables, so every cell of the details box and the Gjelder list carries `emailFont`; numbers use `font-variant-numeric:tabular-nums`, not a monospace stack.

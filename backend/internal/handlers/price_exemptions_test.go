@@ -346,6 +346,10 @@ func TestExemptionsFullyExemptFakturaSettlesOnIssue(t *testing.T) {
 	if !strings.Contains(body, "ikke betale noe") || strings.Contains(body, "KID") {
 		t.Errorf("zero faktura email should say nothing is due and carry no KID")
 	}
+	// It still lists the charge and the exemption that cancels it.
+	if !strings.Contains(body, ">Gjelder</p>") || !strings.Contains(body, ">kr -2 600,00</td>") {
+		t.Errorf("zero faktura email does not list the exempted line: %s", body)
+	}
 
 	// Booked gross with no receivable.
 	net := f.netByAccount(t)

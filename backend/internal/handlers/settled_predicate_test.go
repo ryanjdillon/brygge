@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/brygge-klubb/brygge/internal/auth"
 	"github.com/brygge-klubb/brygge/internal/config"
+	"github.com/brygge-klubb/brygge/internal/email"
 	"github.com/brygge-klubb/brygge/internal/middleware"
 	"github.com/brygge-klubb/brygge/internal/testutil"
 	"github.com/brygge-klubb/brygge/internal/testutil/fin"
@@ -90,6 +92,40 @@ func TestReminderSendSkipsInvoicePaidAfterEnqueue(t *testing.T) {
 		if !errors.Is(err, errSkip) {
 			t.Errorf("%s: sendOneReminder = %v, want errSkip", name, err)
 		}
+	}
+}
+
+// The reminder lists what the faktura charges for.
+func TestReminderEmailListsLines(t *testing.T) {
+	f := newSettledFixture(t)
+	mock := &email.MockSender{}
+	f.h.email = mock
+	if err := f.h.sendOneReminder(context.Background(), f.club.ID, f.club.Treasurer.ID, "",
+		f.unpaid.ID, "Synthetic Club", "1234.56.78903", "nb"); err != nil {
+		t.Fatalf("sendOneReminder: %v", err)
+	}
+	if len(mock.Calls) != 1 {
+		t.Fatalf("emails = %d, want one", len(mock.Calls))
+	}
+	body := mock.Calls[0].HTML
+	for _, want := range []string{">Gjelder</p>", "Synthetic slip_fee", ">kr 450,00</td>"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("reminder email lacks %q", want)
+		}
+	}
+}
+
+// A failed line load leaves the email without its Gjelder list rather than
+// failing the send.
+func TestInvoiceEmailLinesFallsBackToNil(t *testing.T) {
+	f := newSettledFixture(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if got := f.h.invoiceEmailLines(ctx, f.unpaid.ID); got != nil {
+		t.Errorf("lines on a failed load = %+v, want nil", got)
+	}
+	if got := f.h.invoiceEmailLines(context.Background(), f.unpaid.ID); len(got) != 1 || got[0].Description != "Synthetic slip_fee" || got[0].Amount != 450 {
+		t.Errorf("lines = %+v, want the one synthetic slip line of 450", got)
 	}
 }
 

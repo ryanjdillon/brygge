@@ -692,7 +692,32 @@ func (h *InvoiceHandler) invoiceMessage(ctx context.Context, locale, clubID, inv
 	// email. The durable link is created on first send and reused on resends.
 	payURL := h.orderPayURL(h.ensureFakturaOrderToken(ctx, clubID, invoiceID, true))
 	return email.InvoiceSubject(locale, clubName, number),
-		email.InvoiceBody(locale, memberName, clubName, number, dueDate, total, kid, bankAccount, payURL, h.emailPayMethods(payURL, total))
+		email.InvoiceBody(locale, memberName, clubName, number, dueDate, total, kid, bankAccount, payURL, h.emailPayMethods(payURL, total),
+			h.invoiceEmailLines(ctx, invoiceID))
+}
+
+// invoiceEmailLines is a faktura's lines for the "Gjelder" list of its email.
+// Best effort: without them the email only omits the list, and the attached
+// PDF still has every line.
+func (h *InvoiceHandler) invoiceEmailLines(ctx context.Context, invoiceID string) []email.InvoiceLine {
+	if h.db == nil {
+		return nil
+	}
+	lines, err := h.loadInvoiceLinesForPDF(ctx, invoiceID)
+	if err != nil {
+		h.log.Warn().Err(err).Str("invoice_id", invoiceID).Msg("invoice lines not loaded for email; sending without them")
+		return nil
+	}
+	out := make([]email.InvoiceLine, len(lines))
+	for i, l := range lines {
+		// The PDF's line total, so the email and the attachment agree.
+		out[i] = email.InvoiceLine{
+			Description:    l.Description,
+			SubDescription: l.SubDescription,
+			Amount:         float64(l.Quantity) * l.UnitPrice,
+		}
+	}
+	return out
 }
 
 // isCreditTotal is true for the total of a credit note.

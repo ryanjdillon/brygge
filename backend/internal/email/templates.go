@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -221,9 +222,20 @@ var emailFuncs = template.FuncMap{
 	"css":  func(s string) template.CSS { return template.CSS(s) }, // #nosec G203 -- only literal hex colours from the templates reach it, never caller data
 }
 
+// emailFont is the one font stack of every email. Cells that carry values
+// repeat it because some clients reset the font inside tables.
+const emailFont = `font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;`
+
+// The card is designed for light only. The color-scheme declarations keep
+// clients that honour color-scheme (Apple Mail, Outlook.com) from darkening
+// it; the Gmail apps apply their own inversion regardless.
 const emailBaseLayout = `{{define "base"}}<!DOCTYPE html>
-<html>
-<body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+<html style="color-scheme:light;">
+<head>
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+</head>
+<body style="margin:0;padding:0;background:#f5f5f5;` + emailFont + `">
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f5f5f5;padding:32px 16px;">
     <tr>
       <td align="center">
@@ -265,29 +277,46 @@ const emailPayButton = `{{define "payButton"}}{{if .PayURL}}
 {{end}}{{end}}{{end}}`
 
 // emailInvoiceDetails is the label|value payment box shared by the invoice and
-// reminder emails.
+// reminder emails. Numbers stay in the body font with tabular figures: a
+// monospace stack made them look like a different, smaller typeface.
 const emailInvoiceDetails = `{{define "invoiceDetails"}}<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 24px 0;background:#f8fafc;border-radius:6px;">
                 <tr>
-                  <td style="padding:14px 16px;font-size:14px;color:#64748b;width:40%;">Fakturanummer</td>
-                  <td style="padding:14px 16px;font-size:14px;color:#0f172a;font-family:ui-monospace,Menlo,Consolas,monospace;">#{{.InvoiceNumber}}</td>
+                  <td style="padding:12px 16px 4px 16px;font-size:14px;line-height:1.4;color:#64748b;width:40%;` + emailFont + `">Fakturanummer</td>
+                  <td style="padding:12px 16px 4px 16px;font-size:14px;line-height:1.4;color:#0f172a;` + emailFont + `font-variant-numeric:tabular-nums;">#{{.InvoiceNumber}}</td>
                 </tr>
                 <tr>
-                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#64748b;">Forfallsdato</td>
-                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#0f172a;font-weight:600;">{{.DueDate}}</td>
+                  <td style="padding:4px 16px;font-size:14px;line-height:1.4;color:#64748b;` + emailFont + `">Forfallsdato</td>
+                  <td style="padding:4px 16px;font-size:14px;line-height:1.4;color:#0f172a;font-weight:600;` + emailFont + `font-variant-numeric:tabular-nums;">{{.DueDate}}</td>
                 </tr>
                 <tr>
-                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#64748b;">Beløp å betale</td>
-                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#0f172a;font-weight:600;">{{.Amount}}</td>
+                  <td style="padding:4px 16px;font-size:14px;line-height:1.4;color:#64748b;` + emailFont + `">Beløp å betale</td>
+                  <td style="padding:4px 16px;font-size:14px;line-height:1.4;color:#0f172a;font-weight:600;white-space:nowrap;` + emailFont + `font-variant-numeric:tabular-nums;">{{.Amount}}</td>
                 </tr>
                 <tr>
-                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#64748b;">KID</td>
-                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#0f172a;font-family:ui-monospace,Menlo,Consolas,monospace;">{{.KID}}</td>
+                  <td style="padding:4px 16px;font-size:14px;line-height:1.4;color:#64748b;` + emailFont + `">KID</td>
+                  <td style="padding:4px 16px;font-size:14px;line-height:1.4;color:#0f172a;` + emailFont + `font-variant-numeric:tabular-nums;">{{.KID}}</td>
                 </tr>
                 <tr>
-                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#64748b;">Kontonummer</td>
-                  <td style="padding:0 16px 14px 16px;font-size:14px;color:#0f172a;font-family:ui-monospace,Menlo,Consolas,monospace;">{{.BankAccount}}</td>
+                  <td style="padding:4px 16px 12px 16px;font-size:14px;line-height:1.4;color:#64748b;` + emailFont + `">Kontonummer</td>
+                  <td style="padding:4px 16px 12px 16px;font-size:14px;line-height:1.4;color:#0f172a;` + emailFont + `font-variant-numeric:tabular-nums;">{{.BankAccount}}</td>
                 </tr>
               </table>{{end}}`
+
+// emailInvoiceLines is the "Gjelder" list of what the faktura charges for,
+// shared by the invoice and reminder emails; absent without lines. Line text
+// is member- and treasurer-supplied, so it only ever reaches the email through
+// html/template's escaping.
+const emailInvoiceLines = `{{define "invoiceLines"}}{{if .Lines}}<p style="margin:0 0 6px 0;font-size:13px;font-weight:600;color:#334155;">Gjelder</p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 20px 0;">
+{{range .Lines}}                <tr>
+                  <td style="padding:5px 0;border-bottom:1px solid #e5e7eb;font-size:14px;line-height:1.4;color:#0f172a;vertical-align:top;word-break:break-word;overflow-wrap:anywhere;` + emailFont + `">{{.Description}}{{if .SubDescription}}<br><span style="font-size:12px;color:#64748b;">{{.SubDescription}}</span>{{end}}</td>
+                  <td align="right" style="padding:5px 0 5px 12px;border-bottom:1px solid #e5e7eb;font-size:14px;line-height:1.4;color:#0f172a;vertical-align:top;text-align:right;white-space:nowrap;` + emailFont + `font-variant-numeric:tabular-nums;">{{.Amount}}</td>
+                </tr>
+{{end}}{{if .MoreLines}}                <tr>
+                  <td colspan="2" style="padding:6px 0 0 0;font-size:13px;line-height:1.4;color:#64748b;` + emailFont + `">+ {{.MoreLines}} til (se PDF-vedlegget)</td>
+                </tr>
+{{end}}              </table>
+{{end}}{{end}}`
 
 // emailDefaultFooter is the simple club-name footer (invoice + reminder). The
 // magic-link email overrides "footer" with its own.
@@ -296,7 +325,7 @@ const emailDefaultFooter = `{{define "footer"}}<p style="margin:0;"><strong styl
 // sharedEmail holds the base layout + partials. Each email clones it and adds
 // its own "content" (and, for the magic-link, a "footer" override).
 var sharedEmail = template.Must(template.New("shared").Funcs(emailFuncs).
-	Parse(emailBaseLayout + emailButton + emailPayButton + emailInvoiceDetails + emailDefaultFooter))
+	Parse(emailBaseLayout + emailButton + emailPayButton + emailInvoiceDetails + emailInvoiceLines + emailDefaultFooter))
 
 var magicLinkHTMLTpl = template.Must(template.Must(sharedEmail.Clone()).Parse(`{{define "content"}}
               <p style="margin:0 0 16px 0;">{{.Copy.Greeting}}</p>
@@ -317,6 +346,38 @@ var magicLinkHTMLTpl = template.Must(template.Must(sharedEmail.Clone()).Parse(`{
 // ignored so existing callers don't need to change. Localization will
 // be added back when translations are ready.
 
+// InvoiceLine is one line of a faktura as its email lists it under "Gjelder".
+type InvoiceLine struct {
+	Description    string
+	SubDescription string
+	// Amount is the line total, signed: an exemption line is negative.
+	Amount float64
+}
+
+// maxEmailLines caps the "Gjelder" list; the PDF carries the rest, so a
+// faktura with many lines does not push the payment details off the screen.
+const maxEmailLines = 10
+
+type emailLineView struct {
+	Description    string
+	SubDescription string
+	Amount         string
+}
+
+// emailLines formats lines for the "Gjelder" list: the first maxEmailLines,
+// and how many more the PDF holds.
+func emailLines(lines []InvoiceLine) (shown []emailLineView, more int) {
+	if len(lines) > maxEmailLines {
+		more = len(lines) - maxEmailLines
+		lines = lines[:maxEmailLines]
+	}
+	shown = make([]emailLineView, len(lines))
+	for i, l := range lines {
+		shown[i] = emailLineView{Description: l.Description, SubDescription: l.SubDescription, Amount: formatNOK(l.Amount)}
+	}
+	return shown, more
+}
+
 // InvoiceSubject returns the Subject header for invoice-delivery emails.
 // Pattern: "Du har mottatt en ny faktura fra <Klubb> [Faktura 123]".
 // The bracketed token at the end gives Gmail/Apple Mail something to
@@ -334,8 +395,10 @@ func InvoiceSubject(_, clubName string, invoiceNumber int) string {
 // the caller.
 //
 // payURL is the faktura's online pay page ("" for a KID-only email) and
-// payMethods the line naming the ways to pay there (PayMethodsLabel).
-func InvoiceBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, dueDate time.Time, total float64, kid, bankAccount, payURL, payMethods string) string {
+// payMethods the line naming the ways to pay there (PayMethodsLabel). lines
+// are the faktura's lines, listed under "Gjelder"; nil omits
+// the list.
+func InvoiceBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, dueDate time.Time, total float64, kid, bankAccount, payURL, payMethods string, lines []InvoiceLine) string {
 	if clubName == "" {
 		clubName = "klubben"
 	}
@@ -352,6 +415,8 @@ func InvoiceBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, d
 		BankAccount   string
 		PayURL        string
 		PayMethods    string
+		Lines         []emailLineView
+		MoreLines     int
 	}{
 		Club:          clubName,
 		Member:        memberName,
@@ -363,6 +428,7 @@ func InvoiceBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, d
 		PayURL:        payURL,
 		PayMethods:    payMethods,
 	}
+	data.Lines, data.MoreLines = emailLines(lines)
 	var buf bytes.Buffer
 	// A faktura that nets to zero (every line exempted) asks for nothing:
 	// no KID, account number or pay button that could prompt a payment.
@@ -370,20 +436,39 @@ func InvoiceBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, d
 		if err := invoiceNoPaymentHTMLTpl.ExecuteTemplate(&buf, "base", data); err == nil {
 			return buf.String()
 		}
-		return fmt.Sprintf(
-			`<p>Hei %s,</p><p>Du har mottatt faktura #%d fra %s. Den er fullt fritatt, så du skal ikke betale noe.</p>`,
-			memberName, invoiceNumber, clubName,
-		)
+		return invoiceNoPaymentFallback(memberName, clubName, invoiceNumber)
 	}
 	if err := invoiceHTMLTpl.ExecuteTemplate(&buf, "base", data); err != nil {
 		// Template bug — fall back to a flat readable summary so the
 		// member still has the payment details.
-		return fmt.Sprintf(
-			`<p>Hei %s,</p><p>Du har mottatt en ny faktura (#%d) fra %s.</p><p>Forfall: %s · Beløp: %s · KID: %s · Konto: %s</p>%s`,
-			memberName, invoiceNumber, clubName, data.DueDate, data.Amount, kid, bankAccount, fallbackPayLine(payURL),
-		)
+		return invoicePaymentFallback(false, memberName, clubName, invoiceNumber, data.DueDate, data.Amount, kid, bankAccount, payURL)
 	}
 	return buf.String()
+}
+
+// invoiceNoPaymentFallback is the flat body sent for a faktura that nets to
+// zero when its template fails to render. Built without html/template, it
+// escapes every value itself, and it leaves the lines to the PDF.
+func invoiceNoPaymentFallback(memberName, clubName string, invoiceNumber int) string {
+	return fmt.Sprintf(
+		`<p>Hei %s,</p><p>Du har mottatt faktura #%d fra %s. Den er fullt fritatt, så du skal ikke betale noe.</p>`,
+		html.EscapeString(memberName), invoiceNumber, html.EscapeString(clubName),
+	)
+}
+
+// invoicePaymentFallback is the flat summary of the payment details sent when
+// the invoice or reminder template fails to render. Like
+// invoiceNoPaymentFallback it escapes every value and omits the lines.
+func invoicePaymentFallback(reminder bool, memberName, clubName string, invoiceNumber int, dueDate, amount, kid, bankAccount, payURL string) string {
+	intro := "Du har mottatt en ny faktura"
+	if reminder {
+		intro = "Påminnelse om ubetalt faktura"
+	}
+	return fmt.Sprintf(
+		`<p>Hei %s,</p><p>%s (#%d) fra %s.</p><p>Forfall: %s · Beløp: %s · KID: %s · Konto: %s</p>%s`,
+		html.EscapeString(memberName), intro, invoiceNumber, html.EscapeString(clubName), html.EscapeString(dueDate), html.EscapeString(amount),
+		html.EscapeString(kid), html.EscapeString(bankAccount), fallbackPayLine(payURL),
+	)
 }
 
 // InvoiceReminderSubject returns the Subject header for purring
@@ -398,8 +483,8 @@ func InvoiceReminderSubject(_, clubName string, invoiceNumber int) string {
 // InvoiceReminderBody renders a Norwegian purring email that explains
 // the invoice is past due (or pending), restates the payment details,
 // and notes the PDF copy is attached. The PDF is attached separately
-// by the caller — same as InvoiceBody, as are payURL and payMethods.
-func InvoiceReminderBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, dueDate time.Time, total float64, kid, bankAccount, payURL, payMethods string) string {
+// by the caller — same as InvoiceBody, as are payURL, payMethods and lines.
+func InvoiceReminderBody(_ /*locale*/, memberName, clubName string, invoiceNumber int, dueDate time.Time, total float64, kid, bankAccount, payURL, payMethods string, lines []InvoiceLine) string {
 	if clubName == "" {
 		clubName = "klubben"
 	}
@@ -418,6 +503,8 @@ func InvoiceReminderBody(_ /*locale*/, memberName, clubName string, invoiceNumbe
 		Overdue       bool
 		PayURL        string
 		PayMethods    string
+		Lines         []emailLineView
+		MoreLines     int
 	}{
 		Club:          clubName,
 		Member:        memberName,
@@ -430,12 +517,10 @@ func InvoiceReminderBody(_ /*locale*/, memberName, clubName string, invoiceNumbe
 		PayURL:        payURL,
 		PayMethods:    payMethods,
 	}
+	data.Lines, data.MoreLines = emailLines(lines)
 	var buf bytes.Buffer
 	if err := reminderHTMLTpl.ExecuteTemplate(&buf, "base", data); err != nil {
-		return fmt.Sprintf(
-			`<p>Hei %s,</p><p>Påminnelse om ubetalt faktura (#%d) fra %s.</p><p>Forfall: %s · Beløp: %s · KID: %s · Konto: %s</p>%s`,
-			memberName, invoiceNumber, clubName, data.DueDate, data.Amount, kid, bankAccount, fallbackPayLine(payURL),
-		)
+		return invoicePaymentFallback(true, memberName, clubName, invoiceNumber, data.DueDate, data.Amount, kid, bankAccount, payURL)
 	}
 	return buf.String()
 }
@@ -646,15 +731,16 @@ func fallbackPayLine(payURL string) string {
 }
 
 // formatNOK renders a money amount as "kr 1 234,50" with Norwegian
-// thousands grouping and decimal comma.
+// thousands grouping and decimal comma; a negative amount as "kr -650,00".
+// It rounds to whole øre first, so 0.999 is "kr 1,00", not "kr 0,100".
 func formatNOK(amount float64) string {
-	whole := int64(amount)
-	cents := int64((amount-float64(whole))*100 + 0.5)
-	if cents < 0 {
-		cents = -cents
+	ore := int64(math.Round(amount * 100))
+	sign := ""
+	if ore < 0 {
+		sign, ore = "-", -ore
 	}
-	wholeStr := fmt.Sprintf("%d", whole)
-	// Insert non-breaking spaces every 3 digits from the right.
+	wholeStr := strconv.FormatInt(ore/100, 10)
+	// Group with a space every 3 digits from the right.
 	var grouped strings.Builder
 	for i, r := range wholeStr {
 		if i > 0 && (len(wholeStr)-i)%3 == 0 {
@@ -662,7 +748,7 @@ func formatNOK(amount float64) string {
 		}
 		grouped.WriteRune(r)
 	}
-	return fmt.Sprintf("kr %s,%02d", grouped.String(), cents)
+	return fmt.Sprintf("kr %s%s,%02d", sign, grouped.String(), ore%100)
 }
 
 var reminderHTMLTpl = template.Must(template.Must(sharedEmail.Clone()).Parse(`{{define "content"}}
@@ -674,7 +760,7 @@ var reminderHTMLTpl = template.Must(template.Must(sharedEmail.Clone()).Parse(`{{
               <p style="margin:0 0 8px 0;color:#b45309;font-weight:600;">Påminnelse om ubetalt faktura #{{.InvoiceNumber}}.</p>
               <p style="margin:0 0 20px 0;">Vi minner om forfallet under. PDF-kopi følger som vedlegg.</p>
               {{end}}
-{{template "invoiceDetails" .}}
+{{template "invoiceLines" .}}{{template "invoiceDetails" .}}
               <p style="margin:0 0 12px 0;font-size:13px;color:#334155;"><strong>Vi foretrekker bankoverføring med KID</strong> — det koster laget ingenting. Bruk KID-nummeret når du betaler i nettbanken.</p>
 {{template "payButton" .}}
               <p style="margin:0 0 8px 0;font-size:13px;color:#64748b;">Hvis betalingen allerede er sendt, kan du se bort fra denne påminnelsen.</p>
@@ -686,12 +772,12 @@ var reminderHTMLTpl = template.Must(template.Must(sharedEmail.Clone()).Parse(`{{
 var invoiceNoPaymentHTMLTpl = template.Must(template.Must(sharedEmail.Clone()).Parse(`{{define "content"}}
               <p style="margin:0 0 16px 0;">Hei {{.Member}},</p>
               <p style="margin:0 0 20px 0;">Du har mottatt faktura #{{.InvoiceNumber}} fra {{.Club}}. Den er fullt fritatt, så du skal <strong>ikke betale noe</strong>. Fakturaen ligger som PDF-vedlegg til orientering.</p>
-              <p style="margin:0;font-size:13px;color:#64748b;">Spørsmål om fakturaen kan sendes til kasserer ved å svare på denne e-posten.</p>{{end}}`))
+{{template "invoiceLines" .}}              <p style="margin:0;font-size:13px;color:#64748b;">Spørsmål om fakturaen kan sendes til kasserer ved å svare på denne e-posten.</p>{{end}}`))
 
 var invoiceHTMLTpl = template.Must(template.Must(sharedEmail.Clone()).Parse(`{{define "content"}}
               <p style="margin:0 0 16px 0;">Hei {{.Member}},</p>
               <p style="margin:0 0 20px 0;">Du har mottatt en ny faktura fra {{.Club}}. Den fullstendige fakturaen ligger som PDF-vedlegg til denne e-posten.</p>
-{{template "invoiceDetails" .}}
+{{template "invoiceLines" .}}{{template "invoiceDetails" .}}
               <p style="margin:0 0 12px 0;font-size:13px;color:#334155;"><strong>Vi foretrekker bankoverføring med KID</strong> — det koster laget ingenting. Bruk KID-nummeret når du betaler i nettbanken, så registreres innbetalingen automatisk.</p>
 {{template "payButton" .}}
               <p style="margin:0;font-size:13px;color:#64748b;">Spørsmål om fakturaen kan sendes til kasserer ved å svare på denne e-posten.</p>{{end}}`))
