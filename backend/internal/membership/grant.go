@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -64,7 +65,7 @@ func SetLogger(l zerolog.Logger) {
 // or "invoice:<id>"). Withheld is set when the source carries real money for
 // a join but failed the integrity check, or its payer cannot be granted:
 // nothing was granted, and the board was sent a membership_grant_withheld
-// notice.
+// notice (naming the source when there is no user).
 type Outcome struct {
 	Granted  bool
 	ClubID   string
@@ -319,9 +320,11 @@ func grantInvoice(ctx context.Context, q Querier, invoiceID, source string) (Out
 // join was paid but membership was withheld: a membership_grant_withheld
 // delivery and a membership.grant_withheld audit row. The unique ref index
 // keeps a redelivery or the next sweep from telling it again. A source with
-// no user has no one to name and is only logged.
+// no user (an order whose payer is gone) is told too, naming the source
+// instead: money nobody can be granted for is exactly what the board must
+// see.
 func queueWithheldTx(ctx context.Context, q Querier, o Outcome) error {
-	if o.Withheld == "" || o.UserID == "" {
+	if o.Withheld == "" {
 		return nil
 	}
 	details := map[string]any{"ref": o.Ref, "reason": o.Withheld}
@@ -332,7 +335,7 @@ func queueWithheldTx(ctx context.Context, q Querier, o Outcome) error {
 	var id string
 	err = q.QueryRow(ctx,
 		`INSERT INTO deliveries (kind, club_id, user_id, email, status, payload)
-		 VALUES ($1, $2, $3, '', $4, $5)
+		 VALUES ($1, $2, NULLIF($3, '')::uuid, '', $4, $5)
 		 ON CONFLICT (kind, (payload->>'ref')) WHERE `+noticeRefIndexPredicate+` DO NOTHING
 		 RETURNING id`,
 		broadcast.KindMembershipGrantWithheld, o.ClubID, o.UserID, broadcast.DeliveryPending, payload,
@@ -342,6 +345,10 @@ func queueWithheldTx(ctx context.Context, q Querier, o Outcome) error {
 	}
 	if err != nil {
 		return fmt.Errorf("queue withheld notice: %w", err)
+	}
+	if o.UserID == "" {
+		kind, srcID, _ := strings.Cut(o.Ref, ":")
+		return insertAuditOn(ctx, q, o.ClubID, audit.ActionMembershipGrantWithheld, kind, srcID, details)
 	}
 	return insertAudit(ctx, q, o.ClubID, audit.ActionMembershipGrantWithheld, o.UserID, details)
 }
@@ -383,7 +390,9 @@ func grantJoinMembershipTx(ctx context.Context, q Querier, out Outcome, source s
 		userID, clubID,
 	).Scan(&active, &addr, &applicant); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			out.Withheld = withheldNoUser
+			// The id names no user of the club, so the notice names the
+			// source instead of a user it cannot reference.
+			out.Withheld, out.UserID = withheldNoUser, ""
 			return out, nil
 		}
 		return out, fmt.Errorf("load applicant: %w", err)
@@ -466,14 +475,18 @@ func grantJoinMembershipTx(ctx context.Context, q Querier, out Outcome, source s
 }
 
 func insertAudit(ctx context.Context, q Querier, clubID, action, userID string, details map[string]any) error {
+	return insertAuditOn(ctx, q, clubID, action, "user", userID, details)
+}
+
+func insertAuditOn(ctx context.Context, q Querier, clubID, action, resource, resourceID string, details map[string]any) error {
 	b, err := json.Marshal(details)
 	if err != nil {
 		return fmt.Errorf("marshal audit details: %w", err)
 	}
 	if _, err := q.Exec(ctx,
 		`INSERT INTO audit_log (club_id, action, resource, resource_id, details)
-		 VALUES ($1, $2, 'user', $3, $4)`,
-		clubID, action, userID, b,
+		 VALUES ($1, $2, $3, $4, $5)`,
+		clubID, action, resource, resourceID, b,
 	); err != nil {
 		return fmt.Errorf("audit %s: %w", action, err)
 	}

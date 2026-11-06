@@ -56,8 +56,11 @@ type InvoiceDraft struct {
 	MemberEmail            string
 	// Sent stamps sent_at at creation: the faktura is issued as it is
 	// created (a refund's credit note), not by a later send.
-	Sent  bool
-	Lines []InvoiceDraftLine
+	Sent bool
+	// Purpose is invoices.purpose: "" for an ordinary faktura, or what
+	// settling it does besides clearing the receivable (membership_join).
+	Purpose string
+	Lines   []InvoiceDraftLine
 	// RenderPDF, when set, renders the faktura's PDF once its number and
 	// KID are known; the bytes are stored with the faktura. It runs inside
 	// the transaction, so it must not touch the database.
@@ -140,15 +143,15 @@ func CreateInvoiceTx(ctx context.Context, tx pgx.Tx, clubID string, d InvoiceDra
 		                       recipient_kind, recipient_org_name, recipient_org_number,
 		                       recipient_org_address, recipient_contact_person,
 		                       recipient_their_ref, recipient_email, recipient_id,
-		                       member_name, member_email, sent_at)
+		                       member_name, member_email, sent_at, purpose)
 		 VALUES ($1, $2, $3, $4, COALESCE($5::date, CURRENT_DATE), $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
-		         $18, $19, CASE WHEN $20::bool THEN now() END)
+		         $18, $19, CASE WHEN $20::bool THEN now() END, NULLIF($21, ''))
 		 RETURNING id, created_at`,
 		clubID, d.UserID, number, kid, issueDate, d.DueDate, out.Total, out.PDF, d.FiscalPeriodID,
 		recipientKind, d.RecipientOrgName, d.RecipientOrgNumber,
 		d.RecipientOrgAddress, d.RecipientContactPerson,
 		d.RecipientTheirRef, d.RecipientEmail, d.RecipientID,
-		d.MemberName, d.MemberEmail, d.Sent,
+		d.MemberName, d.MemberEmail, d.Sent, d.Purpose,
 	).Scan(&out.ID, &out.CreatedAt); err != nil {
 		return nil, fmt.Errorf("storing faktura: %w", err)
 	}

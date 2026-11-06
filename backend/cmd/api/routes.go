@@ -286,6 +286,13 @@ func newRouter(d routeDeps) *chi.Mux {
 		r.With(joinRL.Handler).Post("/join", joinHandler.HandleJoin)
 		r.With(joinConfirmRL.Handler).Get("/join/confirm/{token}", joinHandler.HandleJoinConfirmStatus)
 		r.With(joinConfirmRL.Handler).Post("/join/confirm", joinHandler.HandleJoinConfirm)
+		// "Betal med bank" (BRY-631): the signed-in applicant's pending join
+		// order becomes a KID faktura. Listed in middleware.ApplicantRoutes.
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.AuthenticateSession(sessionService))
+			r.Use(authedRL)
+			r.Post("/join/bank-invoice", invoiceHandler.HandleJoinBankInvoice)
+		})
 
 		r.Group(func(r chi.Router) {
 			r.Use(standardRL)

@@ -24,10 +24,10 @@ const maxProductNameRunes = 120
 // description.
 const maxIntentDescriptionRunes = 1000
 
-// sessionLifetime is how long a Checkout Session can be paid. Stripe accepts
+// SessionLifetime is how long a Checkout Session can be paid. Stripe accepts
 // 30 minutes to 24 hours; an hour covers a payer who is slow with their card
 // without leaving a stale page payable all day.
-const sessionLifetime = 60 * time.Minute
+const SessionLifetime = 60 * time.Minute
 
 // ErrNotCancellable is returned by CancelPayment for a session whose payment
 // was already captured: it can only be refunded.
@@ -137,7 +137,7 @@ func (p *PaymentProvider) sessionParams(req payments.Request) url.Values {
 	}
 	v.Set("success_url", req.ReturnURL)
 	v.Set("cancel_url", req.CancelURL)
-	v.Set("expires_at", strconv.FormatInt(p.now().Add(sessionLifetime).Unix(), 10))
+	v.Set("expires_at", strconv.FormatInt(p.now().Add(SessionLifetime).Unix(), 10))
 	return v
 }
 

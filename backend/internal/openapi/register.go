@@ -232,6 +232,16 @@ func registerJoinOps(api huma.API) {
 		Summary:     "Confirm a membership application",
 		Description: "Creates or reactivates the user as an applicant, records the consents, opens the pending join order, uses the token up and sets the session cookie. 410 with code join_token_invalid, join_token_used or join_token_expired; 409 join_closed or already_member; 415 unless Content-Type is application/json.",
 	}, stub[struct{ Body JoinConfirmRequest }, struct{ Body JoinConfirmResponse }]())
+
+	huma.Register(api, huma.Operation{
+		OperationID: "join-bank-invoice",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/join/bank-invoice",
+		Tags:        []string{"Join"},
+		Summary:     "Pay the join by bank transfer",
+		Description: "Issues (and books) the signed-in applicant's KID faktura for their pending join order and emails it; the order becomes that faktura's pay order, so it is the one thing left to pay. Calling it again returns the same faktura (200; 201 when issued now) without emailing it again. 409 with code not_applicant, no_pending_join or payment_in_progress (an online payment of the order is reserved, captured or started within the provider's session lifetime).",
+		Security:    BearerSecurity,
+	}, stub[struct{}, struct{ Body JoinBankInvoiceResponse }]())
 }
 
 func registerPublicContentOps(api huma.API) {

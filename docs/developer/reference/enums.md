@@ -196,7 +196,7 @@ Enforced by `invoices_status_check` (BRY-325). This column is **not** the paymen
 membership_join
 ```
 
-NULL (the default) is the ordinary case: settling the order or faktura only clears what was owed. A value names a side effect of settlement. `membership_join` marks the applicant's pending checkout order, and the KID faktura issued when the applicant chooses bank payment instead; settling either grants membership. Enforced by `orders_purpose_check` and `invoices_purpose_check`. A new value needs its settlement hook in every settle path (Vipps, Stripe and the KID match) before anything writes it.
+NULL (the default) is the ordinary case: settling the order or faktura only clears what was owed. A value names a side effect of settlement. `membership_join` marks the applicant's pending checkout order, and the KID faktura issued when the applicant chooses bank payment instead (`POST /join/bank-invoice`, which clears the order's `purpose` and makes it the faktura's pay order); settling either grants membership. Enforced by `orders_purpose_check` and `invoices_purpose_check`. A new value needs its settlement hook in every settle path (Vipps, Stripe and the KID match) before anything writes it.
 
 ### `legal_documents.doc_type` and `user_consents.consent_type` (TEXT, no CHECK)
 
@@ -347,7 +347,7 @@ membership_grant_withheld
 
 `invoice_refund_document` (BRY-446) delivers a document a card refund issued: the delivery worker renders its PDF and emails it when `email` is set (an empty `email` means PDF only, a guest with no address). The booking pass queues it in the transaction that issues the document.
 
-The `membership_*` kinds (BRY-630, migration 000138) have neither `broadcast_id` nor `invoice_id` (the `deliveries_parent_by_kind` CHECK); they name the member by `user_id`. `membership_welcome` and `membership_board_notice` are queued by the grant in the transaction that settles the join payment; `membership_join_refunded` (a refunded join payment) and `membership_grant_withheld` (a paid join the integrity check withheld; `payload.reason`) are queued once per join source, keyed by `payload->>'ref'` (`order:<id>` or `invoice:<id>`, unique index `idx_deliveries_membership_notice_ref` on `(kind, payload->>'ref')`). The sender (`handlers.MembershipNoticeSender`) resolves the recipient when it sends: the member's current address for the welcome, the board address (`boardNotificationAddress`) for the other three; the welcome row's `email` is informational and the board rows' is empty.
+The `membership_*` kinds (BRY-630, migration 000138) have neither `broadcast_id` nor `invoice_id` (the `deliveries_parent_by_kind` CHECK); they name the member by `user_id`, except a `membership_grant_withheld` row for a join source with no user (BRY-631), which has none and is sent to the board naming no member. `membership_welcome` and `membership_board_notice` are queued by the grant in the transaction that settles the join payment; `membership_join_refunded` (a refunded join payment) and `membership_grant_withheld` (a paid join the integrity check withheld; `payload.reason`) are queued once per join source, keyed by `payload->>'ref'` (`order:<id>` or `invoice:<id>`; an expired join under review, BRY-631, is a `membership_grant_withheld` row with ref `join_expired:<source>`; unique index `idx_deliveries_membership_notice_ref` on `(kind, payload->>'ref')`). The sender (`handlers.MembershipNoticeSender`) resolves the recipient when it sends: the member's current address for the welcome, the board address (`boardNotificationAddress`) for the other three; the welcome row's `email` is informational and the board rows' is empty.
 
 ### `stripe_balance_transactions.reporting_category` (CHECK since migration 000117)
 
@@ -544,6 +544,9 @@ The public join routes (`handlers/join.go`) answer refusals as `{error, code}`.
 | `rejoin_blocked` | 409 | `POST /join/confirm` | The board marked the address "can't rejoin" (`users.rejoin_blocked`, BRD-15) after the request; nothing is changed and the token is spent. |
 | `already_member` | 409 | `POST /join/confirm` | The address became an active user with another role after the request; nothing is created and the token is spent. |
 | `rate_limit_unavailable` | 503 | `POST /join` | The per-IP limiter could not read Redis; the route fails closed. |
+| `not_applicant` | 409 | `POST /join/bank-invoice` | The signed-in user holds no `applicant` role (or is deactivated); nothing is issued. |
+| `no_pending_join` | 409 | `POST /join/bank-invoice` | The applicant has no owed join faktura and no pending join order to bill (it was paid, or the join expired). |
+| `payment_in_progress` | 409 | `POST /join/bank-invoice` | The join order has an `authorized` or `captured` payment attempt, or a `created` one younger than Stripe's checkout session lifetime; nothing is issued. |
 
 The public checkout answers 409 `order_locked` to `POST /checkout/{token}/lines` and `DELETE /checkout/{token}/lines/{lineID}` on an order with a `purpose` (fixed content; see invariants.md).
 

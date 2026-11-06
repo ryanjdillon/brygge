@@ -73,15 +73,20 @@ type checkoutResp struct {
 }
 
 // codeOrderLocked answers an add-on change to an order whose content is fixed
-// (any orders.purpose): settling such an order has a side effect tied to what
+// (an orders.purpose, or a faktura it pays with one): settling such an order has a side effect tied to what
 // it charges, so its lines are not the payer's to change.
 const codeOrderLocked = "order_locked"
 
-// orderContentFixed reports whether the order carries a purpose, which fixes
-// its lines: no add-ons may be added or removed and no catalog is offered.
+// orderContentFixed reports whether the order carries a purpose, or pays a
+// faktura that does (a join faktura's pay order, BRY-631), which fixes its
+// lines: no add-ons may be added or removed and no catalog is offered.
 func (h *InvoiceHandler) orderContentFixed(ctx context.Context, orderID string) (bool, error) {
 	var fixed bool
-	err := h.db.QueryRow(ctx, `SELECT purpose IS NOT NULL FROM orders WHERE id = $1`, orderID).Scan(&fixed)
+	err := h.db.QueryRow(ctx,
+		`SELECT o.purpose IS NOT NULL
+		        OR EXISTS (SELECT 1 FROM order_sources s JOIN invoices i ON i.id = s.invoice_id
+		                    WHERE s.order_id = o.id AND i.purpose IS NOT NULL)
+		   FROM orders o WHERE o.id = $1`, orderID).Scan(&fixed)
 	return fixed, err
 }
 

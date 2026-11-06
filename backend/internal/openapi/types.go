@@ -172,6 +172,17 @@ type JoinConfirmResponse struct {
 	OrderToken  string `json:"order_token" doc:"The order's checkout token, as in /betal/{token}"`
 }
 
+type JoinBankInvoiceResponse struct {
+	InvoiceID     string  `json:"invoice_id" doc:"The join faktura's UUID"`
+	InvoiceNumber int     `json:"invoice_number" doc:"The faktura number"`
+	KID           string  `json:"kid_number" doc:"The KID to pay it with"`
+	AccountNumber string  `json:"account_number" doc:"The club's account for faktura payments; empty when none is set"`
+	Amount        float64 `json:"amount" doc:"The amount owed"`
+	Currency      string  `json:"currency" doc:"Always NOK"`
+	DueDate       string  `json:"due_date" format:"date" doc:"The due date (YYYY-MM-DD)"`
+	Emailed       bool    `json:"emailed" doc:"Whether this call emailed the faktura; a repeat call never does"`
+}
+
 // --- Auth ---
 
 type UserProfile struct {

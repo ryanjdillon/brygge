@@ -50,33 +50,22 @@ func NewMembershipNoticeSender(db *pgxpool.Pool, cfg *config.Config, mailer emai
 // member was erased since, the member has no address, or no mail is
 // configured) fails with a note saying why; it is never recorded as sent.
 func (s *MembershipNoticeSender) Send(ctx context.Context, c bcast.Claimed) error {
-	if c.UserID == nil {
+	// A withheld grant with no payer (BRY-631: a capture on a join order
+	// whose user is gone) is still the board's to see; it names no member.
+	userless := c.UserID == nil && c.Kind == bcast.KindMembershipGrantWithheld
+	if c.UserID == nil && !userless {
 		return fmt.Errorf("%w: the member no longer exists", bcast.ErrUnsendable)
 	}
 	if s.email == nil {
 		return fmt.Errorf("%w: no mail transport configured", bcast.ErrUnsendable)
 	}
-	var firstName, name, addr, lang, clubName string
-	err := s.db.QueryRow(ctx,
-		`SELECT COALESCE(u.first_name, ''),
-		        COALESCE(NULLIF(trim(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), ''), u.full_name, ''),
-		        COALESCE(u.email, ''), COALESCE(c.default_language, ''), c.name
-		   FROM users u JOIN clubs c ON c.id = u.club_id
-		  WHERE u.id = $1 AND u.club_id = $2`,
-		*c.UserID, c.ClubID,
-	).Scan(&firstName, &name, &addr, &lang, &clubName)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return fmt.Errorf("%w: the member no longer exists", bcast.ErrUnsendable)
-	}
+	firstName, name, addr, lang, clubName, err := s.loadRecipient(ctx, c, userless)
 	if err != nil {
-		return fmt.Errorf("load member: %w", err)
-	}
-	if s.cfg != nil && s.cfg.ClubName != "" {
-		clubName = s.cfg.ClubName
+		return err
 	}
 	locale := email.JoinLocale(lang)
 	base := publicSiteBase(s.cfg)
-	memberURL := base + "/admin/users?user=" + url.QueryEscape(*c.UserID)
+	memberURL := noticeMemberURL(base, c.UserID)
 
 	var (
 		to, subject, body string
@@ -123,8 +112,50 @@ func (s *MembershipNoticeSender) Send(ctx context.Context, c bcast.Claimed) erro
 	default:
 		return fmt.Errorf("membership sender cannot send kind %q", c.Kind)
 	}
-	mailCtx := email.WithSendMeta(ctx, email.SendMeta{ClubID: c.ClubID, Kind: kind, UserID: *c.UserID})
+	meta := email.SendMeta{ClubID: c.ClubID, Kind: kind}
+	if c.UserID != nil {
+		meta.UserID = *c.UserID
+	}
+	mailCtx := email.WithSendMeta(ctx, meta)
 	return s.email.Send(mailCtx, to, subject, body)
+}
+
+// loadRecipient reads the member a notice is about and the club's language
+// and name; a user-less notice reads the club only.
+func (s *MembershipNoticeSender) loadRecipient(ctx context.Context, c bcast.Claimed, userless bool) (firstName, name, addr, lang, clubName string, err error) {
+	if userless {
+		err = s.db.QueryRow(ctx,
+			`SELECT COALESCE(default_language, ''), name FROM clubs WHERE id = $1`, c.ClubID,
+		).Scan(&lang, &clubName)
+	} else {
+		err = s.db.QueryRow(ctx,
+			`SELECT COALESCE(u.first_name, ''),
+			        COALESCE(NULLIF(trim(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), ''), u.full_name, ''),
+			        COALESCE(u.email, ''), COALESCE(c.default_language, ''), c.name
+			   FROM users u JOIN clubs c ON c.id = u.club_id
+			  WHERE u.id = $1 AND u.club_id = $2`,
+			*c.UserID, c.ClubID,
+		).Scan(&firstName, &name, &addr, &lang, &clubName)
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", "", "", "", fmt.Errorf("%w: the member no longer exists", bcast.ErrUnsendable)
+	}
+	if err != nil {
+		return "", "", "", "", "", fmt.Errorf("load member: %w", err)
+	}
+	if s.cfg != nil && s.cfg.ClubName != "" {
+		clubName = s.cfg.ClubName
+	}
+	return firstName, name, addr, lang, clubName, nil
+}
+
+// noticeMemberURL opens the member in the admin member list, or the list when
+// the notice names none.
+func noticeMemberURL(base string, userID *string) string {
+	if userID == nil {
+		return base + "/admin/users"
+	}
+	return base + "/admin/users?user=" + url.QueryEscape(*userID)
 }
 
 // boardNotificationAddress is where the club's membership notices go, first

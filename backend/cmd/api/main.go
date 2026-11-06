@@ -613,6 +613,19 @@ func main() {
 				if err != nil {
 					log.Error().Err(err).Msg("membership sweep failed")
 				}
+				// A join left unpaid for 60 days ends: the applicant is
+				// deactivated, with the join faktura credited when one was
+				// issued, or the board is asked to review part-paid money
+				// (BRY-631).
+				exp, err := invoiceHandler.ExpireUnpaidJoins(ctx)
+				if err != nil {
+					log.Error().Err(err).Msg("join expiry failed")
+				}
+				if exp.Credited > 0 || exp.Deactivated > 0 || exp.Reviews > 0 {
+					log.Info().Int("credited", exp.Credited).
+						Int("deactivated", exp.Deactivated).Int("reviews", exp.Reviews).Msg("expired unpaid joins")
+					deliveryWorker.Kick()
+				}
 				requeued, err := membershipSender.RequeueUnaddressed(ctx)
 				if err != nil {
 					log.Error().Err(err).Msg("membership notice requeue failed")

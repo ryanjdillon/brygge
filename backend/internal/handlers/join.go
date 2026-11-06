@@ -1170,6 +1170,21 @@ func ensureJoinOrder(ctx context.Context, tx pgx.Tx, st joinState, userID string
 	if currency == "" {
 		currency = paymentCurrency
 	}
+	// The applicant chose bank payment earlier: the join faktura is the one
+	// payable thing (BRY-631), so confirm points at its pay order rather than
+	// opening a second way to pay the same join.
+	// Confirming is activity on the join: touching the pay order restarts
+	// the 60-day expiry clock (ACC-14), as re-pricing a pending order does.
+	orderID, token, err = openJoinInvoiceOrder(ctx, tx, st.clubID, userID)
+	if err != nil {
+		return "", "", err
+	}
+	if orderID != "" {
+		if _, err := tx.Exec(ctx, `UPDATE orders SET updated_at = now() WHERE id = $1`, orderID); err != nil {
+			return "", "", fmt.Errorf("touch join faktura pay order: %w", err)
+		}
+		return orderID, token, nil
+	}
 	err = tx.QueryRow(ctx,
 		`SELECT id, token FROM orders
 		  WHERE club_id = $1 AND user_id = $2 AND purpose = 'membership_join'

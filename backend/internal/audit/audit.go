@@ -176,12 +176,17 @@ const (
 	// Settling the join payment (BRY-630) is logged as the grant, naming its
 	// source (online, kid or sweep); a refund or credit of the payment is
 	// recorded for the board and never revokes the membership; a paid join
-	// the integrity check withholds is recorded for the board too.
-	ActionMembershipGrantWithheld = "membership.grant_withheld"
-	ActionMembershipGranted       = "membership.granted"
-	ActionMembershipJoinConfirmed = "membership.join_confirmed"
-	ActionMembershipJoinRefunded  = "membership.join_refunded"
-	ActionMembershipJoinRequested = "membership.join_requested"
+	// the integrity check withholds is recorded for the board too. A join
+	// left unpaid for 60 days expires (BRY-631): the applicant is deactivated,
+	// with the join faktura credited when one was issued; one with part of
+	// the money in is left for the board's review instead.
+	ActionMembershipGrantWithheld     = "membership.grant_withheld"
+	ActionMembershipGranted           = "membership.granted"
+	ActionMembershipJoinConfirmed     = "membership.join_confirmed"
+	ActionMembershipJoinRefunded      = "membership.join_refunded"
+	ActionMembershipJoinRequested     = "membership.join_requested"
+	ActionMembershipJoinExpired       = "membership.join_expired"
+	ActionMembershipJoinExpiredReview = "membership.join_expired_review"
 
 	// GDPR operations
 	ActionGDPRExportRequested       = "gdpr.export_requested"

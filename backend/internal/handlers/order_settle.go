@@ -303,9 +303,11 @@ func (s orderSettlement) markAttemptCaptured(ctx context.Context, a paymentAttem
 // decision and the refund request take order then attempt and never a faktura,
 // which this order is consistent with. The decision's own transaction
 // (authorizeAttempt) has committed before the provider is called and so holds
-// nothing by now. The membership grant comes last and writes only the payer's
-// roles and rows no other settlement locks (users, the delivery queue, the
-// audit log).
+// nothing by now. The membership grant comes last and locks the payer's users
+// row (and writes their roles, the delivery queue and the audit log). The join
+// expiry and "Betal med bank" lock that row too, but only after the fakturas
+// and orders they touch, in this same order (BRY-631), so neither can deadlock
+// with a capture.
 func (s orderSettlement) settleCapture(ctx context.Context, a paymentAttempt, capturedAt time.Time) (orderPaid, firstCapture bool, err error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {

@@ -613,7 +613,8 @@ func (h *GDPRHandler) HandleListDeletionRequests(w http.ResponseWriter, r *http.
 // identity is anonymised: the magic-link rows are keyed by the old email.
 // Returns the number of session rows deleted, which includes expired sessions
 // the purge job has not yet removed. It refuses a user that is not a person:
-// the club's system actor holds no credentials and is never deactivated.
+// the club's system actor holds no credentials and is never deactivated. An
+// empty actorID records no deactivated_by: a job, not a person, did it.
 func revokeMemberAccess(ctx context.Context, tx pgx.Tx, clubID, userID, actorID string) (int64, error) {
 	var email string
 	if err := tx.QueryRow(ctx,
@@ -624,7 +625,7 @@ func revokeMemberAccess(ctx context.Context, tx pgx.Tx, clubID, userID, actorID 
 	}
 
 	if _, err := tx.Exec(ctx,
-		`UPDATE users SET deactivated_at = now(), deactivated_by = $2, updated_at = now()
+		`UPDATE users SET deactivated_at = now(), deactivated_by = NULLIF($2::text, '')::uuid, updated_at = now()
 		  WHERE id = $1 AND deactivated_at IS NULL`,
 		userID, actorID,
 	); err != nil {
@@ -656,7 +657,7 @@ func revokeMemberAccess(ctx context.Context, tx pgx.Tx, clubID, userID, actorID 
 		return 0, err
 	}
 	if _, err := tx.Exec(ctx,
-		`DELETE FROM magic_links WHERE club_id = $1 AND email = $2`,
+		`DELETE FROM magic_links WHERE club_id = $1 AND lower(email) = lower($2)`,
 		clubID, email,
 	); err != nil {
 		return 0, fmt.Errorf("clear magic links: %w", err)

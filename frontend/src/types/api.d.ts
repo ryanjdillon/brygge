@@ -1901,6 +1901,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/join/bank-invoice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pay the join by bank transfer
+         * @description Issues (and books) the signed-in applicant's KID faktura for their pending join order and emails it; the order becomes that faktura's pay order, so it is the one thing left to pay. Calling it again returns the same faktura (200; 201 when issued now) without emailing it again. 409 with code not_applicant, no_pending_join or payment_in_progress (an online payment of the order is reserved, captured or started within the provider's session lifetime).
+         */
+        post: operations["join-bank-invoice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/join/confirm": {
         parameters: {
             query?: never;
@@ -4418,6 +4438,39 @@ export interface components {
              * @description Queue position
              */
             position: number;
+        };
+        JoinBankInvoiceResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/JoinBankInvoiceResponse.json
+             */
+            readonly $schema?: string;
+            /** @description The club's account for faktura payments; empty when none is set */
+            account_number: string;
+            /**
+             * Format: double
+             * @description The amount owed
+             */
+            amount: number;
+            /** @description Always NOK */
+            currency: string;
+            /**
+             * Format: date
+             * @description The due date (YYYY-MM-DD)
+             */
+            due_date: string;
+            /** @description Whether this call emailed the faktura; a repeat call never does */
+            emailed: boolean;
+            /** @description The join faktura's UUID */
+            invoice_id: string;
+            /**
+             * Format: int64
+             * @description The faktura number
+             */
+            invoice_number: number;
+            /** @description The KID to pay it with */
+            kid_number: string;
         };
         JoinConfirmRequest: {
             /**
@@ -10509,6 +10562,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatusResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "join-bank-invoice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JoinBankInvoiceResponse"];
                 };
             };
             /** @description Error */
