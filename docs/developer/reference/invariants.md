@@ -889,6 +889,12 @@ A new group is created just before the faktura built-in and the positions are re
 
 **Failure mode:** a rank rule would pin a send that a second MX delivered at `rejected` and flag a working address; closest-pair matching swaps the outcomes of two back-to-back sends to one address; a blind write would overwrite a status another writer changed meanwhile.
 
+### A member is flagged for a bounce only by the latest outcome to their current address
+
+**Rule (BRY-615):** `GET /admin/users/email-bounces` lists a member when the **latest outcome row** sent to their **current** address is `rejected`, `suppressed` or `complaint`. Rows count when `user_id` is the member or NULL, and `lower(recipient) = lower(users.email)` (as `accounting.DeleteMemberMailLog` matches them). Outcome rows are `accepted`, `rejected_temporary`, `rejected`, `suppressed`, `complaint`; pending ones (`sending`, `submitted`, `unknown`, `queued`, `deferred`, `failed`) never hide an earlier bounce. A later `accepted` row clears the flag, and so does changing the address.
+
+**Failure mode:** taking the latest row of any status hides a dead address behind each new reminder still in flight; keying on `user_id` alone keeps flagging a member after the board fixed the address.
+
 ### A delivery event the worker can't store goes to the DLQ, never away
 
 **Rule (BRY-588):** the worker deletes an SQS message only after its transaction commits. An unparseable body or a failed write is left on the queue, and after five receives SQS moves it to the dead-letter queue (14 days), which raises `SesDlqNotEmpty` and is redriven by a person. See [sesevents README § Failures and the DLQ](../../../backend/internal/sesevents/README.md#failures-and-the-dlq) and [alerts runbook § SesDlqNotEmpty](../otel/alerts-runbook.md#sesdlqnotempty).

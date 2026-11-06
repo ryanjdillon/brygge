@@ -1297,6 +1297,17 @@ func registerAdminOps(api huma.API) {
 	}]())
 
 	huma.Register(api, huma.Operation{
+		OperationID: "admin-list-email-bounces",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/admin/users/email-bounces",
+		Tags:        []string{"Admin"},
+		Summary:     "Members whose current email address hard-bounced",
+		Description: "Keyed by user id. A member is listed when the latest delivery outcome to their current address is rejected, suppressed or complaint; " +
+			"pending sends never hide it, and a later accepted send or a changed address clears it.",
+		Security: BearerSecurity,
+	}, stub[struct{}, struct{ Body AdminEmailBouncesResponse }]())
+
+	huma.Register(api, huma.Operation{
 		OperationID: "admin-get-user",
 		Method:      http.MethodGet,
 		Path:        "/api/v1/admin/users/{userID}",

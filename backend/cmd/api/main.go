@@ -1000,6 +1000,7 @@ func main() {
 				r.Route("/users", func(r chi.Router) {
 					r.Use(middleware.RequireRoleOrBoardRead("board", "admin"))
 					r.Get("/", adminUsersHandler.HandleListUsers)
+					r.Get("/email-bounces", adminUsersHandler.HandleListEmailBounces)
 					r.Get("/{userID}", adminUsersHandler.HandleGetUser)
 					r.Get("/{userID}/boats", adminUsersHandler.HandleListUserBoats)
 

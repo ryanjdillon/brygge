@@ -804,6 +804,19 @@ type AdminUser struct {
 	HarborSharePaidOn  *string               `json:"harbor_share_paid_on" format:"date" doc:"Date the harbor share was paid (YYYY-MM-DD); null when not an owner or the date is unknown"`
 }
 
+// AdminEmailBounce is a member's last hard delivery outcome to their
+// current address.
+type AdminEmailBounce struct {
+	Status string    `json:"status" enum:"rejected,suppressed,complaint" doc:"rejected: the recipient's server refused it; suppressed: the provider did not send to a listed address; complaint: the member marked club mail as spam"`
+	At     time.Time `json:"at" doc:"When the outcome was reported"`
+	Detail string    `json:"detail" doc:"The remote server's answer or bounce diagnostic; empty when none was reported"`
+}
+
+// AdminEmailBouncesResponse is the response of GET /api/v1/admin/users/email-bounces.
+type AdminEmailBouncesResponse struct {
+	Bounces map[string]AdminEmailBounce `json:"bounces" doc:"Keyed by user id; members without a bounce are absent"`
+}
+
 // AdminUsersListParams are the query parameters of GET /api/v1/admin/users.
 // Unknown filter values are ignored and return the unfiltered set.
 type AdminUsersListParams struct {

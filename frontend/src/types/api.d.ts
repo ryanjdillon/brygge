@@ -884,6 +884,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/users/email-bounces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Members whose current email address hard-bounced
+         * @description Keyed by user id. A member is listed when the latest delivery outcome to their current address is rejected, suppressed or complaint; pending sends never hide it, and a later accepted send or a changed address clears it.
+         */
+        get: operations["admin-list-email-bounces"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/users/export.csv": {
         parameters: {
             query?: never;
@@ -2763,6 +2783,32 @@ export interface components {
             readonly $schema?: string;
             /** @description Role names to assign */
             roles: string[] | null;
+        };
+        AdminEmailBounce: {
+            /**
+             * Format: date-time
+             * @description When the outcome was reported
+             */
+            at: string;
+            /** @description The remote server's answer or bounce diagnostic; empty when none was reported */
+            detail: string;
+            /**
+             * @description rejected: the recipient's server refused it; suppressed: the provider did not send to a listed address; complaint: the member marked club mail as spam
+             * @enum {string}
+             */
+            status: "rejected" | "suppressed" | "complaint";
+        };
+        AdminEmailBouncesResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/AdminEmailBouncesResponse.json
+             */
+            readonly $schema?: string;
+            /** @description Keyed by user id; members without a bounce are absent */
+            bounces: {
+                [key: string]: components["schemas"]["AdminEmailBounce"];
+            };
         };
         AdminUser: {
             /**
@@ -8077,6 +8123,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminUserCreateResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "admin-list-email-bounces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminEmailBouncesResponse"];
                 };
             };
             /** @description Error */
