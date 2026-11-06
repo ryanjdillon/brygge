@@ -7,7 +7,7 @@ An interface (`Sender`), the SMTP transport (Stalwart or the Amazon SES SMTP int
 | File | What |
 |---|---|
 | `sender.go` | `Sender` interface — `Send`, `SendWithAttachment` and `SendWithHeaders`. Implementations are interchangeable. |
-| `smtp.go` | `SMTPClient` — the transport. Uses `mime/multipart` for the attachment variant; sends RFC-compliant `Content-Type: multipart/mixed`. Runs the DATA exchange itself (`writeData`) to classify failures and read the relay's reply. `WithSESConfigurationSet` makes it an SES client. |
+| `smtp.go` | `SMTPClient` — the transport. Builds the message itself (`buildMessage`): a quoted-printable HTML body, and for an attachment `multipart/mixed` with the file base64-encoded in 76-column CRLF lines (`writeBase64Lines`) and its name in both `Content-Type; name=` and `Content-Disposition; filename=` via `mime.FormatMediaType`. Runs the DATA exchange itself (`writeData`) to classify failures and read the relay's reply. `WithSESConfigurationSet` makes it an SES client. |
 | `ses.go` | SES specifics: regional SMTP host, SMTP password derivation from the IAM secret key, `X-SES-CONFIGURATION-SET` / `X-SES-MESSAGE-TAGS` rendering, message id parsing. |
 | `sendmeta.go` | `SendMeta` + `WithSendMeta(ctx, …)` (what a send is about), `ErrDeliveryAmbiguous`, `Provider`. |
 | `record.go` | `Record(Sender, Provider, SendLog, logger)` decorator writing `email_sends`; `PGSendLog` is the table-backed `SendLog`. |
@@ -15,6 +15,7 @@ An interface (`Sender`), the SMTP transport (Stalwart or the Amazon SES SMTP int
 | `instrument.go` | `Instrument(Sender, Provider)` decorator counting `brygge.email.send{kind,provider,result}`; the `Kind` set; `WithKind(ctx, Kind)`. See [instrumentation.md](../../../docs/developer/otel/instrumentation.md#app-email-sends). |
 | `mock.go` | `MockSender` — records every call in a slice for tests. Use with `&MockSender{}` and assert against `mock.Calls`. |
 | `templates.go` | `Subject(...)`, `Body(...)` helpers + `html/template` definitions for invoice, reminder, magic-link emails. Plus `DetectLocale`, `formatNOK`. |
+| `export_test.go` | Exposes `buildMessage` to the external `email_test` package, whose attachment round-trip test renders a real faktura with `finance.GeneratePDF`. |
 
 ## Template pattern
 
@@ -109,3 +110,7 @@ The row's id is the SES `send_id` message tag, so delivery events find it direct
 - SES headers are set after the caller's extra headers, so no caller can redirect the configuration set or forge a `send_id`. Tag values are reduced to `[A-Za-z0-9_-]`, the characters SES allows in the `X-SES-MESSAGE-TAGS` header.
 - Reminder vs invoice subject: the "[Faktura N]" bracket in the subject is what email clients use to thread reminders with the original delivery. Don't drop the bracket; don't change the format.
 - Header bytes are 7-bit ASCII. Subjects are Q-encoded and configured `From`/`Reply-To` display names RFC 2047-encoded (`encodeAddressHeader`); a raw non-ASCII club name gets a 554 "From header is invalid" from strict receivers such as Yahoo (BRY-586).
+
+## Common misses
+
+- **Attachments must be line-wrapped base64.** One unbroken base64 line runs past the 998-byte line limit of RFC 5322 (a one-page faktura is ~3 KB of base64); relays may fold or cut it and the PDF arrives corrupt. `TestFakturaAttachmentRoundTrip` builds a message around a real `finance.GeneratePDF` output and checks every line and the decoded bytes; a short stub attachment would not catch a regression.

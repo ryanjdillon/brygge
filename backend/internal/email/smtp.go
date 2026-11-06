@@ -290,18 +290,14 @@ func (c *SMTPClient) buildMessage(to, subject, htmlBody, filename string, attach
 	}
 
 	attHeader := textproto.MIMEHeader{}
-	attHeader.Set("Content-Type", detectContentType(filename))
+	attHeader.Set("Content-Type", attachmentContentType(filename))
 	attHeader.Set("Content-Transfer-Encoding", "base64")
-	attHeader.Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+	attHeader.Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
 	attPart, err := mw.CreatePart(attHeader)
 	if err != nil {
 		return nil, err
 	}
-	b64 := base64.NewEncoder(base64.StdEncoding, attPart)
-	if _, err := b64.Write(attachment); err != nil {
-		return nil, err
-	}
-	if err := b64.Close(); err != nil {
+	if err := writeBase64Lines(attPart, attachment); err != nil {
 		return nil, err
 	}
 
@@ -330,6 +326,72 @@ func writeQuotedPrintable(w io.Writer, body string) error {
 		return err
 	}
 	return qw.Close()
+}
+
+// base64LineLen is the line length RFC 2045 caps base64 bodies at. Without
+// breaks the whole attachment is one line, far past the 998-byte limit of
+// RFC 5322; relays may then fold or cut it, which corrupts the PDF.
+const base64LineLen = 76
+
+// lineBreaker inserts a CRLF after every base64LineLen bytes written through
+// it.
+type lineBreaker struct {
+	w   io.Writer
+	col int
+}
+
+func (lb *lineBreaker) Write(p []byte) (int, error) {
+	n := 0
+	for len(p) > 0 {
+		chunk := min(base64LineLen-lb.col, len(p))
+		m, err := lb.w.Write(p[:chunk])
+		n += m
+		if err != nil {
+			return n, err
+		}
+		lb.col += m
+		p = p[chunk:]
+		if lb.col == base64LineLen {
+			if _, err := io.WriteString(lb.w, "\r\n"); err != nil {
+				return n, err
+			}
+			lb.col = 0
+		}
+	}
+	return n, nil
+}
+
+// writeBase64Lines writes data base64-encoded in CRLF-terminated lines of at
+// most base64LineLen characters.
+func writeBase64Lines(w io.Writer, data []byte) error {
+	lb := &lineBreaker{w: w}
+	enc := base64.NewEncoder(base64.StdEncoding, lb)
+	if _, err := enc.Write(data); err != nil {
+		return err
+	}
+	if err := enc.Close(); err != nil {
+		return err
+	}
+	if lb.col > 0 {
+		_, err := io.WriteString(w, "\r\n")
+		return err
+	}
+	return nil
+}
+
+// attachmentContentType is the attachment's media type with its file name as
+// the name parameter, quoted and RFC 2231-encoded by mime.FormatMediaType as
+// the name needs; some clients show only the name from Content-Type.
+func attachmentContentType(filename string) string {
+	mediaType, params, err := mime.ParseMediaType(detectContentType(filename))
+	if err != nil {
+		mediaType, params = "application/octet-stream", map[string]string{}
+	}
+	params["name"] = filename
+	if v := mime.FormatMediaType(mediaType, params); v != "" {
+		return v
+	}
+	return mediaType
 }
 
 func detectContentType(filename string) string {

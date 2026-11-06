@@ -27,6 +27,29 @@ func TestBuildMessageHeaderLinesStayWithinRFCLimit(t *testing.T) {
 	}
 }
 
+// The attachment path must keep every line of the message, body included,
+// within the limit, and a non-ASCII file name must reach the header encoded.
+func TestBuildMessageAttachmentLinesStayWithinRFCLimit(t *testing.T) {
+	c := NewSMTPClient("localhost", 587, "", "", "relay@club.example", "")
+	attachment := bytes.Repeat([]byte{0xde, 0xad, 0xbe, 0xef, '%'}, 20_000)
+	filename := "faktura-Østre-Båtlag.pdf"
+
+	msg, err := c.buildMessage("to@example.com", "Faktura", "<p>x</p>", filename, attachment, nil)
+	if err != nil {
+		t.Fatalf("buildMessage: %v", err)
+	}
+	for i, line := range strings.Split(string(msg), "\r\n") {
+		if len(line) > 998 {
+			t.Errorf("message line %d of %d bytes exceeds the RFC 5322 limit: %.40s...", i, len(line), line)
+		}
+	}
+	for i := 0; i < len(msg); i++ {
+		if msg[i] > 0x7e {
+			t.Fatalf("message carries a non-ASCII byte at %d", i)
+		}
+	}
+}
+
 // The contact form sets Reply-To to the submitter; it must replace, not
 // join, the configured EMAIL_REPLY_TO so the recipient answers the visitor.
 func TestBuildMessageExtraReplyToOverridesConfigured(t *testing.T) {
