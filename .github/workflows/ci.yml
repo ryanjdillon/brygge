@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       # Temporary, until BRY-614 moves procedure sections out of AGENTS.md.
-      - uses: ryanjdillon/workflows/check-instructions@eb0eae46c65049d246c8c84471206619c38f0115 # main
+      - uses: ryanjdillon/workflows/check-instructions@f7aa26b3ffb54bb032d2710a44296ec3b82a3f7e # v1.0.0
         with:
           byte-limit: "20480"
       - uses: DeterminateSystems/nix-installer-action@main
