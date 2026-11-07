@@ -553,8 +553,7 @@ func (h *JoinHandler) emailHMAC(addr string) string {
 
 // joinTokenHash is what membership_applications.token_hash stores.
 func joinTokenHash(token string) string {
-	sum := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(sum[:])
+	return sha256Hex(token)
 }
 
 // joinBudget is what allowRecipient decided.

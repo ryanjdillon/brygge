@@ -102,9 +102,9 @@ func (e *gdprProcessEnv) seedMember(t *testing.T, withRecords bool) (userID, ema
 		}
 	}
 	if _, err := e.db.Exec(ctx,
-		`INSERT INTO magic_links (token, email, club_id, expires_at)
+		`INSERT INTO magic_links (token_hash, email, club_id, expires_at)
 		 VALUES ($1, $2, $3, now() + interval '1 hour')`,
-		"tok-"+testutil.RandomHex(8), email, e.clubID,
+		magicLinkTokenHash("tok-"+testutil.RandomHex(8)), email, e.clubID,
 	); err != nil {
 		t.Fatalf("seed magic link: %v", err)
 	}

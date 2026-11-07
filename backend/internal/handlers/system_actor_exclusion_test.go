@@ -541,8 +541,8 @@ func TestIntegration_SystemActorMagicLinkVerifyIssuesNoSession(t *testing.T) {
 	e := newSystemActorEnv(t)
 	ctx := context.Background()
 	if _, err := e.db.Exec(ctx,
-		`INSERT INTO magic_links (token, email, club_id, expires_at) VALUES ('synthetic-system-token', $1, $2, now() + interval '10 minutes')`,
-		accounting.SystemActorEmail, e.clubID); err != nil {
+		`INSERT INTO magic_links (token_hash, email, club_id, expires_at) VALUES ($1, $2, $3, now() + interval '10 minutes')`,
+		magicLinkTokenHash("synthetic-system-token"), accounting.SystemActorEmail, e.clubID); err != nil {
 		t.Fatalf("seed magic link: %v", err)
 	}
 	h := NewMagicLinkHandler(e.db, e.cfg, &email.MockSender{}, auth.NewSessionService(e.db), zerolog.Nop())

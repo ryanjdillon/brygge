@@ -552,9 +552,15 @@ The setting itself is written only through `PATCH /admin/settings/site`, which t
 
 ### Magic links are deleted a day after they expire
 
-**Rule (BRY-648):** a `magic_links` row holds the address the link was sent to and the token itself (not a hash). A link lives 15 minutes (`magicLinkExpiry`) and can be consumed only before `expires_at`, so one rule covers used and unused links: the hourly sweep (`MagicLinkHandler.PurgeExpired`) deletes every row whose `expires_at` is more than 24 hours past (`magicLinkRetention`). `revokeMemberAccess` deletes a member's links at once. Join requests (`membership_applications`) are covered the same way by `JoinHandler.PurgeExpired`, which deletes them at `expires_at`, confirmed or not.
+**Rule (BRY-648):** a `magic_links` row holds the address the link was sent to and the token's SHA-256 (see the next rule). A link lives 15 minutes (`magicLinkExpiry`) and can be consumed only before `expires_at`, so one rule covers used and unused links: the hourly sweep (`MagicLinkHandler.PurgeExpired`) deletes every row whose `expires_at` is more than 24 hours past (`magicLinkRetention`). `revokeMemberAccess` deletes a member's links at once. Join requests (`membership_applications`) are covered the same way by `JoinHandler.PurgeExpired`, which deletes them at `expires_at`, confirmed or not.
 
 **Failure mode:** every address that ever asked for a login link stays in the table forever, including the addresses of erased members who requested a link before an erasure that matched on a later address.
+
+### Login tokens are stored only as a SHA-256
+
+**Rule (BRY-652):** `magic_links` stores `token_hash`, the SHA-256 hex of the login token (`magicLinkTokenHash`, the same encoding as `joinTokenHash`), never the token. `issueMagicLink` puts the raw token only in the URL it returns for the email; `HandleVerifyMagicLink` hashes the presented token and consumes the row by `token_hash` in one `UPDATE … WHERE used = false AND expires_at > NOW()`, so expiry and single use still hold. The lookup is by hash, so it needs no constant-time compare. Any new code that writes or looks up a login link goes through `magicLinkTokenHash`; a test or a manual probe that inserts a row stores the hash. `magic_link_hash_test.go` pins that no column of the row holds the mailed token.
+
+**Failure mode:** anyone who can read the table (a backup, a leaked dump, a SQL injection) can log in as every user with a link issued in the last 15 minutes.
 
 ### The member data export holds the member's own data and nothing else
 

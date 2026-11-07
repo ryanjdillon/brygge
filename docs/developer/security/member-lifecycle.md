@@ -330,9 +330,10 @@ wrote (document comments, feature requests).
 
 ## Magic links
 
-A `magic_links` row holds the address the link was sent to and the token. A
-link is valid 15 minutes and can only be consumed before it expires, so the
-hourly sweep (`MagicLinkHandler.PurgeExpired`) deletes every row 24 hours past
+A `magic_links` row holds the address the link was sent to and the SHA-256 of
+the token, never the token itself (BRY-652): the token exists only in the
+emailed link, so a copy of the table logs no one in. A link is valid 15
+minutes and can only be consumed before it expires, so the hourly sweep (`MagicLinkHandler.PurgeExpired`) deletes every row 24 hours past
 its `expires_at`, used or not. `revokeMemberAccess` deletes the member's links
 at once. Join requests follow the same idea: `JoinHandler.PurgeExpired`
 deletes a `membership_applications` row at its `expires_at`, confirmed or not.

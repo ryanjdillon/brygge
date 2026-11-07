@@ -30,9 +30,9 @@ func TestIntegration_MagicLinkPurgeKeepsTheGracePeriod(t *testing.T) {
 		{"used-fresh", "now() + interval '10 minutes'", true},
 	} {
 		if _, err := db.Exec(ctx,
-			`INSERT INTO magic_links (token, email, club_id, expires_at, used)
+			`INSERT INTO magic_links (token_hash, email, club_id, expires_at, used)
 			 VALUES ($1, 'link@example.test', $2, `+l.expires+`, $3)`,
-			l.token, clubID, l.used); err != nil {
+			magicLinkTokenHash(l.token), clubID, l.used); err != nil {
 			t.Fatalf("seed %s: %v", l.token, err)
 		}
 	}
@@ -46,7 +46,7 @@ func TestIntegration_MagicLinkPurgeKeepsTheGracePeriod(t *testing.T) {
 		t.Errorf("purged %d rows, want 2", n)
 	}
 
-	rows, err := db.Query(ctx, `SELECT token FROM magic_links ORDER BY token`)
+	rows, err := db.Query(ctx, `SELECT token_hash FROM magic_links`)
 	if err != nil {
 		t.Fatalf("list links: %v", err)
 	}
@@ -59,7 +59,12 @@ func TestIntegration_MagicLinkPurgeKeepsTheGracePeriod(t *testing.T) {
 		left = append(left, tok)
 	}
 	rows.Close()
-	want := []string{"expired-23h", "fresh", "used-expired-1h", "used-fresh"}
+	slices.Sort(left)
+	var want []string
+	for _, tok := range []string{"expired-23h", "fresh", "used-expired-1h", "used-fresh"} {
+		want = append(want, magicLinkTokenHash(tok))
+	}
+	slices.Sort(want)
 	if !slices.Equal(left, want) {
 		t.Errorf("links left = %v, want %v", left, want)
 	}

@@ -24,7 +24,7 @@ import (
 const magicLinkExpiry = 15 * time.Minute
 
 // magicLinkRetention is how long a magic-link row is kept past its expiry.
-// The row holds the address the link was sent to and the token, and a link
+// The row holds the address the link was sent to and the token's hash, and a link
 // can only be consumed before it expires, so this also bounds how long a
 // consumed one is kept.
 const magicLinkRetention = 24 * time.Hour
@@ -149,13 +149,14 @@ func (h *MagicLinkHandler) HandleVerifyMagicLink(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// Atomically consume the token
+	// Atomically consume the token. The lookup is by hash, so it needs no
+	// constant-time compare.
 	var linkEmail, clubID string
 	err := h.db.QueryRow(ctx,
 		`UPDATE magic_links SET used = true
-		 WHERE token = $1 AND used = false AND expires_at > NOW()
+		 WHERE token_hash = $1 AND used = false AND expires_at > NOW()
 		 RETURNING email, club_id`,
-		token,
+		magicLinkTokenHash(token),
 	).Scan(&linkEmail, &clubID)
 
 	if err == pgx.ErrNoRows {
@@ -235,19 +236,25 @@ func (h *MagicLinkHandler) mayProvisionMail(ctx context.Context, userID, clubID 
 // returns its URL. The URL is the backend verify endpoint: it consumes the
 // token, sets the session cookie and redirects to /portal in one request.
 // email must be the address as stored on the user, which verify matches
-// exactly.
+// exactly. Only the token's hash is stored; the URL carries the token.
 func issueMagicLink(ctx context.Context, db *pgxpool.Pool, cfg *config.Config, clubID, email string) (string, error) {
 	token, err := generateToken()
 	if err != nil {
 		return "", fmt.Errorf("generate magic link token: %w", err)
 	}
 	if _, err := db.Exec(ctx,
-		`INSERT INTO magic_links (token, email, club_id, expires_at) VALUES ($1, $2, $3, $4)`,
-		token, email, clubID, time.Now().Add(magicLinkExpiry),
+		`INSERT INTO magic_links (token_hash, email, club_id, expires_at) VALUES ($1, $2, $3, $4)`,
+		magicLinkTokenHash(token), email, clubID, time.Now().Add(magicLinkExpiry),
 	); err != nil {
 		return "", fmt.Errorf("store magic link: %w", err)
 	}
 	return fmt.Sprintf("%s/api/v1/auth/verify?token=%s", cfg.FrontendURL, token), nil
+}
+
+// magicLinkTokenHash is what magic_links.token_hash stores: sha256 hex, the
+// encoding join tokens use, so a read of the table cannot log anyone in.
+func magicLinkTokenHash(token string) string {
+	return sha256Hex(token)
 }
 
 // HandleSessionLogout destroys the current session and clears the cookie.

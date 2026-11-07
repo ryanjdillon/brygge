@@ -236,8 +236,8 @@ sudo -u postgres psql brygge -c "TRUNCATE user_mail_credentials;"
 
 TOKEN="probe-$(cat /proc/sys/kernel/random/uuid)"
 sudo -u postgres psql brygge -c \
-  "INSERT INTO magic_links (token, email, club_id, expires_at, used)
-     SELECT '$TOKEN', u.email, u.club_id, now() + interval '15 min', false
+  "INSERT INTO magic_links (token_hash, email, club_id, expires_at, used)
+     SELECT encode(sha256(convert_to('$TOKEN', 'UTF8')), 'hex'), u.email, u.club_id, now() + interval '15 min', false
        FROM users u WHERE u.email = '<your-email>';"
 
 curl -sS -o /dev/null -w 'verify=%{http_code}\n' \

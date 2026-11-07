@@ -310,8 +310,9 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   dimensions with `name`, `registration_number`, `mmsi` and `call_sign`
   blanked (`accounting.EraseMemberProfileData`, BRY-648). All three FKs into
   `boats` are `ON DELETE SET NULL`.
-- `magic_links` — single-use login links: the raw `token` (primary key), the
-  `email` it was sent to, `expires_at` (15 minutes after issue) and `used`.
+- `magic_links` — single-use login links: `token_hash` (primary key, the
+  SHA-256 hex of the token; the raw token is only in the emailed link,
+  BRY-652), the `email` it was sent to, `expires_at` (15 minutes after issue) and `used`.
   There is no consumed-at column; a link is consumed only before it expires,
   so the hourly sweep (`MagicLinkHandler.PurgeExpired`) deletes every row
   24 hours past `expires_at`, used or not (BRY-648), and `revokeMemberAccess`
@@ -627,6 +628,19 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   it is unknown. Values in [enums.md](reference/enums.md). `dev_masked`
   passes `address_verified` through and NULLs the other two. **The down**
   drops the trigger, its function and the columns.
+- **Magic-link token hash.** 000142 (BRY-652) adds `magic_links.token_hash`,
+  backfills it as `encode(sha256(convert_to(token, 'UTF8')), 'hex')` so links
+  issued before the deploy keep working, drops the raw `token` column (and its
+  primary key with it), makes `token_hash` the primary key and adds the CHECK
+  `magic_links_token_hash_sha256_hex` (`^[0-9a-f]{64}$`), so a raw token is
+  refused. The API hashes the token the same way (`sha256Hex`, pinned against
+  the SQL expression by `TestIntegration_TokenHashMatchesSQLBackfill`).
+  **Rollback:** a binary from before 000142 still writes `token`, which no
+  longer exists, so after a rollback of the code alone no magic link can be
+  issued or verified until the next deploy. `magic_links` is not granted
+  to `brygge_dev_ro` and has no `dev_masked` view. **The down** cannot recover
+  tokens from hashes, so it deletes every row, then drops the CHECK and
+  restores `token` as the primary key.
 - `invoice_pdf_archive` (migration 000050) — preserves prior PDF bytes when
   `invoices.pdf_data` is regenerated, so Norwegian bokføringsloven §13's
   5-year retention requirement is satisfied.
