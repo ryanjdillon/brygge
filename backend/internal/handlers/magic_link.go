@@ -14,8 +14,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
 
+	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/auth"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/email"
@@ -42,7 +44,12 @@ type MagicLinkHandler struct {
 	config   *config.Config
 	email    email.Sender
 	sessions *auth.SessionService
+	audit    *audit.Service // optional, may be nil in tests
 	log      zerolog.Logger
+
+	// loginFailDedupe bounds anonymous auth.login_failed rows (BRY-659);
+	// nil writes every one. Set with SetLoginFailDedupe.
+	loginFailDedupe *redis.Client
 
 	// MailProvisioner, when set, lazily ensures a Stalwart principal
 	// exists for the user on first successful login (DIL-321).
@@ -56,6 +63,7 @@ func NewMagicLinkHandler(
 	cfg *config.Config,
 	emailClient email.Sender,
 	sessions *auth.SessionService,
+	auditService *audit.Service,
 	log zerolog.Logger,
 ) *MagicLinkHandler {
 	return &MagicLinkHandler{
@@ -63,6 +71,7 @@ func NewMagicLinkHandler(
 		config:   cfg,
 		email:    emailClient,
 		sessions: sessions,
+		audit:    auditService,
 		log:      log.With().Str("handler", "magic_link").Logger(),
 	}
 }
@@ -74,6 +83,10 @@ type magicLinkRequest struct {
 type magicLinkResponse struct {
 	Message string `json:"message"`
 }
+
+// SetLoginFailDedupe gives the handler the Redis client that bounds anonymous
+// auth.login_failed rows to one per client IP, method and reason a minute.
+func (h *MagicLinkHandler) SetLoginFailDedupe(rdb *redis.Client) { h.loginFailDedupe = rdb }
 
 // HandleRequestMagicLink sends a login link to the user's email.
 // Always returns 200 regardless of whether the email exists.
@@ -176,6 +189,11 @@ const (
 //
 // A session the request already carries is deleted once the new one exists,
 // so logging in as someone else does not leave the previous login live.
+//
+// Audit (BRY-659): a login writes auth.login_success; a token that is
+// refused writes auth.login_failed with the reason, naming the user the
+// link was for when its row is still there. A missing token, a wrong
+// content type or a malformed body presented no credential and writes none.
 func (h *MagicLinkHandler) HandleConsumeMagicLink(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if !requireJSON(w, r) {
@@ -203,7 +221,9 @@ func (h *MagicLinkHandler) HandleConsumeMagicLink(w http.ResponseWriter, r *http
 		magicLinkTokenHash(token),
 	).Scan(&linkEmail, &clubID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		loginTokenRefused(w, h.refusalCode(ctx, token))
+		code, rowEmail, rowClubID := h.refusal(ctx, token)
+		h.auditLoginFailed(ctx, r, rowEmail, rowClubID, code)
+		loginTokenRefused(w, code)
 		return
 	}
 	if err != nil {
@@ -221,6 +241,7 @@ func (h *MagicLinkHandler) HandleConsumeMagicLink(w http.ResponseWriter, r *http
 	if errors.Is(err, pgx.ErrNoRows) {
 		// The user was deactivated (or never was a person) after the link
 		// was sent: the link is spent and logs no one in.
+		h.auditLoginFailed(ctx, r, linkEmail, clubID, codeLoginTokenInvalid)
 		loginTokenRefused(w, codeLoginTokenInvalid)
 		return
 	}
@@ -238,6 +259,7 @@ func (h *MagicLinkHandler) HandleConsumeMagicLink(w http.ResponseWriter, r *http
 	}
 	endPriorSession(ctx, r, h.sessions, sessionID, h.log)
 	middleware.SetSessionCookie(w, sessionID, cookieSecure(h.config))
+	auditLoginSuccess(ctx, h.audit, r, userID, clubID, loginMethodMagicLink)
 
 	// Lazy Stalwart provisioning (DIL-321). Detached so login
 	// latency isn't affected; reconciler picks up the new principal
@@ -261,25 +283,49 @@ func (h *MagicLinkHandler) HandleConsumeMagicLink(w http.ResponseWriter, r *http
 	JSON(w, http.StatusOK, magicLinkVerifyResponse{Status: "logged_in"})
 }
 
-// refusalCode says why a token could not be consumed, so the page can tell
-// the member whether to ask for a new link because theirs expired or was
-// already used. Only the holder of the token can learn this.
-func (h *MagicLinkHandler) refusalCode(ctx context.Context, token string) string {
+// refusal says why a token could not be consumed, so the page can tell the
+// member whether to ask for a new link because theirs expired or was already
+// used. Only the holder of the token can learn this. It also returns the
+// address and club of the link's row, for the audit row; both are "" for a
+// token with no row.
+func (h *MagicLinkHandler) refusal(ctx context.Context, token string) (code, linkEmail, clubID string) {
 	var used, expired bool
 	err := h.db.QueryRow(ctx,
-		`SELECT used, expires_at <= NOW() FROM magic_links WHERE token_hash = $1`,
+		`SELECT used, expires_at <= NOW(), email, club_id::text FROM magic_links WHERE token_hash = $1`,
 		magicLinkTokenHash(token),
-	).Scan(&used, &expired)
+	).Scan(&used, &expired, &linkEmail, &clubID)
 	switch {
 	case err != nil:
-		return codeLoginTokenInvalid
+		return codeLoginTokenInvalid, "", ""
 	case used:
-		return codeLoginTokenUsed
+		return codeLoginTokenUsed, linkEmail, clubID
 	case expired:
-		return codeLoginTokenExpired
+		return codeLoginTokenExpired, linkEmail, clubID
 	default:
-		return codeLoginTokenInvalid
+		return codeLoginTokenInvalid, linkEmail, clubID
 	}
+}
+
+// auditLoginFailed writes auth.login_failed for a refused token. The link's
+// row names an address, not a user, so the user is looked up by it, active
+// or not: a deactivated member's refused link is still theirs. The address
+// itself never goes in the row. With no link row (an unknown token) there is
+// no one to name.
+func (h *MagicLinkHandler) auditLoginFailed(ctx context.Context, r *http.Request, linkEmail, clubID, code string) {
+	if h.audit == nil {
+		return
+	}
+	var userID string
+	if linkEmail != "" && clubID != "" {
+		err := h.db.QueryRow(ctx,
+			`SELECT id FROM users WHERE email = $1 AND club_id = $2 AND kind = 'person'`,
+			linkEmail, clubID,
+		).Scan(&userID)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			h.log.Warn().Err(err).Msg("login audit: resolve the link's user")
+		}
+	}
+	auditLoginFailed(ctx, h.audit, h.loginFailDedupe, r, userID, clubID, h.config.ClubSlug, loginMethodMagicLink, loginFailReason(code))
 }
 
 func loginTokenRefused(w http.ResponseWriter, code string) {
@@ -336,15 +382,21 @@ func magicLinkTokenHash(token string) string {
 	return sha256Hex(token)
 }
 
-// HandleSessionLogout destroys the current session and clears the cookie.
+// HandleSessionLogout destroys the current session and clears the cookie,
+// and writes auth.logout for the member (BRY-659). The session id stays out
+// of the audit row: it is the cookie's value.
 func (h *MagicLinkHandler) HandleSessionLogout(w http.ResponseWriter, r *http.Request) {
-	sessionID := middleware.GetSessionID(r.Context())
+	ctx := r.Context()
+	sessionID := middleware.GetSessionID(ctx)
 	if sessionID != "" && h.sessions != nil {
-		if err := h.sessions.DeleteSession(r.Context(), sessionID); err != nil {
+		if err := h.sessions.DeleteSession(ctx, sessionID); err != nil {
 			h.log.Error().Err(err).Msg("failed to delete session on logout")
 		}
 	}
 	middleware.ClearSessionCookie(w, cookieSecure(h.config))
+	if claims := middleware.GetClaims(ctx); claims != nil && h.audit != nil {
+		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr, audit.ActionLogout, "session", "", nil)
+	}
 	JSON(w, http.StatusOK, map[string]string{"message": "logged out"})
 }
 

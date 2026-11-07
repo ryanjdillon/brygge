@@ -21,7 +21,7 @@ func newTestMagicLinkHandler(t *testing.T) (*MagicLinkHandler, *email.MockSender
 	cfg.FrontendURL = "http://localhost:5173"
 	log := zerolog.Nop()
 	mock := &email.MockSender{}
-	h := NewMagicLinkHandler(nil, cfg, mock, nil, log)
+	h := NewMagicLinkHandler(nil, cfg, mock, nil, nil, log)
 	return h, mock
 }
 
@@ -62,7 +62,7 @@ func TestHandleVerifyMagicLinkNoEmailSender(t *testing.T) {
 	cfg.FrontendURL = "http://localhost:5173"
 	log := zerolog.Nop()
 	// nil email sender — handler should still work
-	h := NewMagicLinkHandler(nil, cfg, nil, nil, log)
+	h := NewMagicLinkHandler(nil, cfg, nil, nil, nil, log)
 
 	r := chi.NewRouter()
 	r.Post("/auth/magic-link", h.HandleRequestMagicLink)

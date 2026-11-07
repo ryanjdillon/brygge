@@ -263,7 +263,8 @@ func main() {
 	healthHandler := handlers.NewHealthHandler(db, rdb)
 	auditHandler := handlers.NewAuditHandler(db, auditService, &cfg, log)
 	authHandler := handlers.NewAuthHandler(db, &cfg, log)
-	magicLinkHandler := handlers.NewMagicLinkHandler(db, &cfg, emailClient, sessionService, log)
+	magicLinkHandler := handlers.NewMagicLinkHandler(db, &cfg, emailClient, sessionService, auditService, log)
+	magicLinkHandler.SetLoginFailDedupe(rdb)
 	if userProvisioner != nil {
 		magicLinkHandler.MailProvisioner = userProvisioner
 	}
@@ -275,6 +276,7 @@ func main() {
 		log.Fatal().Err(err).Msg("initialize passkey relying party")
 	}
 	passkeyHandler := handlers.NewPasskeyHandler(webAuthn, passkey.NewStore(db), passkey.NewChallengeStore(rdb), sessionService, auditService, &cfg, log)
+	passkeyHandler.SetLoginFailDedupe(rdb)
 	waitingListHandler := handlers.NewWaitingListHandler(db, rdb, &cfg, log)
 	paymentFilterHandler := handlers.NewPaymentFilterHandler(db, auditService, log)
 	adminUsersHandler := handlers.NewAdminUsersHandler(db, &cfg, log)

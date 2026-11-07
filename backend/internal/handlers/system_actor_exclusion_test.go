@@ -207,7 +207,7 @@ func TestIntegration_SystemActorGetsNoMagicLinkOrSession(t *testing.T) {
 	e := newSystemActorEnv(t)
 	ctx := context.Background()
 	mock := &email.MockSender{}
-	h := NewMagicLinkHandler(e.db, e.cfg, mock, auth.NewSessionService(e.db), zerolog.Nop())
+	h := NewMagicLinkHandler(e.db, e.cfg, mock, auth.NewSessionService(e.db), nil, zerolog.Nop())
 
 	rec := e.do(t, http.MethodPost, "/auth/magic-link", "/auth/magic-link", h.HandleRequestMagicLink,
 		`{"email":"`+accounting.SystemActorEmail+`"}`)
@@ -545,7 +545,7 @@ func TestIntegration_SystemActorMagicLinkVerifyIssuesNoSession(t *testing.T) {
 		magicLinkTokenHash("synthetic-system-token"), accounting.SystemActorEmail, e.clubID); err != nil {
 		t.Fatalf("seed magic link: %v", err)
 	}
-	h := NewMagicLinkHandler(e.db, e.cfg, &email.MockSender{}, auth.NewSessionService(e.db), zerolog.Nop())
+	h := NewMagicLinkHandler(e.db, e.cfg, &email.MockSender{}, auth.NewSessionService(e.db), nil, zerolog.Nop())
 	rec := e.do(t, http.MethodPost, "/auth/verify", "/auth/verify", h.HandleConsumeMagicLink, `{"token":"synthetic-system-token"}`)
 	if rec.Code < 400 {
 		t.Errorf("verify for the system actor answered %d, want an error; body: %s", rec.Code, rec.Body.String())

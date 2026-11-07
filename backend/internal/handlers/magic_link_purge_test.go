@@ -37,7 +37,7 @@ func TestIntegration_MagicLinkPurgeKeepsTheGracePeriod(t *testing.T) {
 		}
 	}
 
-	h := NewMagicLinkHandler(db, testConfig(), nil, nil, zerolog.Nop())
+	h := NewMagicLinkHandler(db, testConfig(), nil, nil, nil, zerolog.Nop())
 	n, err := h.PurgeExpired(ctx)
 	if err != nil {
 		t.Fatalf("PurgeExpired: %v", err)

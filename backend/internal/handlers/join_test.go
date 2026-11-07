@@ -307,6 +307,12 @@ func TestJoinHappyPath(t *testing.T) {
 	if got := e.roles(t, userID); !slices.Equal(got, []string{"applicant"}) {
 		t.Errorf("roles = %v, want [applicant]", got)
 	}
+	// The confirm logged the applicant in, and says so once (BRY-659).
+	if n := e.count(t, `SELECT count(*) FROM audit_log WHERE club_id = $1 AND actor_id = $2 AND action = $3
+		AND details = jsonb_build_object('method', $4::text)`,
+		e.clubID, userID, audit.ActionLoginSuccess, loginMethodJoinConfirm); n != 1 {
+		t.Errorf("%d join_confirm login rows, want 1", n)
+	}
 	for _, d := range joinRequiredDocs {
 		if n := e.count(t, `SELECT count(*) FROM user_consents WHERE user_id = $1 AND consent_type = $2 AND version = $3`,
 			userID, d, d+"-v1"); n != 1 {
@@ -792,7 +798,7 @@ func TestMagicLinkSkipsMailProvisioningForApplicants(t *testing.T) {
 	member := e.seedUser(t, "member.mail@example.com", false, "member")
 
 	fake := &fakeMailProvisioner{called: make(chan string, 4)}
-	ml := NewMagicLinkHandler(e.db, e.cfg, nil, auth.NewSessionService(e.db), zerolog.Nop())
+	ml := NewMagicLinkHandler(e.db, e.cfg, nil, auth.NewSessionService(e.db), nil, zerolog.Nop())
 	ml.MailProvisioner = fake
 	r := chi.NewRouter()
 	r.Post("/auth/verify", ml.HandleConsumeMagicLink)

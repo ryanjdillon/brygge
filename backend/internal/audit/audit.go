@@ -3,6 +3,7 @@ package audit
 import (
 	"context"
 	"encoding/json"
+	"sync"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
@@ -10,9 +11,12 @@ import (
 
 // Action constants for audit events.
 const (
-	// Auth events
+	// Auth events. A login is recorded per attempt that presented a
+	// credential (BRY-659); details name the method and, for a failure, the
+	// reason, never the token, its hash, the session or the address.
 	ActionLoginSuccess = "auth.login_success"
 	ActionLoginFailed  = "auth.login_failed"
+	ActionLogout       = "auth.logout"
 	ActionTokenRevoked = "auth.token_revoked" // #nosec G101 -- not a credential
 	ActionInvalidToken = "auth.invalid_token" // #nosec G101 -- not a credential
 
@@ -217,6 +221,11 @@ type Entry struct {
 type Service struct {
 	db  *pgxpool.Pool
 	log zerolog.Logger
+
+	// clubIDs caches ClubIDForSlug's successful lookups; a club's id never
+	// changes, so one read per slug per process is enough.
+	clubIDsMu sync.Mutex
+	clubIDs   map[string]string
 }
 
 func NewService(db *pgxpool.Pool, log zerolog.Logger) *Service {
@@ -237,6 +246,33 @@ func (s *Service) LogAction(ctx context.Context, clubID, actorID, actorIP, actio
 		ResourceID: resourceID,
 		Details:    details,
 	})
+}
+
+// ClubIDForSlug returns the id of the club with slug, or "" when it cannot be
+// read. It is for a row with no user to take the club from, such as a login
+// with an unknown token, so the row is still scoped to the deployment's club.
+// A found id is cached; a failed lookup is not, so the next row tries again.
+func (s *Service) ClubIDForSlug(ctx context.Context, slug string) string {
+	if s == nil || s.db == nil || slug == "" {
+		return ""
+	}
+	s.clubIDsMu.Lock()
+	id, ok := s.clubIDs[slug]
+	s.clubIDsMu.Unlock()
+	if ok {
+		return id
+	}
+	if err := s.db.QueryRow(ctx, `SELECT id::text FROM clubs WHERE slug = $1`, slug).Scan(&id); err != nil {
+		s.log.Warn().Err(err).Msg("audit: resolve club by slug")
+		return ""
+	}
+	s.clubIDsMu.Lock()
+	if s.clubIDs == nil {
+		s.clubIDs = make(map[string]string)
+	}
+	s.clubIDs[slug] = id
+	s.clubIDsMu.Unlock()
+	return id
 }
 
 func strPtr(s string) *string {

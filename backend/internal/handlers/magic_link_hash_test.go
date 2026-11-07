@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
+	"github.com/brygge-klubb/brygge/internal/audit"
 	"github.com/brygge-klubb/brygge/internal/auth"
 	"github.com/brygge-klubb/brygge/internal/config"
 	"github.com/brygge-klubb/brygge/internal/email"
@@ -41,7 +42,7 @@ func newMagicLinkHashEnv(t *testing.T) *magicLinkHashEnv {
 		t.Fatalf("club slug: %v", err)
 	}
 	mailer := &email.MockSender{}
-	h := NewMagicLinkHandler(db, cfg, mailer, auth.NewSessionService(db), zerolog.Nop())
+	h := NewMagicLinkHandler(db, cfg, mailer, auth.NewSessionService(db), audit.NewService(db, zerolog.Nop()), zerolog.Nop())
 	r := chi.NewRouter()
 	r.Post("/auth/magic-link", h.HandleRequestMagicLink)
 	r.Get("/auth/verify", h.HandleVerifyMagicLink)

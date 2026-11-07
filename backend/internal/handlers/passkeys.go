@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
@@ -13,6 +15,7 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
 
 	"github.com/brygge-klubb/brygge/internal/audit"
@@ -39,7 +42,15 @@ type PasskeyHandler struct {
 	audit    *audit.Service
 	config   *config.Config
 	log      zerolog.Logger
+
+	// loginFailDedupe bounds anonymous auth.login_failed rows (BRY-659);
+	// nil writes every one. Set with SetLoginFailDedupe.
+	loginFailDedupe *redis.Client
 }
+
+// SetLoginFailDedupe gives the handler the Redis client that bounds anonymous
+// auth.login_failed rows to one per client IP, method and reason a minute.
+func (h *PasskeyHandler) SetLoginFailDedupe(rdb *redis.Client) { h.loginFailDedupe = rdb }
 
 func NewPasskeyHandler(
 	wa *webauthn.WebAuthn,
@@ -392,6 +403,11 @@ type passkeyLoginFinishResponse struct {
 // the credential's user handle, and creates a session exactly like the
 // magic-link verify path. A user-verifying assertion also stamps the step-up,
 // so a board member is signed in AND stepped-up in one tap.
+//
+// Audit (BRY-659): a login writes auth.login_success; an assertion that
+// fails writes auth.login_failed, naming the member only when the credential
+// is one of theirs. A missing or expired ceremony and a body that does not
+// parse as an assertion presented no credential and write none.
 func (h *PasskeyHandler) HandleLoginFinish(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -403,6 +419,14 @@ func (h *PasskeyHandler) HandleLoginFinish(w http.ResponseWriter, r *http.Reques
 	sessionData, err := h.chal.Take(ctx, loginChallengeKey(cid))
 	if err != nil {
 		Error(w, http.StatusBadRequest, "login expired — start again")
+		return
+	}
+
+	// Parsed apart from the verification so a body that is not an assertion
+	// is told from a failed one: only the latter is audited.
+	parsed, err := protocol.ParseCredentialRequestResponse(r)
+	if err != nil {
+		Error(w, http.StatusUnauthorized, "passkey login failed")
 		return
 	}
 
@@ -418,10 +442,17 @@ func (h *PasskeyHandler) HandleLoginFinish(w http.ResponseWriter, r *http.Reques
 		return u, nil
 	}
 
-	cred, err := h.wa.FinishDiscoverableLogin(handler, *sessionData, r)
+	cred, err := h.wa.ValidateDiscoverableLogin(handler, *sessionData, parsed)
 	if err != nil || resolved == nil {
+		h.auditLoginFailed(ctx, r, resolved, parsed.RawID)
 		Error(w, http.StatusUnauthorized, "passkey login failed")
 		return
+	}
+
+	if cred.Authenticator.CloneWarning {
+		// Signature counter went backwards — possible cloned authenticator.
+		// Not a hard fail, as in step-up; leave the same trail.
+		h.log.Warn().Str("user_id", resolved.UserID()).Msg("passkey clone warning during login")
 	}
 
 	if err := h.store.TouchCredential(ctx, cred); err != nil {
@@ -438,6 +469,7 @@ func (h *PasskeyHandler) HandleLoginFinish(w http.ResponseWriter, r *http.Reques
 	}
 	endPriorSession(ctx, r, h.sessions, sessionID, h.log)
 	middleware.SetSessionCookie(w, sessionID, cookieSecure(h.config))
+	auditLoginSuccess(ctx, h.audit, r, resolved.UserID(), resolved.ClubID(), loginMethodPasskey)
 
 	// A user-verifying assertion proves possession + inherence — enough to also
 	// satisfy the step-up gate, so an admin lands signed in and stepped up.
@@ -448,6 +480,33 @@ func (h *PasskeyHandler) HandleLoginFinish(w http.ResponseWriter, r *http.Reques
 	}
 
 	JSON(w, http.StatusOK, passkeyLoginFinishResponse{Message: "signed in"})
+}
+
+// auditLoginFailed writes auth.login_failed for a refused assertion. The
+// user handle is the client's to send, so it names the member only together
+// with a credential id that is one of theirs; anything else is an unknown
+// credential with no actor, scoped to the handle's club when it resolved.
+func (h *PasskeyHandler) auditLoginFailed(ctx context.Context, r *http.Request, resolved *passkey.User, credentialID []byte) {
+	if h.audit == nil {
+		return
+	}
+	var userID, clubID string
+	reason := loginFailPasskeyUnknownCredential
+	if resolved != nil {
+		clubID = resolved.ClubID()
+		for _, c := range resolved.WebAuthnCredentials() {
+			if bytes.Equal(c.ID, credentialID) {
+				userID = resolved.UserID()
+				reason = loginFailPasskeyVerification
+				break
+			}
+		}
+	}
+	var slug string
+	if h.config != nil {
+		slug = h.config.ClubSlug
+	}
+	auditLoginFailed(ctx, h.audit, h.loginFailDedupe, r, userID, clubID, slug, loginMethodPasskey, reason)
 }
 
 type passkeyAdminResetResponse struct {

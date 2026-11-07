@@ -1057,6 +1057,7 @@ func (h *JoinHandler) HandleJoinConfirm(w http.ResponseWriter, r *http.Request) 
 			h.log.Error().Err(err).Str("user_id", userID).Msg("join confirm: create session failed")
 		} else {
 			middleware.SetSessionCookie(w, sessionID, cookieSecure(h.config))
+			auditLoginSuccess(ctx, h.audit, r, userID, clubID, loginMethodJoinConfirm)
 		}
 	}
 
