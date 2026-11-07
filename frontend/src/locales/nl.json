@@ -894,7 +894,8 @@
         "chair": "Voorzitter",
         "vice_chair": "Vicevoorzitter",
         "deputy": "Plaatsvervanger",
-        "secretary": "Secretaris"
+        "secretary": "Secretaris",
+        "applicant": "Aanvrager"
       },
       "phone": "Telefoon",
       "isLocal": "Lokaal",
@@ -981,7 +982,12 @@
         "alertComplaint": "Het lid heeft e-mail van de club op {date} als spam gemarkeerd. Stuur geen e-mail meer naar dit adres; neem op een andere manier contact op.",
         "alertSuppressed": "E-mail naar dit adres wordt niet verzonden omdat het eerder e-mail heeft geweigerd (geblokkeerd op {date}). Vraag het lid om een actueel adres."
       },
-      "cancelledBadge": "Opgezegd"
+      "cancelledBadge": "Opgezegd",
+      "statusApplicant": "Aanvragers",
+      "statusNewThisYear": "Nieuw dit jaar: dit jaar lid geworden",
+      "rejoinBlockedBadge": "Kan niet opnieuw lid worden",
+      "rejoinBlocked": "Kan niet opnieuw lid worden",
+      "rejoinBlockedHint": "Blokkeert zelf aanmelden. De persoon krijgt te horen dat hij contact moet opnemen met het bestuur."
     },
     "waitingList": {
       "loadError": "Kon wachtlijst niet laden",
@@ -1326,7 +1332,25 @@
       "bankAutoAssignHint": "Boekt na elke bankupload en Synk bank een betaling zonder KID alleen als de naam van de betaler precies bij één lid past met precies één openstaande factuur van hetzelfde bedrag. De rest blijft in Tildel. Elke boeking kan ongedaan worden gemaakt. Los van de Vipps-instelling.",
       "vippsPortalUrlLabel": "Adres van het Vipps-portaal",
       "vippsPortalUrlHint": "Plak het adres dat u ziet nadat u bent ingelogd op portal.vippsmobilepay.com, bijvoorbeeld https://portal.vippsmobilepay.com/123456/home. Het nummer daarin hoort bij het portaal en is niet het verkopersnummer (MSN). Wordt als link getoond op de pagina Betalingen zolang Vipps echte betalingen accepteert. Laat leeg als er geen link moet komen.",
-      "vippsPortalUrlInvalid": "Dit is geen adres van het Vipps-portaal. Het moet beginnen met https://portal.vippsmobilepay.com/ en mag geen gebruikersnaam, poort of #fragment bevatten."
+      "vippsPortalUrlInvalid": "Dit is geen adres van het Vipps-portaal. Het moet beginnen met https://portal.vippsmobilepay.com/ en mag geen gebruikersnaam, poort of #fragment bevatten.",
+      "joinPriceLabel": "Inschrijfprijs",
+      "joinPriceHint": "De prijs die een nieuw persoon betaalt om zich via de website aan te melden. Alleen actieve prijzen met een vast bedrag kunnen worden gekozen.",
+      "joinPriceNone": "Geen (aanmelden gesloten)",
+      "joinPriceUnusable": "{name} (niet bruikbaar)",
+      "joinPriceInvalid": "Kies een actieve prijs met een vast bedrag van deze club.",
+      "joinStatusOpen": "Aanmelden is open",
+      "joinStatusClosed": "Aanmelden is gesloten. Ontbreekt:",
+      "joinMissingPriceUnset": "Er is geen inschrijfprijs gekozen",
+      "joinMissingPriceOtherClub": "De inschrijfprijs hoort bij een andere club",
+      "joinMissingPriceInactive": "De inschrijfprijs is gearchiveerd",
+      "joinMissingPriceNotFlat": "De inschrijfprijs heeft geen vast bedrag",
+      "joinMissingDocument": "{doc} is niet gepubliceerd",
+      "joinMissingClub": "De club is niet ingericht",
+      "joinFixPrices": "Naar prijzen",
+      "joinFixDocuments": "Naar juridische documenten",
+      "joinPriceListFailed": "Kon de prijslijst niet laden.",
+      "joinPriceCurrent": "Huidige inschrijfprijs",
+      "joinAskAdmin": "Vraag een beheerder de documenten te publiceren."
     },
     "faktura": {
       "draft": {
@@ -1898,7 +1922,8 @@
       }
     },
     "columns": {
-      "harborShare": "Havenaandeel"
+      "harborShare": "Havenaandeel",
+      "memberSince": "Lid sinds"
     },
     "siteSettings": {
       "boardNotificationEmail": "Lidmaatschapsmeldingen naar",

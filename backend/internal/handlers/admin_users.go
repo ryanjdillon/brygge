@@ -162,6 +162,10 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		sortCol = "u.harbor_share_owner DESC, u.harbor_share_paid_on NULLS LAST, u.last_name"
 	case "-harbor_share":
 		sortCol = "u.harbor_share_owner DESC, u.harbor_share_paid_on DESC NULLS LAST, u.last_name DESC"
+	case "member_since":
+		sortCol = "u.member_since NULLS LAST, u.last_name"
+	case "-member_since":
+		sortCol = "u.member_since DESC NULLS LAST, u.last_name DESC"
 	}
 
 	// Optional ?spot=permanent|seasonal|none filter. Anything else is
@@ -246,13 +250,24 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 
 	// Optional ?status filter for account lifecycle (BRY-203). Default
 	// hides deactivated members; "deactivated" shows only them, "all"
-	// shows both. Count and list share the clause so paging stays consistent.
+	// shows both. "applicant" and "new_this_year" narrow the active set to
+	// people who have started a self-service join but not paid, and to
+	// members granted membership this calendar year (BRY-634). Count and
+	// list share the clause so paging stays consistent.
 	statusClause := " AND u.deactivated_at IS NULL"
 	switch strings.ToLower(r.URL.Query().Get("status")) {
 	case "deactivated":
 		statusClause = " AND u.deactivated_at IS NOT NULL"
 	case "all":
 		statusClause = ""
+	case "applicant":
+		statusClause = ` AND u.deactivated_at IS NULL AND EXISTS (
+			SELECT 1 FROM user_roles ar
+			 WHERE ar.user_id = u.id AND ar.club_id = u.club_id AND ar.role = 'applicant'
+		)`
+	case "new_this_year":
+		statusClause = fmt.Sprintf(" AND u.deactivated_at IS NULL AND u.member_since >= $%d::date", nextArg)
+		args = append(args, localYearStart(time.Now()))
 	}
 
 	var totalCount int
@@ -286,7 +301,8 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		        u.harbor_share_owner,
 		        to_char(u.harbor_share_paid_on, 'YYYY-MM-DD'),
 		        u.rejoin_blocked,
-		        to_char(u.membership_ends_on, 'YYYY-MM-DD')
+		        to_char(u.membership_ends_on, 'YYYY-MM-DD'),
+		        to_char(u.member_since, 'YYYY-MM-DD')
 		 FROM users u
 		 LEFT JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
 		 LEFT JOIN LATERAL (
@@ -430,12 +446,14 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		// MembershipEndsOn is set while the member has cancelled (utmeld):
 		// the bulk faktura run skips them for a period after it.
 		MembershipEndsOn *string `json:"membership_ends_on"`
+		// MemberSince is the day membership was granted; null when unknown.
+		MemberSince *string `json:"member_since"`
 	}
 
 	var users []userRow
 	for rows.Next() {
 		var u userRow
-		if err := rows.Scan(&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.FullName, &u.Phone, &u.AddressLine, &u.PostalCode, &u.City, &u.IsLocal, &u.AdminNotes, &u.CreatedAt, &u.UpdatedAt, &u.Roles, &u.SlipID, &u.SlipNumber, &u.SlipSection, &u.SlipAssignmentType, &u.Slips, &u.MembershipStatus, &u.SlipFeeStatus, &u.Boats, &u.DeactivatedAt, &u.HarborShareOwner, &u.HarborSharePaidOn, &u.RejoinBlocked, &u.MembershipEndsOn); err != nil {
+		if err := rows.Scan(&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.FullName, &u.Phone, &u.AddressLine, &u.PostalCode, &u.City, &u.IsLocal, &u.AdminNotes, &u.CreatedAt, &u.UpdatedAt, &u.Roles, &u.SlipID, &u.SlipNumber, &u.SlipSection, &u.SlipAssignmentType, &u.Slips, &u.MembershipStatus, &u.SlipFeeStatus, &u.Boats, &u.DeactivatedAt, &u.HarborShareOwner, &u.HarborSharePaidOn, &u.RejoinBlocked, &u.MembershipEndsOn, &u.MemberSince); err != nil {
 			h.log.Error().Err(err).Msg("failed to scan user row")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
@@ -458,6 +476,36 @@ func (h *AdminUsersHandler) HandleListUsers(w http.ResponseWriter, r *http.Reque
 		"limit":       limit,
 		"offset":      offset,
 	})
+}
+
+// stampMemberSince records today (server-local, as the self-service grant
+// does) as the day userID became a member when roles grants "member" and no
+// date is stored yet. Callers pass only a grant that is new, so editing an
+// existing member's other roles never invents a date for a legacy member.
+func stampMemberSince(ctx context.Context, tx pgx.Tx, clubID, userID string, roles []string) error {
+	if !slices.Contains(roles, "member") {
+		return nil
+	}
+	if _, err := tx.Exec(ctx,
+		`UPDATE users SET member_since = COALESCE(member_since, $3::date)
+		  WHERE id = $1 AND club_id = $2`,
+		userID, clubID, localToday(time.Now()),
+	); err != nil {
+		return fmt.Errorf("set member_since: %w", err)
+	}
+	return nil
+}
+
+// localYearStart is 1 January of now's year in the server's zone, the zone
+// member_since is written in.
+func localYearStart(now time.Time) string {
+	return yearStartIn(now, time.Local)
+}
+
+// yearStartIn is 1 January of the year now falls in at loc: the year turns
+// at loc's midnight, not UTC's.
+func yearStartIn(now time.Time, loc *time.Location) string {
+	return time.Date(now.In(loc).Year(), time.January, 1, 0, 0, 0, 0, loc).Format(time.DateOnly)
 }
 
 func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request) {
@@ -504,6 +552,11 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 		HarborSharePaidOn *string `json:"harbor_share_paid_on"`
 		// RejoinBlocked is the board's "can't rejoin" mark (BRY-476).
 		RejoinBlocked bool `json:"rejoin_blocked"`
+		// The lifecycle fields the member list carries too, so a member
+		// opened by link (outside the listed page or filter) shows the same.
+		DeactivatedAt    *time.Time `json:"deactivated_at,omitempty"`
+		MembershipEndsOn *string    `json:"membership_ends_on"`
+		MemberSince      *string    `json:"member_since"`
 	}
 
 	var u userDetail
@@ -527,7 +580,10 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 		        ), '[]'::jsonb),
 		        u.harbor_share_owner,
 		        to_char(u.harbor_share_paid_on, 'YYYY-MM-DD'),
-		        u.rejoin_blocked
+		        u.rejoin_blocked,
+		        u.deactivated_at,
+		        to_char(u.membership_ends_on, 'YYYY-MM-DD'),
+		        to_char(u.member_since, 'YYYY-MM-DD')
 		 FROM users u
 		 LEFT JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
 		 WHERE u.id = $1 AND u.club_id = $2 AND u.kind = 'person'
@@ -536,7 +592,8 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 	).Scan(&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.FullName,
 		&u.Phone, &u.Address, &u.PostalCd, &u.City,
 		&u.IsLocal, &u.AdminNotes, &u.CreatedAt, &u.UpdatedAt, &u.Roles, &slipsJSON,
-		&u.HarborShareOwner, &u.HarborSharePaidOn, &u.RejoinBlocked)
+		&u.HarborShareOwner, &u.HarborSharePaidOn, &u.RejoinBlocked,
+		&u.DeactivatedAt, &u.MembershipEndsOn, &u.MemberSince)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "user not found")
 		return
@@ -749,6 +806,14 @@ func (h *AdminUsersHandler) HandleUpdateUserRoles(w http.ResponseWriter, r *http
 		)
 		if err != nil {
 			h.log.Error().Err(err).Str("role", role).Msg("failed to insert role")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+	}
+
+	if !slices.Contains(oldRoles, "member") {
+		if err := stampMemberSince(ctx, tx, clubID, userID, req.Roles); err != nil {
+			h.log.Error().Err(err).Msg("failed to set member_since")
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
@@ -1322,6 +1387,10 @@ func (h *AdminUsersHandler) createUser(ctx context.Context, clubID, actorID stri
 		); err != nil {
 			return "", fmt.Errorf("insert role %s: %w", role, err)
 		}
+	}
+
+	if err := stampMemberSince(ctx, tx, clubID, id, req.Roles); err != nil {
+		return "", err
 	}
 
 	auditData, _ := json.Marshal(map[string]any{"roles": req.Roles})

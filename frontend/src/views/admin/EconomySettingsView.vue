@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useFreshTotp } from '@/composables/useFreshTotp'
 import { useCan } from '@/composables/useCan'
+import { useAuthStore } from '@/stores/auth'
 import FileInput from '@/components/ui/form/FileInput.vue'
 import Tabs from '@/components/ui/Tabs.vue'
 import BankAccountsPanel from '@/components/admin/BankAccountsPanel.vue'
@@ -60,6 +62,87 @@ const portalSaving = ref(false)
 const portalSaved = ref(false)
 const portalError = ref<string | null>(null)
 
+// The price item a self-service join is charged from (BRY-634); '' closes
+// joining. The server takes only an active, flat item of this club, so those
+// are the choices, the membership category first. joinOpen and joinMissing
+// are the server's read of whether the join form takes joins.
+type PriceItemOption = {
+  id: string
+  name: string
+  category: string
+  amount: number
+  is_active: boolean
+  pricing_kind?: string
+}
+const joinPriceItemId = ref('')
+const joinOpen = ref(false)
+const joinMissing = ref<string[]>([])
+const priceItems = ref<PriceItemOption[]>([])
+// Whether the price list loaded: until it has, a stored item cannot be
+// judged, so it is not marked unusable on a failed load.
+const priceItemsState = ref<'loading' | 'loaded' | 'failed'>('loading')
+const joinSaving = ref(false)
+const joinSaved = ref(false)
+const joinError = ref<string | null>(null)
+
+const joinPriceOptions = computed(() =>
+  priceItems.value
+    .filter((i) => i.is_active && (i.pricing_kind ?? 'flat') === 'flat')
+    .sort((a, b) => Number(b.category === 'membership') - Number(a.category === 'membership')),
+)
+// A stored item that is no longer a valid choice still shows, marked, so
+// the select never silently reads as another value.
+const joinPriceUnusable = computed(() => {
+  const id = joinPriceItemId.value
+  if (!id || priceItemsState.value !== 'loaded' || joinPriceOptions.value.some((i) => i.id === id)) return null
+  const item = priceItems.value.find((i) => i.id === id)
+  return { id, name: item?.name ?? id }
+})
+// The stored item while the list could not be read: kept selectable under a
+// neutral label so saving another field never clears it.
+const joinPriceUnknown = computed(() =>
+  priceItemsState.value === 'failed' && joinPriceItemId.value ? joinPriceItemId.value : null,
+)
+// Only an admin can publish legal documents (the GDPR page is admin only).
+const auth = useAuthStore()
+const canPublishDocuments = computed(() => auth.hasRole('admin'))
+const JOIN_PRICE_CODES: Record<string, string> = {
+  club: 'admin.economySettings.joinMissingClub',
+  price_item_unset: 'admin.economySettings.joinMissingPriceUnset',
+  price_item_other_club: 'admin.economySettings.joinMissingPriceOtherClub',
+  price_item_inactive: 'admin.economySettings.joinMissingPriceInactive',
+  price_item_not_flat: 'admin.economySettings.joinMissingPriceNotFlat',
+}
+function joinMissingLabel(code: string): string {
+  const key = JOIN_PRICE_CODES[code]
+  if (key) return t(key)
+  // Anything else is a legal document type not yet published.
+  return t('admin.economySettings.joinMissingDocument', { doc: t(`gdpr.consentType.${code}`) })
+}
+const joinNeedsPrice = computed(() => joinMissing.value.some((c) => c.startsWith('price_item_')))
+const joinNeedsDocuments = computed(() => joinMissing.value.some((c) => c !== 'club' && !JOIN_PRICE_CODES[c]))
+
+function applyJoinState(body: { join_price_item_id?: string; join_open?: boolean; join_missing?: string[] }) {
+  joinPriceItemId.value = body.join_price_item_id || ''
+  joinOpen.value = !!body.join_open
+  joinMissing.value = Array.isArray(body.join_missing) ? body.join_missing : []
+}
+
+async function loadPriceItems() {
+  priceItemsState.value = 'loading'
+  try {
+    const res = await fetch('/api/v1/admin/pricing', { credentials: 'include' })
+    if (!res.ok) throw new Error(String(res.status))
+    const body = await res.json()
+    if (!Array.isArray(body.items)) throw new Error('unexpected price list')
+    priceItems.value = body.items
+    priceItemsState.value = 'loaded'
+  } catch {
+    priceItems.value = []
+    priceItemsState.value = 'failed'
+  }
+}
+
 async function load() {
   loading.value = true
   error.value = null
@@ -78,6 +161,7 @@ async function load() {
     vippsAutoAssignTieCategory.value = body.vipps_auto_assign_tie_category || ''
     bankAutoAssign.value = !!body.bank_auto_assign
     vippsPortalUrl.value = body.vipps_portal_url || ''
+    applyJoinState(body)
     fakturaLogoCacheBust.value = Date.now()
   } catch (e) {
     error.value = (e as Error).message
@@ -197,6 +281,38 @@ async function saveVippsPortalUrl() {
   }
 }
 
+async function saveJoinPrice() {
+  if (!(await ensureFreshTotp())) return
+  joinSaving.value = true
+  joinSaved.value = false
+  joinError.value = null
+  error.value = null
+  try {
+    const res = await totpAwareFetch('/api/v1/admin/settings/site', {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ join_price_item_id: joinPriceItemId.value }),
+    })
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '')
+      if (res.status === 400 && errorCode(txt) === 'invalid_join_price_item') {
+        joinError.value = t('admin.economySettings.joinPriceInvalid')
+        return
+      }
+      throw new Error(`${res.status} ${txt}`)
+    }
+    joinSaved.value = true
+    // Re-read the join status the server derives from the new setting.
+    const fresh = await fetch('/api/v1/admin/settings/site', { credentials: 'include' })
+    if (fresh.ok) applyJoinState(await fresh.json())
+  } catch (e) {
+    error.value = (e as Error).message
+  } finally {
+    joinSaving.value = false
+  }
+}
+
 // The typed error code of a refused write, or '' when the body has none.
 function errorCode(body: string): string {
   try {
@@ -259,7 +375,10 @@ async function deleteFakturaLogo() {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  load()
+  loadPriceItems()
+})
 
 // Board members without the money role read these settings; a disabled
 // fieldset turns every control below read-only (BRY-372).
@@ -335,6 +454,81 @@ const canEdit = can('money')
           <span v-if="kidSaved" class="text-sm font-medium text-green-600">
             {{ t('common.saved') }}
           </span>
+        </div>
+      </fieldset>
+
+      <fieldset class="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-3" data-testid="join-price">
+        <legend class="px-1 text-xs font-semibold text-slate-700">
+          {{ t('admin.economySettings.joinPriceLabel') }}
+        </legend>
+        <p id="join-price-hint" class="text-xs text-slate-600">{{ t('admin.economySettings.joinPriceHint') }}</p>
+        <div class="flex flex-col gap-3 md:flex-row md:items-center">
+          <select
+            v-model="joinPriceItemId"
+            :aria-label="t('admin.economySettings.joinPriceLabel')"
+            aria-describedby="join-price-hint"
+            data-testid="join-price-select"
+            class="min-h-[44px] w-full rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 md:min-h-0 md:w-auto md:max-w-md"
+            @change="joinSaved = false; joinError = null"
+          >
+            <option value="">{{ t('admin.economySettings.joinPriceNone') }}</option>
+            <option v-if="joinPriceUnknown" :value="joinPriceUnknown">
+              {{ t('admin.economySettings.joinPriceCurrent') }}
+            </option>
+            <option v-if="joinPriceUnusable" :value="joinPriceUnusable.id">
+              {{ t('admin.economySettings.joinPriceUnusable', { name: joinPriceUnusable.name }) }}
+            </option>
+            <option v-for="i in joinPriceOptions" :key="i.id" :value="i.id">
+              {{ i.name }} ({{ categoryLabel(i.category) }}, {{ i.amount }} kr)
+            </option>
+          </select>
+          <button
+            type="button"
+            class="min-h-[44px] rounded-md bg-brand-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50 md:min-h-0"
+            :disabled="joinSaving"
+            data-testid="join-price-save"
+            @click="saveJoinPrice"
+          >
+            {{ t('common.save') }}
+          </button>
+          <span v-if="joinSaved" class="text-sm font-medium text-green-600">
+            {{ t('common.saved') }}
+          </span>
+        </div>
+        <p v-if="priceItemsState === 'failed'" class="text-xs text-slate-600" data-testid="join-price-list-failed">
+          {{ t('admin.economySettings.joinPriceListFailed') }}
+        </p>
+        <p v-if="joinError" role="alert" class="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{{ joinError }}</p>
+        <div
+          v-if="!loading && joinOpen"
+          class="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800"
+          data-testid="join-status-open"
+        >
+          {{ t('admin.economySettings.joinStatusOpen') }}
+        </div>
+        <div
+          v-else-if="!loading"
+          class="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900"
+          role="status"
+          data-testid="join-status-closed"
+        >
+          <p class="font-medium">{{ t('admin.economySettings.joinStatusClosed') }}</p>
+          <ul class="mt-1 list-disc space-y-0.5 pl-5">
+            <li v-for="code in joinMissing" :key="code">{{ joinMissingLabel(code) }}</li>
+          </ul>
+          <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+            <RouterLink
+              v-if="joinNeedsPrice"
+              to="/admin/pricing"
+              class="inline-flex min-h-[44px] items-center font-medium text-amber-900 underline md:min-h-0"
+            >{{ t('admin.economySettings.joinFixPrices') }}</RouterLink>
+            <RouterLink
+              v-if="joinNeedsDocuments && canPublishDocuments"
+              to="/admin/gdpr"
+              class="inline-flex min-h-[44px] items-center font-medium text-amber-900 underline md:min-h-0"
+            >{{ t('admin.economySettings.joinFixDocuments') }}</RouterLink>
+            <span v-else-if="joinNeedsDocuments" data-testid="join-ask-admin">{{ t('admin.economySettings.joinAskAdmin') }}</span>
+          </div>
         </div>
       </fieldset>
 

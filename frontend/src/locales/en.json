@@ -1448,7 +1448,8 @@
       "notes": "Notes",
       "membership": "Membership",
       "slipFee": "Slip rental",
-      "harborShare": "Harbor share"
+      "harborShare": "Harbor share",
+      "memberSince": "Member since"
     },
     "invoiceStatus": {
       "draft": "Draft",
@@ -1500,7 +1501,8 @@
         "chair": "Chair",
         "vice_chair": "Vice-chair",
         "deputy": "Deputy",
-        "secretary": "Secretary"
+        "secretary": "Secretary",
+        "applicant": "Applicant"
       },
       "phone": "Phone",
       "isLocal": "Local",
@@ -1617,7 +1619,12 @@
         "alertComplaint": "The member marked email from the club as spam {date}. Do not send more email to this address; contact the member another way.",
         "alertSuppressed": "Email to this address is not sent because it rejected email before (blocked {date}). Get a current address from the member."
       },
-      "cancelledBadge": "Cancelled"
+      "cancelledBadge": "Cancelled",
+      "statusApplicant": "Applicants",
+      "statusNewThisYear": "New this year: became a member this year",
+      "rejoinBlockedBadge": "Can’t rejoin",
+      "rejoinBlocked": "Can’t rejoin",
+      "rejoinBlockedHint": "Stops self-service joining. The person is told to contact the board."
     },
     "waitingList": {
       "loadError": "Could not load the waiting list",
@@ -2214,7 +2221,25 @@
       "bankAutoAssignHint": "After each bank upload and Synk bank, books a payment without KID only when the payer's name matches exactly one member who has exactly one open faktura for the same amount. Everything else stays in Tildel. Every booking can be undone. Separate from the Vipps setting.",
       "vippsPortalUrlLabel": "Vipps portal address",
       "vippsPortalUrlHint": "Paste the address you see after logging in to portal.vippsmobilepay.com, e.g. https://portal.vippsmobilepay.com/123456/home. The number in it belongs to the portal; it is not the merchant serial number. Shown as a link on the Payments page while Vipps takes live payments. Leave empty for no link.",
-      "vippsPortalUrlInvalid": "That is not a Vipps portal address. It must start with https://portal.vippsmobilepay.com/ and have no username, port or #fragment."
+      "vippsPortalUrlInvalid": "That is not a Vipps portal address. It must start with https://portal.vippsmobilepay.com/ and have no username, port or #fragment.",
+      "joinPriceLabel": "Joining price",
+      "joinPriceHint": "The price a new person pays to join on the website. Only active prices with a fixed amount can be chosen.",
+      "joinPriceNone": "None (joining closed)",
+      "joinPriceUnusable": "{name} (not usable)",
+      "joinPriceInvalid": "Choose an active price with a fixed amount from this club.",
+      "joinStatusOpen": "Joining is open",
+      "joinStatusClosed": "Joining is closed. Missing:",
+      "joinMissingPriceUnset": "No joining price is chosen",
+      "joinMissingPriceOtherClub": "The joining price belongs to another club",
+      "joinMissingPriceInactive": "The joining price is archived",
+      "joinMissingPriceNotFlat": "The joining price has no fixed amount",
+      "joinMissingDocument": "{doc} is not published",
+      "joinMissingClub": "The club is not set up",
+      "joinFixPrices": "Go to prices",
+      "joinFixDocuments": "Go to legal documents",
+      "joinPriceListFailed": "Could not load the price list.",
+      "joinPriceCurrent": "Current joining price",
+      "joinAskAdmin": "Ask an administrator to publish the documents."
     },
     "bankAccounts": {
       "title": "Bank accounts",

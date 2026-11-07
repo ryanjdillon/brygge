@@ -3029,6 +3029,11 @@ export interface components {
             last_name: string;
             /**
              * Format: date
+             * @description Date membership was granted; null when unknown
+             */
+            member_since: string | null;
+            /**
+             * Format: date
              * @description Last day of membership when the member has cancelled (utmeld); null otherwise
              */
             membership_ends_on: string | null;
@@ -8472,7 +8477,7 @@ export interface operations {
                 limit?: number;
                 /** @description Number of items to skip */
                 offset?: number;
-                /** @description Sort key, '-' prefix for descending: first_name, last_name (default), email, phone, created_at, slip, membership, slip_fee, harbor_share */
+                /** @description Sort key, '-' prefix for descending: first_name, last_name (default), email, phone, created_at, slip, membership, slip_fee, harbor_share, member_since */
                 sort?: string;
                 /** @description Members with an active slip of this type, or with none */
                 spot?: "permanent" | "seasonal" | "none";
@@ -8480,8 +8485,8 @@ export interface operations {
                 dock?: string;
                 /** @description Members with or without admin notes */
                 notes?: "with" | "without";
-                /** @description Account lifecycle; omitted hides deactivated members */
-                status?: "deactivated" | "all";
+                /** @description Account lifecycle; omitted hides deactivated members. applicant: active people holding the applicant role (a self-service join not yet paid); new_this_year: active members whose member_since falls in the current calendar year */
+                status?: "deactivated" | "all" | "applicant" | "new_this_year";
                 /** @description Space-separated tokens, each matched against first name, last name and email */
                 q?: string;
                 /** @description Harbor share owners or non-owners; combines with spot (owner + none = owners without an active slip) */

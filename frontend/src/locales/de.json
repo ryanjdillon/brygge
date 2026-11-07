@@ -894,7 +894,8 @@
         "chair": "Vorsitzender",
         "vice_chair": "Stellv. Vorsitzender",
         "deputy": "Stellvertreter",
-        "secretary": "Schriftführer"
+        "secretary": "Schriftführer",
+        "applicant": "Antragsteller"
       },
       "phone": "Telefon",
       "isLocal": "Lokal",
@@ -981,7 +982,12 @@
         "alertComplaint": "Das Mitglied hat E-Mails des Vereins am {date} als Spam markiert. Senden Sie keine weiteren E-Mails an diese Adresse; kontaktieren Sie das Mitglied auf anderem Weg.",
         "alertSuppressed": "An diese Adresse werden keine E-Mails gesendet, weil sie früher E-Mails abgewiesen hat (blockiert am {date}). Fragen Sie das Mitglied nach einer aktuellen Adresse."
       },
-      "cancelledBadge": "Gekündigt"
+      "cancelledBadge": "Gekündigt",
+      "statusApplicant": "Antragsteller",
+      "statusNewThisYear": "Neu dieses Jahr: in diesem Jahr Mitglied geworden",
+      "rejoinBlockedBadge": "Kein Wiedereintritt",
+      "rejoinBlocked": "Kein Wiedereintritt",
+      "rejoinBlockedHint": "Verhindert den Selbstbeitritt. Die Person wird gebeten, sich an den Vorstand zu wenden."
     },
     "waitingList": {
       "loadError": "Warteliste konnte nicht geladen werden",
@@ -1326,7 +1332,25 @@
       "bankAutoAssignHint": "Bucht nach jedem Bank-Upload und Synk bank eine Zahlung ohne KID nur, wenn der Name des Zahlers genau einem Mitglied entspricht, das genau eine offene Rechnung über denselben Betrag hat. Alles andere bleibt in Tildel. Jede Buchung kann rückgängig gemacht werden. Unabhängig von der Vipps-Einstellung.",
       "vippsPortalUrlLabel": "Adresse des Vipps-Portals",
       "vippsPortalUrlHint": "Fügen Sie die Adresse ein, die Sie nach der Anmeldung bei portal.vippsmobilepay.com sehen, z. B. https://portal.vippsmobilepay.com/123456/home. Die Nummer darin gehört zum Portal und ist nicht die Händlernummer (MSN). Wird auf der Seite „Zahlungen“ als Link angezeigt, solange Vipps echte Zahlungen annimmt. Leer lassen, wenn kein Link angezeigt werden soll.",
-      "vippsPortalUrlInvalid": "Das ist keine Adresse des Vipps-Portals. Sie muss mit https://portal.vippsmobilepay.com/ beginnen und darf keinen Benutzernamen, keinen Port und kein #Fragment enthalten."
+      "vippsPortalUrlInvalid": "Das ist keine Adresse des Vipps-Portals. Sie muss mit https://portal.vippsmobilepay.com/ beginnen und darf keinen Benutzernamen, keinen Port und kein #Fragment enthalten.",
+      "joinPriceLabel": "Beitrittspreis",
+      "joinPriceHint": "Der Preis, den eine neue Person für den Beitritt auf der Website zahlt. Nur aktive Preise mit festem Betrag sind wählbar.",
+      "joinPriceNone": "Keiner (Beitritt geschlossen)",
+      "joinPriceUnusable": "{name} (nicht verwendbar)",
+      "joinPriceInvalid": "Wähle einen aktiven Preis mit festem Betrag aus diesem Verein.",
+      "joinStatusOpen": "Beitritt ist geöffnet",
+      "joinStatusClosed": "Beitritt ist geschlossen. Es fehlt:",
+      "joinMissingPriceUnset": "Kein Beitrittspreis gewählt",
+      "joinMissingPriceOtherClub": "Der Beitrittspreis gehört zu einem anderen Verein",
+      "joinMissingPriceInactive": "Der Beitrittspreis ist archiviert",
+      "joinMissingPriceNotFlat": "Der Beitrittspreis hat keinen festen Betrag",
+      "joinMissingDocument": "{doc} ist nicht veröffentlicht",
+      "joinMissingClub": "Der Verein ist nicht eingerichtet",
+      "joinFixPrices": "Zu den Preisen",
+      "joinFixDocuments": "Zu den rechtlichen Dokumenten",
+      "joinPriceListFailed": "Preisliste konnte nicht geladen werden.",
+      "joinPriceCurrent": "Aktueller Beitrittspreis",
+      "joinAskAdmin": "Bitte einen Administrator, die Dokumente zu veröffentlichen."
     },
     "faktura": {
       "draft": {
@@ -1898,7 +1922,8 @@
       }
     },
     "columns": {
-      "harborShare": "Hafenanteil"
+      "harborShare": "Hafenanteil",
+      "memberSince": "Mitglied seit"
     },
     "siteSettings": {
       "boardNotificationEmail": "Mitgliedschaftsmeldungen an",

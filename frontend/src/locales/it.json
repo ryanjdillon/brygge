@@ -894,7 +894,8 @@
         "chair": "Presidente",
         "vice_chair": "Vicepresidente",
         "deputy": "Sostituto",
-        "secretary": "Segretario"
+        "secretary": "Segretario",
+        "applicant": "Richiedente"
       },
       "phone": "Telefono",
       "isLocal": "Locale",
@@ -981,7 +982,12 @@
         "alertComplaint": "Il socio ha segnalato le email del club come spam il {date}. Non inviare altre email a questo indirizzo; contatta il socio in un altro modo.",
         "alertSuppressed": "Le email a questo indirizzo non vengono inviate perché in passato ha respinto delle email (bloccato il {date}). Chiedi al socio un indirizzo aggiornato."
       },
-      "cancelledBadge": "Disdetto"
+      "cancelledBadge": "Disdetto",
+      "statusApplicant": "Richiedenti",
+      "statusNewThisYear": "Nuovi quest’anno: diventati soci quest’anno",
+      "rejoinBlockedBadge": "Reiscrizione bloccata",
+      "rejoinBlocked": "Reiscrizione bloccata",
+      "rejoinBlockedHint": "Blocca l’iscrizione autonoma. Alla persona viene detto di contattare il consiglio."
     },
     "waitingList": {
       "loadError": "Impossibile caricare la lista d'attesa",
@@ -1326,7 +1332,25 @@
       "bankAutoAssignHint": "Dopo ogni caricamento bancario e Synk bank, registra un pagamento senza KID solo se il nome del pagatore corrisponde esattamente a un socio con una sola fattura aperta dello stesso importo. Il resto rimane in Tildel. Ogni registrazione può essere annullata. Indipendente dall'impostazione Vipps.",
       "vippsPortalUrlLabel": "Indirizzo del portale Vipps",
       "vippsPortalUrlHint": "Incolla l'indirizzo che vedi dopo aver effettuato l'accesso a portal.vippsmobilepay.com, ad esempio https://portal.vippsmobilepay.com/123456/home. Il numero al suo interno appartiene al portale e non è il numero del commerciante (MSN). Mostrato come link nella pagina Pagamenti finché Vipps accetta pagamenti reali. Lascia vuoto per non mostrare alcun link.",
-      "vippsPortalUrlInvalid": "Questo non è un indirizzo del portale Vipps. Deve iniziare con https://portal.vippsmobilepay.com/ e non può contenere nome utente, porta o #frammento."
+      "vippsPortalUrlInvalid": "Questo non è un indirizzo del portale Vipps. Deve iniziare con https://portal.vippsmobilepay.com/ e non può contenere nome utente, porta o #frammento.",
+      "joinPriceLabel": "Quota di iscrizione",
+      "joinPriceHint": "Il prezzo che una nuova persona paga per iscriversi sul sito. Si possono scegliere solo prezzi attivi con importo fisso.",
+      "joinPriceNone": "Nessuno (iscrizioni chiuse)",
+      "joinPriceUnusable": "{name} (non utilizzabile)",
+      "joinPriceInvalid": "Scegli un prezzo attivo con importo fisso di questo club.",
+      "joinStatusOpen": "Le iscrizioni sono aperte",
+      "joinStatusClosed": "Le iscrizioni sono chiuse. Manca:",
+      "joinMissingPriceUnset": "Nessuna quota di iscrizione scelta",
+      "joinMissingPriceOtherClub": "La quota di iscrizione appartiene a un altro club",
+      "joinMissingPriceInactive": "La quota di iscrizione è archiviata",
+      "joinMissingPriceNotFlat": "La quota di iscrizione non ha un importo fisso",
+      "joinMissingDocument": "{doc} non è pubblicato",
+      "joinMissingClub": "Il club non è configurato",
+      "joinFixPrices": "Vai ai prezzi",
+      "joinFixDocuments": "Vai ai documenti legali",
+      "joinPriceListFailed": "Impossibile caricare il listino prezzi.",
+      "joinPriceCurrent": "Quota di iscrizione attuale",
+      "joinAskAdmin": "Chiedi a un amministratore di pubblicare i documenti."
     },
     "faktura": {
       "draft": {
@@ -1898,7 +1922,8 @@
       }
     },
     "columns": {
-      "harborShare": "Quota del porto"
+      "harborShare": "Quota del porto",
+      "memberSince": "Socio dal"
     },
     "siteSettings": {
       "boardNotificationEmail": "Avvisi di adesione a",

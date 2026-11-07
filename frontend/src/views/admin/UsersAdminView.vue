@@ -62,7 +62,7 @@ async function copyUserPayLink(userId: string) {
   }
 }
 
-type SortField = 'first_name' | 'last_name' | 'email' | 'phone' | 'slip' | 'membership' | 'slip_fee' | 'harbor_share'
+type SortField = 'first_name' | 'last_name' | 'email' | 'phone' | 'slip' | 'membership' | 'slip_fee' | 'harbor_share' | 'member_since'
 const sortField = ref<SortField>('last_name')
 const sortDir = ref<'asc' | 'desc'>('asc')
 const sortParam = computed(() => (sortDir.value === 'desc' ? '-' : '') + sortField.value)
@@ -71,7 +71,9 @@ const spotFilter = ref<SpotFilterValue>('')
 const dockFilter = ref<string>('')
 const notesFilter = ref<NotesFilterValue>('')
 const harborShareFilter = ref<HarborShareFilterValue>('')
-const statusFilter = ref<'' | 'deactivated' | 'all'>('')
+// Account lifecycle, plus two views of self-service joining (BRY-634):
+// applicants who have not paid yet, and members who joined this year.
+const statusFilter = ref<'' | 'deactivated' | 'all' | 'applicant' | 'new_this_year'>('')
 
 // Member-table column visibility. Persisted per-browser in localStorage
 // so a club admin's preferred view survives reloads. The two flagged
@@ -87,6 +89,7 @@ const ALL_COLUMNS: ColumnDef[] = [
   { key: 'membership', labelKey: 'admin.columns.membership' },
   { key: 'slip_fee',   labelKey: 'admin.columns.slipFee' },
   { key: 'harbor_share', labelKey: 'admin.columns.harborShare' },
+  { key: 'member_since', labelKey: 'admin.columns.memberSince' },
   { key: 'notes',      labelKey: 'admin.columns.notes' },
   { key: 'roles',      labelKey: 'admin.users.roles' },
 ]
@@ -617,16 +620,36 @@ function openDetail(user: User) {
   loadUserBoats(user.id)
 }
 
-// Deep-link: /admin/users?user=<id> (e.g. from a faktura row) opens that
-// user's detail panel once the list has loaded.
+// Deep-link: /admin/users?user=<id> (e.g. from a faktura row or a board
+// notice email) opens that user's detail panel once the list has loaded.
+// A member outside the listed page or filter (a deactivated member, or one
+// past the first page) is fetched on its own. Following a second link while
+// the page is open switches to that member.
 const route = useRoute()
+let deepLinkTarget = ''
+let deepLinkFetched = false
 watch(
-  users,
-  (list) => {
-    const target = route.query.user
-    if (typeof target !== 'string' || !target || detailUser.value) return
+  [users, isLoading, () => route.query.user],
+  async ([list, loading, query]) => {
+    const target = typeof query === 'string' ? query : ''
+    if (target !== deepLinkTarget) {
+      deepLinkTarget = target
+      deepLinkFetched = false
+      if (target && detailUser.value && detailUser.value.id !== target) closeDetail()
+    }
+    if (!target || detailUser.value || loading) return
     const u = list.find((x) => x.id === target)
-    if (u) openDetail(u)
+    if (u) {
+      openDetail(u)
+      return
+    }
+    if (deepLinkFetched) return
+    deepLinkFetched = true
+    const result = await client.GET('/api/v1/admin/users/{userID}', {
+      params: { path: { userID: target } },
+    })
+    const fetched = (result.data as unknown as { user?: User } | undefined)?.user
+    if (result.response.ok && fetched && !detailUser.value) openDetail(fetched)
   },
   { immediate: true },
 )
@@ -693,6 +716,35 @@ async function openEditDirect(user: User) {
   if (!canManage(user)) return
   openDetail(user)
   await startDetailEdit()
+}
+
+// The board's "can't rejoin" mark (BRY-476) is its own action rather than a
+// field of the edit form: it is fresh-TOTP gated and audited on its own, so
+// the step-up is asked for on the click and the PATCH carries only the mark.
+// The box only changes once the server has stored it.
+const rejoinSaving = ref(false)
+async function onRejoinBlockedChange(event: Event) {
+  const box = event.target as HTMLInputElement
+  const blocked = box.checked
+  box.checked = !blocked
+  const u = detailUser.value
+  if (!u || !canManage(u)) return
+  if (!(await ensureFreshTotp())) return
+  rejoinSaving.value = true
+  try {
+    await unwrap(await client.PATCH('/api/v1/admin/users/{userID}', {
+      params: { path: { userID: u.id } },
+      body: { rejoin_blocked: blocked },
+    }))
+    if (detailUser.value?.id === u.id) detailUser.value = { ...detailUser.value, rejoin_blocked: blocked }
+    queryClient.invalidateQueries({ queryKey: ['admin', 'users'] })
+  } catch (err) {
+    toast.error(err instanceof ApiError && err.code
+      ? t(userLifecycleErrorKey(err.code))
+      : t('admin.users.updateError'))
+  } finally {
+    rejoinSaving.value = false
+  }
 }
 
 // The paid date needs an owner (DB CHECK), so unticking ownership clears it.
@@ -996,6 +1048,8 @@ function harborSharesImported() {
           <option value="">{{ t('admin.users.statusActive') }}</option>
           <option value="deactivated">{{ t('admin.users.statusDeactivated') }}</option>
           <option value="all">{{ t('admin.users.statusAll') }}</option>
+          <option value="applicant">{{ t('admin.users.statusApplicant') }}</option>
+          <option value="new_this_year">{{ t('admin.users.statusNewThisYear') }}</option>
         </select>
         <ColumnSelector
           :columns="ALL_COLUMNS"
@@ -1094,6 +1148,7 @@ function harborSharesImported() {
             <SortableTh v-if="visible.has('membership')" :active="sortField === 'membership'" :dir="sortDir" @click="setSort('membership')">{{ t('admin.columns.membership') }}</SortableTh>
             <SortableTh v-if="visible.has('slip_fee')" :active="sortField === 'slip_fee'" :dir="sortDir" @click="setSort('slip_fee')">{{ t('admin.columns.slipFee') }}</SortableTh>
             <SortableTh v-if="visible.has('harbor_share')" :active="sortField === 'harbor_share'" :dir="sortDir" @click="setSort('harbor_share')">{{ t('admin.columns.harborShare') }}</SortableTh>
+            <SortableTh v-if="visible.has('member_since')" :active="sortField === 'member_since'" :dir="sortDir" @click="setSort('member_since')">{{ t('admin.columns.memberSince') }}</SortableTh>
             <th v-if="visible.has('notes')" scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.columns.notes') }}</th>
             <th v-if="visible.has('roles')" scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('admin.users.roles') }}</th>
             <th scope="col" class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">{{ t('common.actions') }}</th>
@@ -1116,17 +1171,26 @@ function harborSharesImported() {
               />
             </td>
             <td class="whitespace-nowrap px-3 py-3 text-right text-xs text-gray-400 tabular-nums">{{ offset + index + 1 }}</td>
-            <td v-if="visible.has('first_name')" class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
-              {{ user.first_name || formatName(user) }}
+            <td v-if="visible.has('first_name')" class="px-4 py-3 text-sm font-medium text-gray-900">
+              <span class="whitespace-nowrap">
+                {{ user.first_name || formatName(user) }}
+                <span
+                  v-if="user.deactivated_at"
+                  class="ml-1 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600"
+                >{{ t('admin.users.deactivatedBadge') }}</span>
+                <span
+                  v-if="user.membership_ends_on && !user.deactivated_at"
+                  class="ml-1 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+                  data-testid="cancelled-badge"
+                >{{ t('admin.users.cancelledBadge') }} {{ formatDate(user.membership_ends_on, locale) }}</span>
+              </span>
+              <!-- Its own line, wrapping inside a capped width, so the long
+                   label never widens the row on a phone. -->
               <span
-                v-if="user.deactivated_at"
-                class="ml-1 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600"
-              >{{ t('admin.users.deactivatedBadge') }}</span>
-              <span
-                v-if="user.membership_ends_on && !user.deactivated_at"
-                class="ml-1 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
-                data-testid="cancelled-badge"
-              >{{ t('admin.users.cancelledBadge') }} {{ formatDate(user.membership_ends_on, locale) }}</span>
+                v-if="user.rejoin_blocked"
+                class="mt-1 block w-fit max-w-[10rem] rounded-md bg-red-100 px-2 py-0.5 text-xs font-medium leading-snug text-red-800"
+                data-testid="rejoin-blocked-badge"
+              >{{ t('admin.users.rejoinBlockedBadge') }}</span>
             </td>
             <td v-if="visible.has('last_name')" class="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{{ user.last_name }}</td>
             <td v-if="visible.has('email')" class="whitespace-nowrap px-4 py-3 text-sm text-gray-500">
@@ -1188,6 +1252,9 @@ function harborSharesImported() {
             </td>
             <td v-if="visible.has('harbor_share')" class="whitespace-nowrap px-4 py-3 text-sm text-gray-700">
               {{ harborShareLabel(user) || '—' }}
+            </td>
+            <td v-if="visible.has('member_since')" class="whitespace-nowrap px-4 py-3 text-sm text-gray-700" data-testid="member-since-cell">
+              {{ user.member_since ? formatDate(user.member_since, locale) : '—' }}
             </td>
             <td v-if="visible.has('notes')" class="px-4 py-3 text-sm text-gray-700">
               <span
@@ -1323,6 +1390,8 @@ function harborSharesImported() {
             <dd class="col-span-2 text-gray-900">{{ detailUser.is_local ? t('common.yes') : t('common.no') }}</dd>
             <dt class="text-xs font-medium text-gray-500">{{ t('admin.columns.harborShare') }}</dt>
             <dd class="col-span-2 text-gray-900">{{ harborShareLabel(detailUser) || t('common.no') }}</dd>
+            <dt class="text-xs font-medium text-gray-500">{{ t('admin.columns.memberSince') }}</dt>
+            <dd class="col-span-2 text-gray-900" data-testid="detail-member-since">{{ detailUser.member_since ? formatDate(detailUser.member_since, locale) : '—' }}</dd>
             <template v-if="detailUser.admin_notes">
               <dt class="text-xs font-medium text-gray-500">{{ t('admin.users.adminNotes') }}</dt>
               <dd class="col-span-2 whitespace-pre-wrap rounded-md bg-amber-50 px-2 py-1 text-gray-900">{{ detailUser.admin_notes }}</dd>
@@ -1351,6 +1420,28 @@ function harborSharesImported() {
               <span v-if="!detailUser.roles?.length" class="text-gray-500">—</span>
             </dd>
           </dl>
+
+          <!-- Shown for former members, where it applies, and whenever the
+               mark is set so it can always be cleared. -->
+          <div
+            v-if="canManage(detailUser) && (detailUser.deactivated_at || detailUser.rejoin_blocked)"
+            class="mt-3 rounded-md border border-gray-200 bg-gray-50 px-3 py-2"
+            data-testid="rejoin-blocked-control"
+          >
+            <label class="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-medium text-gray-800 md:min-h-0">
+              <input
+                type="checkbox"
+                class="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-1 focus:ring-brand-500"
+                :checked="!!detailUser.rejoin_blocked"
+                :disabled="rejoinSaving"
+                aria-describedby="rejoin-blocked-hint"
+                data-testid="rejoin-blocked-checkbox"
+                @change="onRejoinBlockedChange"
+              />
+              {{ t('admin.users.rejoinBlocked') }}
+            </label>
+            <p id="rejoin-blocked-hint" class="mt-1 text-xs text-gray-600">{{ t('admin.users.rejoinBlockedHint') }}</p>
+          </div>
 
           <!-- Boats (read-only) -->
           <div class="mt-4">

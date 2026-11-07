@@ -885,6 +885,7 @@ type AdminUser struct {
 	HarborSharePaidOn  *string               `json:"harbor_share_paid_on" format:"date" doc:"Date the harbor share was paid (YYYY-MM-DD); null when not an owner or the date is unknown"`
 	RejoinBlocked      bool                  `json:"rejoin_blocked" doc:"The board's 'can't rejoin' mark: the self-service join form points this address to the board instead"`
 	MembershipEndsOn   *string               `json:"membership_ends_on" format:"date" doc:"Last day of membership when the member has cancelled (utmeld); null otherwise"`
+	MemberSince        *string               `json:"member_since" format:"date" doc:"Date membership was granted; null when unknown"`
 }
 
 // AdminEmailBounce is a member's last hard delivery outcome to their
@@ -905,11 +906,11 @@ type AdminEmailBouncesResponse struct {
 type AdminUsersListParams struct {
 	Limit       int    `query:"limit" minimum:"1" maximum:"500" default:"100" doc:"Items per page"`
 	Offset      int    `query:"offset" minimum:"0" default:"0" doc:"Number of items to skip"`
-	Sort        string `query:"sort" doc:"Sort key, '-' prefix for descending: first_name, last_name (default), email, phone, created_at, slip, membership, slip_fee, harbor_share"`
+	Sort        string `query:"sort" doc:"Sort key, '-' prefix for descending: first_name, last_name (default), email, phone, created_at, slip, membership, slip_fee, harbor_share, member_since"`
 	Spot        string `query:"spot" enum:"permanent,seasonal,none" doc:"Members with an active slip of this type, or with none"`
 	Dock        string `query:"dock" doc:"Members with an active slip in this section"`
 	Notes       string `query:"notes" enum:"with,without" doc:"Members with or without admin notes"`
-	Status      string `query:"status" enum:"deactivated,all" doc:"Account lifecycle; omitted hides deactivated members"`
+	Status      string `query:"status" enum:"deactivated,all,applicant,new_this_year" doc:"Account lifecycle; omitted hides deactivated members. applicant: active people holding the applicant role (a self-service join not yet paid); new_this_year: active members whose member_since falls in the current calendar year"`
 	Q           string `query:"q" doc:"Space-separated tokens, each matched against first name, last name and email"`
 	HarborShare string `query:"harbor_share" enum:"owner,not_owner" doc:"Harbor share owners or non-owners; combines with spot (owner + none = owners without an active slip)"`
 }

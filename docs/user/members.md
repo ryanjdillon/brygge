@@ -4,6 +4,25 @@
 
 This guide covers the signals on the Members page that need someone to act. The register itself (adding, editing, importing members) is described in the app. A member who has cancelled carries an amber **Utmeld** badge with their end date; see [membership.md](membership.md#for-the-board-following-up-a-cancellation).
 
+## Applicants and new members
+
+The status filter next to the search box (it shows **Aktive** by default) has two choices for people who joined on the website:
+
+- **Søkjarar** lists applicants: people who confirmed the join form but have not paid yet. They carry the **Søkjar** role and cannot use the member portal until they pay. A join left unpaid for 60 days ends on its own.
+- **Ny i år: fekk medlemskap i år** lists active members who got their membership this calendar year: those who joined and paid on the website, and those the board gave the **Medlem** role (adding them, ticking the role, or a CSV import with the `member` role).
+
+Both show active people only. **Alle** and **Deaktiverte** still show everyone and former members.
+
+The **Medlem sidan** column shows the date a person got their membership: the day they paid their join on the website, or the day the board first gave them the **Medlem** role. A date already recorded is never moved. It is hidden by default: turn it on under **Kolonnar**, and click the heading to sort by it. It is empty for members registered before Brygge recorded the date, and the detail view shows it as well.
+
+## Can't rejoin
+
+A red **Kan ikkje melde seg inn att** badge next to a name means the board has stopped that person from joining again on the website. When they fill in the join form, they get an email asking them to contact the board instead, and nothing is created.
+
+To set or clear it, open the member and tick or untick **Kan ikkje melde seg inn att** (board or admin). The box appears for deactivated members, and for anyone who already has the mark so it can always be cleared. Brygge asks for a fresh two-factor code when you click it, and every change is logged.
+
+The mark does not deactivate anyone: deactivate the member as usual. Other former members can join again freely.
+
 ## Email rejected badge
 
 A small red **E-post avvist** badge next to a member's email address means the last email Brygge sent to that address was refused for good: the member's mail server answered that the mailbox does not exist, is disabled, or will not take mail from the club. Every faktura and reminder to that address will fail the same way until the address is fixed.

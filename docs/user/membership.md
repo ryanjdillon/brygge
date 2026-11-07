@@ -35,4 +35,4 @@ Your account is deactivated: you can no longer log in, and you are taken off the
 - **1 January.** Brygge deactivates the member and withdraws their waiting-list entries automatically, as the system. If the member is the club's **only administrator**, they are not deactivated: the board gets **Utmelding må handsamast** instead. Make another member an administrator; the next daily run then ends the membership.
 - **Taking a member back.** Reactivating a deactivated member under **Medlemmer** also clears their ended cancellation. Their place on the waiting list is **not** restored; enrol them again if they should have one.
 
-How people join in the first place is described in [join.md](join.md).
+How people join in the first place, and how the board opens joining, is described in [join.md](join.md).

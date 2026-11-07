@@ -502,6 +502,8 @@ A payer with one matching open faktura (`member_invoice`) is never reclassified 
 
 **Rule (BRY-629):** an `orders` row with `purpose` set (today `membership_join`) charges exactly what its creator put on it, and so does an order that pays a faktura with `purpose` set (the join faktura's pay order, BRY-631). The public checkout answers 409 `order_locked` to adding or removing a line on either and offers them no catalog (`InvoiceHandler.orderContentFixed`). The club's join price item (`clubs.join_price_item_id`) is left out of every order's catalog and refused as an add-on by id, so only a join order charges it. A reused join order is rewritten to one line of the current join item.
 
+The setting itself is written only through `PATCH /admin/settings/site`, which takes only an active, flat price item of the caller's own club (`validJoinPriceItem`, BRY-634); a stored item that later becomes inactive, tiered or deleted closes joining (`loadJoinState`) rather than charging it.
+
 **Failure mode:** the token holder removes the dues line, adds a sticker and pays; settlement then grants membership for the price of the sticker. Or the dues item is bought as an add-on on another order without being a join.
 
 ### Joining creates nothing before confirmation, answers every address alike, and confirms only by POST

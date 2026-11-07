@@ -15,6 +15,15 @@ The **Bli medlem** page (`/bli-medlem`, also `/join`) shows the form only when t
 
 Until then the page says **Innmelding er ikkje opna enno** (*Innmelding er ikke åpnet ennå*) and links to the contact page. Nothing a visitor types is stored.
 
+### Opening joining (Innmeldingspris)
+
+1. **The joining price.** In **Økonomi-innstillingar**, under **Innmeldingspris**, choose the price item a new member pays (treasurer or admin, with a fresh two-factor code). Only active price items with a fixed amount can be chosen; items in the **Medlemskap** category are listed first. Create the item under **Prisar** first if it does not exist. Choosing **Ingen (innmelding stengd)** closes joining.
+2. **The legal documents.** Personvernerklæring, Vedtekter, Hamnereglement and Salsvilkår must each have a published version, under **GDPR-administrasjon** → **Juridiske dokument**. Only a site admin can publish them; a treasurer sees a note asking an administrator to do it.
+
+Below the selector Brygge shows whether joining is open. When it is closed, it lists what is missing (no price chosen, the price archived or not a fixed amount, or a document not published) with a link to **Prisar** and, for an admin, to the legal documents. Archiving the chosen price item, or deleting it, closes joining until you choose another.
+
+The board address gets an email when someone joins and pays, and when a join payment is refunded or held back; each email opens the person in **Medlemmer**. Applicants and the members who got their membership this year have their own filters there; see [members.md](members.md#applicants-and-new-members).
+
 ## What the person joining does
 
 1. **Fill in the form.** Name, email, postal code and town are required; phone and street address are optional. They answer whether they live in the municipality where the club is based, and tick one box accepting the statutes and harbour rules, the privacy policy and the terms of sale. Each document opens in a new tab (`/vilkar/...`). The newsletter box is optional and starts unticked. The page shows the membership fee for the current year.

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
@@ -307,6 +308,14 @@ type clubFinancialSettings struct {
 	// means the deployment default (the general shared mailbox, else the
 	// secretary or chair).
 	BoardNotificationEmail string `json:"board_notification_email"`
+
+	// JoinPriceItemID is the price item a self-service join is charged from
+	// (BRY-634); empty means joining is closed. JoinOpen and JoinMissing are
+	// read only: whether the join form takes joins, and the coarse reasons
+	// it does not (the same as GET /join/status), for the caller's club.
+	JoinPriceItemID string   `json:"join_price_item_id"`
+	JoinOpen        bool     `json:"join_open"`
+	JoinMissing     []string `json:"join_missing"`
 }
 
 // HandleGetFinancialSettings returns the club's invoice-relevant
@@ -349,7 +358,8 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		        feature_bookings, feature_projects, feature_calendar,
 		        feature_commerce, feature_accounting,
 		        (anthropic_api_key IS NOT NULL AND anthropic_api_key != ''),
-		        board_notification_email
+		        board_notification_email,
+		        COALESCE(join_price_item_id::text, '')
 		   FROM clubs WHERE id = $1`,
 		claims.ClubID,
 	).Scan(&s.Name, &s.OrgNumber, &s.Address,
@@ -379,10 +389,22 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		&s.FeatureBookings, &s.FeatureProjects, &s.FeatureCalendar,
 		&s.FeatureCommerce, &s.FeatureAccounting,
 		&s.HasAnthropicKey,
-		&s.BoardNotificationEmail); err != nil {
+		&s.BoardNotificationEmail,
+		&s.JoinPriceItemID); err != nil {
 		h.log.Error().Err(err).Msg("load financial settings")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
+	}
+	join, err := loadJoinState(ctx, h.db, claims.ClubID)
+	if err != nil {
+		h.log.Error().Err(err).Msg("load join state")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	s.JoinOpen = join.open()
+	s.JoinMissing = join.missing
+	if s.JoinMissing == nil {
+		s.JoinMissing = []string{}
 	}
 	if h.config != nil {
 		s.StripeConfigured, _ = h.config.StripeCredentials()
@@ -445,6 +467,10 @@ type updateFinancialSettingsRequest struct {
 	// BoardNotificationEmail: omitted = keep; "" = use the deployment
 	// default; otherwise a bare mailbox.
 	BoardNotificationEmail *string `json:"board_notification_email,omitempty"`
+
+	// JoinPriceItemID: omitted = keep; "" = close joining; otherwise an
+	// active, flat price item of the caller's club.
+	JoinPriceItemID *string `json:"join_price_item_id,omitempty"`
 }
 
 // HandleUpdateFinancialSettings updates org_number, address, and
@@ -501,6 +527,10 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 	}
 	if msg != "" {
 		Error(w, http.StatusBadRequest, msg)
+		return
+	}
+	oldJoinPriceItem, ok := h.checkJoinPriceItem(ctx, w, claims.ClubID, req.JoinPriceItemID)
+	if !ok {
 		return
 	}
 
@@ -563,7 +593,10 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		                                 WHEN $42::text IS NULL THEN vipps_portal_url
 		                                 ELSE NULLIF($42::text, '') END,
 		   automatic_booking         = COALESCE($43, automatic_booking),
-		   board_notification_email  = COALESCE($44, board_notification_email)
+		   board_notification_email  = COALESCE($44, board_notification_email),
+		   join_price_item_id        = CASE
+		                                 WHEN $45::text IS NULL THEN join_price_item_id
+		                                 ELSE NULLIF($45::text, '')::uuid END
 		 WHERE id = $1`,
 		claims.ClubID, req.OrgNumber, req.Address, req.Phone, req.VHFChannel,
 		req.Latitude, req.Longitude,
@@ -588,6 +621,7 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		req.VippsPortalURL,
 		req.AutomaticBooking,
 		req.BoardNotificationEmail,
+		req.JoinPriceItemID,
 	); err != nil {
 		h.log.Error().Err(err).Msg("update financial settings")
 		Error(w, http.StatusInternalServerError, "internal error")
@@ -596,7 +630,14 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 	// Field names only. The request carries a secret (the Anthropic key) and
 	// board members' addresses; a value in the log outlives a rotation or an
 	// erasure.
-	auditData, _ := json.Marshal(map[string]any{"fields": suppliedSettingFields(req)})
+	details := map[string]any{"fields": suppliedSettingFields(req)}
+	// The one exception to names-only: the join price item is a catalogue
+	// id, not personal data or a secret, and which item joiners are charged
+	// is what a reviewer of this row needs to see ("" = joining closed).
+	if req.JoinPriceItemID != nil {
+		details["join_price_item_id"] = map[string]string{"old": oldJoinPriceItem, "new": *req.JoinPriceItemID}
+	}
+	auditData, _ := json.Marshal(details)
 	if _, auditErr := h.db.Exec(ctx,
 		`INSERT INTO audit_log (club_id, actor_id, actor_ip, action, resource, resource_id, details)
 		 VALUES ($1, $2, '', $3, 'clubs', $5, $4)`,
@@ -605,6 +646,65 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		h.log.Error().Err(auditErr).Msg("audit financial settings")
 	}
 	JSON(w, http.StatusOK, map[string]string{"status": "updated"})
+}
+
+// checkJoinPriceItem validates a join_price_item_id setting (trimming it in
+// place) and returns the club's current item, "" when unset, for the audit
+// row. It reports false having written the error response.
+func (h *ClubSettingsHandler) checkJoinPriceItem(ctx context.Context, w http.ResponseWriter, clubID string, id *string) (string, bool) {
+	if id == nil {
+		return "", true
+	}
+	ok, err := validJoinPriceItem(ctx, h.db, clubID, id)
+	if err != nil {
+		h.log.Error().Err(err).Msg("validate join price item")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return "", false
+	}
+	if !ok {
+		JSON(w, http.StatusBadRequest, map[string]string{
+			"error": "join_price_item_id must be an active, flat price item of this club",
+			"code":  codeInvalidJoinPriceItem,
+		})
+		return "", false
+	}
+	var old string
+	if err := h.db.QueryRow(ctx,
+		`SELECT COALESCE(join_price_item_id::text, '') FROM clubs WHERE id = $1`, clubID,
+	).Scan(&old); err != nil {
+		h.log.Error().Err(err).Msg("load join price item")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return "", false
+	}
+	return old, true
+}
+
+// codeInvalidJoinPriceItem is the 400 code of a refused join price item.
+const codeInvalidJoinPriceItem = "invalid_join_price_item"
+
+// validJoinPriceItem checks a join_price_item_id setting, trimming it in
+// place: unset and "" (close joining) pass; anything else must name an
+// active, flat price item of clubID, the terms loadJoinState opens joining
+// on. A foreign or tiered item would otherwise be charged to every joiner.
+func validJoinPriceItem(ctx context.Context, q pgxQuerier, clubID string, id *string) (bool, error) {
+	if id == nil {
+		return true, nil
+	}
+	*id = strings.TrimSpace(*id)
+	if *id == "" {
+		return true, nil
+	}
+	if _, err := uuid.Parse(*id); err != nil {
+		return false, nil
+	}
+	var ok bool
+	err := q.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM price_items
+		                 WHERE id = $1 AND club_id = $2
+		                   AND is_active AND pricing_kind = 'flat')`,
+		*id, clubID,
+	).Scan(&ok)
+	return ok, err
 }
 
 // normalizeOptionalEmail cleans an optional address setting in place: blank
