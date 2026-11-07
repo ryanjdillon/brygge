@@ -359,11 +359,14 @@ func TestAddressLookupIsExact(t *testing.T) {
 	f := newFakeAddressRegister(t)
 	k := newKartverketAddresses(&config.Config{KartverketAddressURL: f.srv.URL})
 	ctx := context.Background()
-	for id, street := range map[string]string{
-		"v:4601:90001:12:":  "Fiktivvegen 12",
-		"v:4601:90001:12:A": "Fiktivvegen 12A",
-		"m:4601:10:2:0:1":   "10/2",
+	// A slice, not a map: the check below reads the last query, which must
+	// be the cadastral one.
+	for _, c := range []struct{ id, street string }{
+		{"v:4601:90001:12:", "Fiktivvegen 12"},
+		{"v:4601:90001:12:A", "Fiktivvegen 12A"},
+		{"m:4601:10:2:0:1", "10/2"},
 	} {
+		id, street := c.id, c.street
 		a, err := k.Lookup(ctx, id)
 		if err != nil || a.Street != street || a.ID != id {
 			t.Errorf("Lookup(%q) = %+v, %v; want %s", id, a, err, street)
