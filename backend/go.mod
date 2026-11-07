@@ -4,7 +4,7 @@ go 1.26.10
 
 require (
 	github.com/SherClockHolmes/webpush-go v1.4.0
-	github.com/alicebob/miniredis/v2 v2.38.0
+	github.com/alicebob/miniredis/v2 v2.40.0
 	github.com/aws/aws-sdk-go-v2 v1.47.5
 	github.com/aws/aws-sdk-go-v2/config v1.33.13
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.20.5
