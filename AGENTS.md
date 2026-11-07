@@ -109,6 +109,10 @@ nix develop /home/ryan/code/personal/brygge --command bash -c "cd backend && go 
 
 Node (v22) is available system-wide. Frontend commands (`npm`, `npx`) work directly from `frontend/`.
 
+### Troubleshooting production data
+
+Use `just prod-query "<read-only SQL>"` (SSH) or `just prod-query-http "<sql>"` (developer token). Both run as the read-only, PII-masked `brygge_dev_ro` role; see [docs/developer/security/dev-query.md](docs/developer/security/dev-query.md). Agent sessions in git worktrees have the placeholder tfvars, so set `BRYGGE_PROD_HOST` (or pass `origin=` / the host argument) or the recipe refuses to run.
+
 ## Common Commands
 
 All `just` commands run from the repo root (`/home/ryan/code/personal/brygge`). Use `nix develop --command just <target>` if just isn't in PATH.

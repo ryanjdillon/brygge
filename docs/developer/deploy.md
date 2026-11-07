@@ -70,7 +70,30 @@ Required values:
 | `club_slug` | terraform, NixOS | Short club identifier (`CLUB_SLUG`); also names the SES/SQS/IAM resources. Lowercase letters, digits, hyphens |
 | `ses_enabled`, `aws_region`, `aws_access_key`, `aws_secret_key` *(optional)* | terraform, NixOS | Amazon SES app mail and its delivery-event queue. `ses_enabled` defaults to `false` (nothing created on AWS); the keys are a Terraform admin principal, never Brygge's runtime key. See [mail/ses.md](mail/ses.md) |
 | `ses_sending` *(optional)* | NixOS | Sends app mail through SES (`EMAIL_PROVIDER=ses`) when `ses_enabled` is also true. Defaults to `false`, so infrastructure and DNS can land and verify before the cutover. Declared in Terraform only to document it; Terraform does not use it. See [mail/ses.md § Cutover](mail/ses.md#cutover-sending-app-mail-through-ses) |
+| `ssh_user` *(optional)* | NixOS flake, `justfile` | Account that `just deploy`, `just prod-query` and the other deploy tooling SSH in as. Defaults to `root`. Overridable per run with `BRYGGE_SSH_USER`. See [SSH login account](#ssh-login-account) |
 | `tailnet_domain` *(optional)* | NixOS (unbound) | Tailnet MagicDNS suffix (e.g. `tail.example.net`). The host resolver forwards only this zone to `100.100.100.100` so the OTel collector's upstream endpoint resolves. Unset or empty → telemetry export can't resolve its endpoint. See [otel/local-collector.md](otel/local-collector.md#name-resolution) |
+
+### SSH login account
+
+The account that deploy tooling logs into is a setting, not hardcoded `root`. It is resolved in this order:
+
+1. `BRYGGE_SSH_USER` in the environment (one run);
+2. `ssh_user` in `terraform/terraform.tfvars.json` (read by `flake.nix` as `clubConfig.sshUser`, and by the `justfile`);
+3. `root`.
+
+`just prod-query` and `just rotate-name-token-key` take the host from the positional `host` argument, else `BRYGGE_PROD_HOST`, else tfvars `domain` (`user@host` is used as is). With no host they refuse to run. `just prod-query-http` builds its `origin` (`https://<host>`) from the same `BRYGGE_PROD_HOST` / `domain`, or takes `origin=`. `just deploy <host>` still takes the host as its argument.
+
+The resolved account always replaces a `User` set in `~/.ssh/config` for the host (default `root`, so a `User` there is ignored unless `ssh_user` matches it). `BRYGGE_SSH_USER` is the way to override the account for a deploy; don't pass `--ssh-user` through `just deploy`, because the app already adds it.
+
+`nix run .#deploy`, `deploy-rs` and the `gen-dendrite-token` app all use the resolved account. `nix run .#install` always uses `root`: Hetzner rescue mode offers nothing else and the installed system does not exist yet.
+
+A non-root account needs, on the host:
+
+- its public key in the account's own `authorized_keys` (the NixOS config only writes `admin_ssh_keys` to `root`);
+- membership in `wheel`, which gives passwordless sudo (`security.sudo.wheelNeedsPassword = false`, already set in `nix/host.nix`) and nix `trusted-users` (`@wheel`). Without `trusted-users`, deploy-rs's `nix copy` of unsigned store paths is rejected. The deploy script runs its snapshot, `systemctl`, `journalctl` and `sudo -u brygge psql` steps through `sudo`, and reads the dump (owned by `brygge`, in a 0750 directory) with `sudo cat` instead of `scp`. deploy-rs activates the system as `root` (`profiles.system.user`) through `sudo -u root`; an account whose sudo asks for a password would need deploy-rs's `interactiveSudo`, which is not enabled here;
+- `just prod-query` needs `sudo -u brygge psql`, so the same sudo rights.
+
+`nix/host.nix` does not create such an account today: only `root` has `admin_ssh_keys`. Provision the user and its key on the host before setting `ssh_user`, or the next deploy cannot log in.
 
 **Protection against committing secrets**: a pre-commit hook at `.githooks/pre-commit` rejects any attempt to stage `terraform/terraform.tfvars.json`. The dev shell's `shellHook` auto-installs it by setting `core.hooksPath` the first time you `nix develop`. If you accept the hook, `git status` will still show the file as modified, but `git commit` (with or without `-a`) will fail:
 

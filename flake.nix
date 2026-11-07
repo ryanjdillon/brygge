@@ -60,6 +60,11 @@
       adminSshKeys = tfvars.admin_ssh_keys;
       hostname     = tfvars.server_name;
       timezone     = tfvars.timezone;
+      # Account that deploy tooling (deploy-rs, `just prod-query`, ...)
+      # logs into over SSH. Not "root" when the host admits an
+      # unprivileged admin with passwordless sudo. Overridable per run
+      # with BRYGGE_SSH_USER.
+      sshUser      = if (tfvars.ssh_user or "") == "" then "root" else tfvars.ssh_user;
       # Feature flags. Pass-through to services.brygge.features (a
       # submodule with per-flag defaults), so this can be empty {} or
       # a partial override like {accounting = true;}.
@@ -132,8 +137,11 @@
 
       deploy.nodes.brygge = {
         hostname = clubConfig.domain;
-        sshUser = "root";
+        # A non-root sshUser makes deploy-rs activate through
+        # `sudo -u root`, which needs passwordless sudo on the host.
+        sshUser = clubConfig.sshUser;
         profiles.system = {
+          # Activation user; independent of the SSH login account.
           user = "root";
           path = deploy-rs.lib.${deploySystem}.activate.nixos self.nixosConfigurations.brygge;
         };
@@ -301,6 +309,8 @@
               exit 1
             fi
 
+            # Hetzner rescue mode only offers root, and the installed
+            # system does not exist yet, so this is not the ssh_user setting.
             TARGET="root@$1"
 
             echo "==> pre-building system closure"
@@ -329,6 +339,22 @@
               exit 1
             fi
             shift
+
+            # SSH login account for every remote step below; BRYGGE_SSH_USER
+            # overrides the tfvars ssh_user baked in at build time. A
+            # non-root account runs the privileged commands through sudo.
+            SSH_USER="''${BRYGGE_SSH_USER:-${clubConfig.sshUser}}"
+            SSH_TARGET="''${SSH_USER}@''${HOSTNAME}"
+            SUDO_PREFIX=""
+            [[ "$SSH_USER" == "root" ]] || SUDO_PREFIX="sudo "
+            # remote <command>: run a command string as root on the host.
+            remote() {
+              if [[ -z "$SUDO_PREFIX" ]]; then
+                ssh "$SSH_TARGET" "$1"
+              else
+                ssh "$SSH_TARGET" "sudo bash -c $(printf '%q' "$1")"
+              fi
+            }
 
             # Everything below reads repo-relative paths (tfvars, migrations,
             # scripts/), so run from the checkout root wherever we were called.
@@ -442,7 +468,7 @@
               if [[ "''${SKIP_PROD_CHECK:-0}" != "1" ]]; then
                 STATE_CMD=" && { ''${PROD_PSQL_REMOTE} -X -q -t -A -f - 2>/dev/null || true; }"
               fi
-              if ! REMOTE_OUT=$(bash "$DRYRUN" --state-sql | ssh "root@''${HOSTNAME}" \
+              if ! REMOTE_OUT=$(bash "$DRYRUN" --state-sql | remote \
                   "install -d -o brygge -g brygge -m 0750 ''${PREDEPLOY_DIR%/*} ''${PREDEPLOY_DIR} && date +%s''${STATE_CMD}" 2>&1); then
                 echo "''${REMOTE_OUT}"
                 abort_backup "could not prepare the backup directory on ''${HOSTNAME}"
@@ -454,16 +480,16 @@
               fi
               PROD_MIGRATION_STATE=$(${pkgs.gnugrep}/bin/grep -E '^([0-9]+[|](true|false)|none)[|](true|false)$' <<< "''${REMOTE_OUT}" | head -1 || true)
 
-              if ! out=$(ssh "root@''${HOSTNAME}" \
+              if ! out=$(remote \
                   "systemctl start brygge-pre-deploy-backup.service" 2>&1); then
                 echo "''${out}"
                 echo "deploy: last log lines of brygge-pre-deploy-backup.service:"
-                ssh "root@''${HOSTNAME}" \
+                remote \
                   "journalctl -u brygge-pre-deploy-backup.service -n 30 --no-pager" 2>&1 || true
                 abort_backup "pre-deploy backup failed on ''${HOSTNAME}"
               fi
 
-              LATEST=$(ssh "root@''${HOSTNAME}" \
+              LATEST=$(remote \
                 "find ''${PREDEPLOY_DIR} -maxdepth 1 -name 'brygge-predeploy-*.dump' -newermt @''${REMOTE_START} -printf '%T@ %p\n' | sort -rn | head -1 | cut -d' ' -f2-")
               if [[ -z "''${LATEST}" ]]; then
                 abort_backup "backup unit reported success but no new dump appeared in ''${PREDEPLOY_DIR}"
@@ -474,7 +500,17 @@
               mkdir -p "''${LOCAL_BACKUP_DIR}"
               DEST="''${LOCAL_BACKUP_DIR}/$(basename "''${LATEST}")"
               echo "deploy: pulling ''${LATEST} → ''${DEST}…"
-              if ${pkgs.openssh}/bin/scp "root@''${HOSTNAME}:''${LATEST}" "''${DEST}"; then
+              pull_dump() {
+                if [[ -z "$SUDO_PREFIX" ]]; then
+                  ${pkgs.openssh}/bin/scp "''${SSH_TARGET}:''${LATEST}" "''${DEST}"
+                else
+                  ssh "$SSH_TARGET" "sudo cat $(printf '%q' "''${LATEST}")" > "''${DEST}.part" \
+                    && mv "''${DEST}.part" "''${DEST}" || { rm -f "''${DEST}.part"; return 1; }
+                fi
+              }
+              # The dump is owned by brygge (0750 directory), so a non-root
+              # account reads it through sudo instead of scp.
+              if pull_dump; then
                 echo "deploy: local backup saved to ''${DEST}"
                 LOCAL_DUMP="''${DEST}"
               else
@@ -483,6 +519,8 @@
               fi
 
               # Prune local copies to last 10.
+              # A pull that died mid-copy leaves a .part file behind.
+              rm -f "''${LOCAL_BACKUP_DIR}"/brygge-predeploy-*.dump.part
               mapfile -t LOCAL_ALL < <(ls -t "''${LOCAL_BACKUP_DIR}"/brygge-predeploy-*.dump 2>/dev/null || true)
               LOCAL_TOTAL="''${#LOCAL_ALL[@]}"
               if [[ "''${LOCAL_TOTAL}" -gt 10 ]]; then
@@ -504,7 +542,7 @@
             # explicit, visible opt-out; PROD_CHECK=snapshot forces the
             # fallback. See scripts/deploy-migration-dryrun.sh.
             check_rc=0
-            PROD_PSQL="ssh root@''${HOSTNAME} \"''${PROD_PSQL_REMOTE}\"" \
+            PROD_PSQL="ssh ''${SSH_TARGET} \"''${SUDO_PREFIX}''${PROD_PSQL_REMOTE}\"" \
               PROD_MIGRATION_STATE="''${PROD_MIGRATION_STATE}" \
               SNAPSHOT_DUMP="''${LOCAL_DUMP}" \
               bash "$DRYRUN" || check_rc=$?
@@ -515,6 +553,7 @@
 
             ${deploy-rs.packages.${system}.default}/bin/deploy \
               --hostname "$HOSTNAME" \
+              --ssh-user "$SSH_USER" \
               "$@" \
               .#brygge
           '');
@@ -588,12 +627,23 @@
               exit 1
             fi
 
+            # Login account (BRYGGE_SSH_USER overrides tfvars ssh_user); a
+            # non-root account runs each command as root through sudo.
+            SSH_USER="''${BRYGGE_SSH_USER:-${clubConfig.sshUser}}"
+            remote() {
+              if [[ "$SSH_USER" == "root" ]]; then
+                ${pkgs.openssh}/bin/ssh -o BatchMode=yes "$SSH_USER@$VM" "$1"
+              else
+                ${pkgs.openssh}/bin/ssh -o BatchMode=yes "$SSH_USER@$VM" "sudo bash -c $(printf '%q' "$1")"
+              fi
+            }
+
             USER=brygge-svc
             PW=$(${pkgs.openssl}/bin/openssl rand -base64 24 | tr -d '/+=')
 
             # Verify create-account is available on the VM. It only is
             # if `pkgs.dendrite` is in environment.systemPackages.
-            if ! ${pkgs.openssh}/bin/ssh -o BatchMode=yes "root@$VM" "command -v create-account >/dev/null"; then
+            if ! remote "command -v create-account >/dev/null"; then
               echo "ERROR: 'create-account' not found on PATH on $VM." >&2
               echo "Re-deploy with the latest nix/host.nix (dendrite added to systemPackages):" >&2
               echo "  nix run .#deploy -- $VM" >&2
@@ -605,7 +655,7 @@
             # provisioned declaratively by dendrite-secret-init.service
             # on first deploy. Sanity-check that it exists; if not, the
             # deploy hasn't run with the latest nix yet.
-            if ! ${pkgs.openssh}/bin/ssh -o BatchMode=yes "root@$VM" "test -s /etc/dendrite/env"; then
+            if ! remote "test -s /etc/dendrite/env"; then
               echo "ERROR: /etc/dendrite/env missing on $VM." >&2
               echo "Re-deploy with the latest nix/host.nix; dendrite-secret-init.service" >&2
               echo "will provision it on the next activation." >&2
@@ -617,23 +667,23 @@
             # (or /nix/store, depending on version) and points the
             # systemd unit at it via --config. Discover the path from
             # the running unit so we don't have to hardcode it.
-            CONFIG=$(${pkgs.openssh}/bin/ssh -o BatchMode=yes "root@$VM" \
+            CONFIG=$(remote \
               "systemctl show dendrite -p ExecStart --value | grep -oE -- '--config [^ ;]+' | head -1 | cut -d' ' -f2")
             if [[ -z "$CONFIG" ]]; then
               echo "ERROR: couldn't discover dendrite config path on $VM." >&2
               echo "Is the dendrite service running?  systemctl status dendrite" >&2
               echo "Raw ExecStart for debugging:" >&2
-              ${pkgs.openssh}/bin/ssh -o BatchMode=yes "root@$VM" "systemctl show dendrite -p ExecStart --value" >&2
+              remote "systemctl show dendrite -p ExecStart --value" >&2
               exit 1
             fi
             echo "    using config: $CONFIG" >&2
 
             echo "==> creating dendrite user '$USER' on $VM" >&2
-            create_output=$(${pkgs.openssh}/bin/ssh -o BatchMode=yes "root@$VM" \
+            create_output=$(remote \
               "create-account -config '$CONFIG' -username $USER -password '$PW' 2>&1" || true)
             if echo "$create_output" | grep -q "already exists"; then
               echo "    (user already exists; resetting password to issue a fresh token)" >&2
-              ${pkgs.openssh}/bin/ssh -o BatchMode=yes "root@$VM" \
+              remote \
                 "create-account -reset-password -config '$CONFIG' -username $USER -password '$PW'" >&2
             elif echo "$create_output" | grep -q "Created account"; then
               :
@@ -644,7 +694,7 @@
             fi
 
             echo "==> logging in to obtain access token" >&2
-            TOKEN=$(${pkgs.openssh}/bin/ssh -o BatchMode=yes "root@$VM" \
+            TOKEN=$(remote \
               "${pkgs.curl}/bin/curl -s -X POST http://127.0.0.1:8008/_matrix/client/v3/login \
                 -H 'Content-Type: application/json' \
                 -d '{\"type\":\"m.login.password\",\"identifier\":{\"type\":\"m.id.user\",\"user\":\"$USER\"},\"password\":\"$PW\"}' \

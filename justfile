@@ -6,6 +6,14 @@ default:
 
 compose := "docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml"
 
+# SSH login account and host for the production recipes. Precedence: the
+# BRYGGE_SSH_USER / BRYGGE_PROD_HOST environment, then the deployer's
+# terraform/terraform.tfvars.json (`ssh_user`, `domain`), then "root" for the
+# user and no host at all: a recipe that needs the host refuses to guess.
+# A missing file, a missing jq or a placeholder domain degrades the same way.
+ssh_user  := env("BRYGGE_SSH_USER", `jq -r 'if (.ssh_user // "") == "" then "root" else .ssh_user end' terraform/terraform.tfvars.json 2>/dev/null || echo root`)
+prod_host := env("BRYGGE_PROD_HOST", `jq -r '(.domain // "") | if . == "example.invalid" or endswith(".invalid") then "" else . end' terraform/terraform.tfvars.json 2>/dev/null || true`)
+
 # Start compose services + frontend dev server
 up:
     #!/usr/bin/env bash
@@ -238,8 +246,17 @@ rollback host="brygge":
 # deny / allow / mask matrix. Output is CSV; add your own LIMIT (rows are not
 # capped). Every query is logged to the host journal. Usage:
 #   just prod-query "select id, status, vipps_payment_reference from invoices where kid_number = '1234567890'"
-prod-query sql host="klokkarvikbaatlag.no":
-    printf '%s\n' {{quote(sql)}} | ssh {{host}} "sudo -u brygge psql 'postgres://brygge_dev_ro@/brygge?host=/run/postgresql&sslmode=disable' --csv -P pager=off -v ON_ERROR_STOP=1 -f -"
+prod-query sql host=prod_host:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    host={{quote(host)}}
+    if [ -z "$host" ]; then
+      echo "no production host: pass it (just prod-query <sql> <host>), set BRYGGE_PROD_HOST, or fill domain in terraform/terraform.tfvars.json" >&2
+      exit 1
+    fi
+    # A host given as user@host is used as is.
+    case "$host" in *@*) target="$host" ;; *) target={{quote(ssh_user)}}"@$host" ;; esac
+    printf '%s\n' {{quote(sql)}} | ssh "$target" "sudo -u brygge psql 'postgres://brygge_dev_ro@/brygge?host=/run/postgresql&sslmode=disable' --csv -P pager=off -v ON_ERROR_STOP=1 -f -"
 
 # Same as prod-query, but over HTTPS with a developer bearer token instead of
 # SSH (BRY-115) — for when the SSH key isn't usable, e.g. from an agent
@@ -248,9 +265,14 @@ prod-query sql host="klokkarvikbaatlag.no":
 # Same read-only brygge_dev_ro role and PII masking. Rows are capped by
 # `limit` (default 200, max 1000); CSV on stdout, truncation notice on stderr.
 #   just prod-query-http "select id, status from invoices where kid_number = '1234567890'"
-prod-query-http sql limit="200" origin="https://klokkarvikbaatlag.no":
+prod-query-http sql limit="200" origin=("https://" + prod_host):
     #!/usr/bin/env bash
     set -euo pipefail
+    origin={{quote(origin)}}
+    if [ "$origin" = "https://" ]; then
+      echo "no production host: set BRYGGE_PROD_HOST, fill domain in terraform/terraform.tfvars.json, or pass origin=https://<host>" >&2
+      exit 1
+    fi
     token="${BRYGGE_DEV_TOKEN:-}"
     if [ -z "$token" ] && [ -r "$HOME/.config/brygge/dev-token" ]; then
       token="$(tr -d '[:space:]' < "$HOME/.config/brygge/dev-token")"
@@ -262,7 +284,7 @@ prod-query-http sql limit="200" origin="https://klokkarvikbaatlag.no":
     body="$(jq -n --arg sql {{quote(sql)}} --argjson limit {{limit}} '{sql: $sql, limit: $limit}')"
     # Header via process substitution so the token never lands in argv / ps.
     resp="$(curl -sS --fail-with-body -H @<(printf 'Authorization: Bearer %s\n' "$token") \
-      -H 'Content-Type: application/json' -d "$body" "{{origin}}/api/v1/dev/query")" \
+      -H 'Content-Type: application/json' -d "$body" "$origin/api/v1/dev/query")" \
       || { echo "$resp" >&2; exit 1; }
     jq -r '.columns, (.rows[] | map(if type == "object" or type == "array" then tojson else . end)) | @csv' <<<"$resp"
     if [ "$(jq -r .truncated <<<"$resp")" = "true" ]; then
@@ -273,8 +295,16 @@ prod-query-http sql limit="200" origin="https://klokkarvikbaatlag.no":
 # (BRY-343). Every token changes immediately, so any token an agent has
 # copied elsewhere stops matching. The new key is generated server-side and
 # never leaves the database.
-rotate-name-token-key host="klokkarvikbaatlag.no":
-    ssh {{host}} "sudo -u brygge psql 'postgres:///brygge?host=/run/postgresql&sslmode=disable' -v ON_ERROR_STOP=1 -c \"UPDATE dev_private.token_key SET key = public.gen_random_bytes(32), rotated_at = now()\""
+rotate-name-token-key host=prod_host:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    host={{quote(host)}}
+    if [ -z "$host" ]; then
+      echo "no production host: pass it (just rotate-name-token-key <host>), set BRYGGE_PROD_HOST, or fill domain in terraform/terraform.tfvars.json" >&2
+      exit 1
+    fi
+    case "$host" in *@*) target="$host" ;; *) target={{quote(ssh_user)}}"@$host" ;; esac
+    ssh "$target" "sudo -u brygge psql 'postgres:///brygge?host=/run/postgresql&sslmode=disable' -v ON_ERROR_STOP=1 -c \"UPDATE dev_private.token_key SET key = public.gen_random_bytes(32), rotated_at = now()\""
 
 # Build the brygge package locally (frontend + Go binary with embedded SPA).
 build-nix:

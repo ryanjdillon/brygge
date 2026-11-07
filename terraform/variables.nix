@@ -148,6 +148,13 @@
       default     = false;
       description = "Send app mail through SES (EMAIL_PROVIDER=ses) once ses_enabled infrastructure is verified. Consumed by nix/host.nix; Terraform does not use it.";
     };
+    # Read by the flake (clubConfig.sshUser) and the justfile, not by any
+    # resource; declared so the shared tfvars file carries no undeclared key.
+    ssh_user = {
+      type        = "string";
+      default     = "root";
+      description = "Account deploy tooling logs into over SSH. Consumed by flake.nix and the justfile; Terraform does not use it.";
+    };
     aws_access_key = {
       type        = "string";
       sensitive   = true;

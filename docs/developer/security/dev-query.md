@@ -47,6 +47,10 @@ fails if a base column of a masked table isn't accounted for in its view.
 | `just prod-query "<sql>"` | SSH key → `sudo -u brygge psql` as the role over the socket | Operator shell with a working SSH key |
 | `just prod-query-http "<sql>"` (`POST /api/v1/dev/query`) | developer bearer token | An external tool or agent that cannot use the SSH key (BRY-115) |
 
+`just prod-query` SSHes as the account from `BRYGGE_SSH_USER`, else tfvars `ssh_user`, else `root`, to the host from `BRYGGE_PROD_HOST`, else tfvars `domain`, else the positional `host` argument. A non-root account needs its key on the host and passwordless sudo, because the recipe runs `sudo -u brygge psql`. See [deploy.md § SSH login account](../deploy.md#ssh-login-account).
+
+Agent sessions in a git worktree carry the committed placeholder tfvars (no real `domain`), so `just prod-query-http` and `just prod-query` find no host there. Set `BRYGGE_PROD_HOST`, or pass `origin=https://<host>` (`prod-query-http`) or the host argument (`prod-query`).
+
 All three run as the same `brygge_dev_ro` role, so they see the same masked data.
 
 ### Developer bearer tokens

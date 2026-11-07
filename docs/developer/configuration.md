@@ -23,6 +23,8 @@ Brygge is configured entirely via environment variables. In production, set thes
 
 In NixOS deploys `CLUB_SLUG`, `CLUB_NAME` and `DOMAIN` come from `clubConfig` (see the env-layering rules in the repo's `AGENTS.md`); don't put them in the secrets env file.
 
+The SSH account deploy tooling logs in as (`clubConfig.sshUser`, tfvars `ssh_user`, default `root`) is deploy-time config for the operator's machine, not a runtime variable of the API. See [deploy.md § SSH login account](deploy.md#ssh-login-account).
+
 ## Authentication
 
 Sessions are server-side rows in Postgres (`auth.SessionService`); there are no JWT variables any more.
