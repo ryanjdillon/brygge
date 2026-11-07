@@ -1,9 +1,11 @@
 package middleware
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -258,5 +260,25 @@ func TestRateLimitRedisErrorFailOpenAndClosed(t *testing.T) {
 	var body map[string]any
 	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil || body["error"] != "rate_limit_unavailable" {
 		t.Fatalf("fail-closed body = %v (err %v), want error rate_limit_unavailable", body, err)
+	}
+}
+
+func TestRateLimitLogRedactsPathToken(t *testing.T) {
+	rdb, _ := testRedis(t)
+	var buf bytes.Buffer
+	rl := NewRateLimiter(rdb, zerolog.New(&buf), 1, time.Minute, IPKey)
+	handler := rl.Handler(okHandler())
+
+	for i := 0; i < 2; i++ {
+		handler.ServeHTTP(httptest.NewRecorder(),
+			httptest.NewRequest(http.MethodGet, "/api/v1/betal/SECRET-TOKEN", nil))
+	}
+
+	out := buf.String()
+	if strings.Contains(out, "SECRET-TOKEN") {
+		t.Fatalf("rate limit log holds the path token: %s", out)
+	}
+	if !strings.Contains(out, "/api/v1/betal/REDACTED") {
+		t.Fatalf("rate limit log missing the redacted path: %q", out)
 	}
 }

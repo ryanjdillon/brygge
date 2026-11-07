@@ -14,15 +14,40 @@ let
     inherit (clubConfig) boardMailboxes;
   };
   inherit (mailBounce) bounceAddress;
+  caddyLog = import ./caddy-log.nix { };
+  caddyHosts = [
+    cfg.domain
+    "matrix.${cfg.domain}"
+    "status.${cfg.domain}"
+    "mail.${cfg.domain}"
+    "webmail.${cfg.domain}"
+  ];
 in
 {
   imports = [
     ./disko.nix
+    # A separate module because `services.caddy` is defined as one attrset
+    # below. Every vhost's access log goes through the redacting format
+    # (BRY-657); a vhost added there must be listed in caddyHosts, and the
+    # assertion below fails the build if one is missed.
+    {
+      services.caddy.virtualHosts = lib.genAttrs caddyHosts (host: {
+        logFormat = caddyLog.logFormat host;
+      });
+    }
   ];
 
   # Fails evaluation (and so the deploy) on a board_mailboxes spec that
   # flags more than one bounce mailbox, or flags a list.
-  assertions = mailBounce.assertions;
+  assertions = mailBounce.assertions ++ [
+    {
+      assertion =
+        config.services.caddy.logFormat == caddyLog.defaultLogFormat
+        && lib.all (host: config.services.caddy.virtualHosts.${host}.logFormat == caddyLog.logFormat host)
+          (lib.attrNames config.services.caddy.virtualHosts);
+      message = "the Caddy global log and every virtualHost must log through nix/caddy-log.nix (BRY-657): a URL token must not reach the access log";
+    }
+  ];
 
   system.stateVersion = "25.05";
   nixpkgs.hostPlatform = "x86_64-linux";
@@ -311,6 +336,9 @@ in
   services.caddy = {
     enable = true;
     email = clubConfig.adminEmail;
+    # The global log carries error entries (request URI included) to journald,
+    # which is shipped off-host: redact it like the access logs (BRY-657).
+    logFormat = caddyLog.defaultLogFormat;
 
     virtualHosts."${cfg.domain}".extraConfig = ''
       encode gzip zstd

@@ -49,7 +49,7 @@ Audience: deployers, contributors, and anyone troubleshooting at the OS / protoc
 
 | Subdir | Description |
 |--------|-------------|
-| [security/](security/) | TOTP / 2FA, the auth middleware matrix, the member lifecycle (join to purge), developer DB query access |
+| [security/](security/) | TOTP / 2FA, the auth middleware matrix, the member lifecycle (join to purge), developer DB query access, log redaction |
 | [mail/](mail/) | Self-hosted Stalwart + Bulwark — setup, shared inbox, internals, BIMI |
 | [otel/](otel/) | OpenTelemetry — instrumentation, collectors, alerting |
 

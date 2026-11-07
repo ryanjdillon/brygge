@@ -98,6 +98,7 @@ Each is a self-contained module covering one subject in depth. Per the deep-modu
 |----------|----------|-------------|
 | [developer/security/2fa.md](developer/security/2fa.md) | Board members + Operators | Two-factor authentication: enrollment, recovery codes, admin reset |
 | [developer/security/member-lifecycle.md](developer/security/member-lifecycle.md) | Operators + Developers | Join to purge: applicant, grant, cancel, the two deactivation paths, erasure, retention, GDPR deletion |
+| [developer/security/log-redaction.md](developer/security/log-redaction.md) | Developers + Operators | Redaction of URL tokens in the Caddy and app logs, off-host shipping, clearing old access logs |
 
 ## Architecture Overview
 

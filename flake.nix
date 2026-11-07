@@ -160,6 +160,11 @@
           mail-bounce = import ./nix/tests/mail-bounce.nix {
             pkgs = nixpkgs.legacyPackages.${system};
           };
+          caddy-log = import ./nix/tests/caddy-log.nix {
+            pkgs = nixpkgs.legacyPackages.${system};
+            hostCaddyfile =
+              self.nixosConfigurations.brygge.config.environment.etc."caddy/caddy_config".source;
+          };
           # Same as `just alerts-check`: promtool check + unit tests on the
           # alert rules rendered for a placeholder deployment.
           alerts = let

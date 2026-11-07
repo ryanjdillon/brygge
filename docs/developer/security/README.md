@@ -8,6 +8,7 @@ Cross-audience navigation: see [`../../index.md`](../../index.md).
 | [auth-middleware-matrix.md](auth-middleware-matrix.md) | Developers | Route × role × TOTP-gate coverage map for every registered API surface (DIL-245) |
 | [member-lifecycle.md](member-lifecycle.md) | Operators + Developers | The lifecycle from self-service join to purge (applicant, grant, cancel, expiry, rejoin), the two deactivation paths, erase vs purge, the bokføringsloven §13 retention rule, and how GDPR deletion reconciles with it |
 | [dev-query.md](dev-query.md) | Developers + Operators | Read-only, PII-masked `/admin/dev/query` + `just prod-query` access: the role privilege boundary and the deny/allow/mask table-classification matrix |
+| [log-redaction.md](log-redaction.md) | Developers + Operators | What the Caddy and app logs redact (URL tokens, Referer), why, what ships off-host, and the one-off clearing of pre-redaction access logs |
 
 Related:
 

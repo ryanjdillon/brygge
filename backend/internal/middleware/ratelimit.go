@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/brygge-klubb/brygge/internal/logredact"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
 )
@@ -77,7 +78,7 @@ func (rl *RateLimiter) Handler(next http.Handler) http.Handler {
 				retryAfter = 1
 			}
 			w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
-			rl.log.Warn().Str("key", key).Str("ip", r.RemoteAddr).Str("path", r.URL.Path).Msg("rate limit exceeded")
+			rl.log.Warn().Str("key", key).Str("ip", r.RemoteAddr).Str("path", logredact.Path(r.URL.Path)).Msg("rate limit exceeded")
 
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusTooManyRequests)

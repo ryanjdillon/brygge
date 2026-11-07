@@ -871,6 +871,12 @@ A new group is created just before the faktura built-in and the positions are re
 
 **Failure mode:** the backup scripts used `pkgs.postgresql`, which follows nixpkgs (17 by October 2026) while the server ran 16. Every nightly and pre-deploy dump was written in archive format 1.16, which the server's `pg_restore` 16 rejects ("unsupported version (1.16) in file header"). A disaster restore on the host would have failed. Found by `migrate-check-prod` on 2026-10-16.
 
+### No bearer token in a URL is written to any log
+
+**Rule:** a secret that rides in a URL (`?token=` on `/api/v1/auth/verify`, `/api/v1/unsubscribe` and `/join/confirm`, and `access_token` on Matrix calls; the token segment of `/betal/`, `/betal/bruker/`, `/checkout/`, `/qr/` and `/join/confirm/`, with or without `/api/v1`) never reaches a log. Caddy's access logs and its global error log are redacted by `nix/caddy-log.nix` (URI, Referer and redirect Location); the app's request logger and rate-limit log redact the path through `logredact.Path` (`backend/internal/logredact`). A new token-addressed route or query secret is added to both lists in the same commit. `nix/host.nix` asserts that every Caddy log equals the generated filtered format, and `nix flake check` runs a real Caddy against the filter. Details: [security/log-redaction.md](../security/log-redaction.md).
+
+**Failure mode:** the Caddy access log recorded the full URI, so a magic-link token (a login for 15 minutes) and live pay-link tokens sat in clear in `/var/log/caddy/access-*.log` (BRY-657), and the journal that the OTel collector ships off-host could carry them in error entries.
+
 ## Config
 
 ### Env vars are trimmed at the boundary

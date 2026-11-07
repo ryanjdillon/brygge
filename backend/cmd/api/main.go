@@ -33,6 +33,7 @@ import (
 	"github.com/brygge-klubb/brygge/internal/devtoken"
 	"github.com/brygge-klubb/brygge/internal/email"
 	"github.com/brygge-klubb/brygge/internal/handlers"
+	"github.com/brygge-klubb/brygge/internal/logredact"
 	"github.com/brygge-klubb/brygge/internal/mail"
 	"github.com/brygge-klubb/brygge/internal/membership"
 	"github.com/brygge-klubb/brygge/internal/middleware"
@@ -818,7 +819,7 @@ func requestLogger(log zerolog.Logger) func(http.Handler) http.Handler {
 			next.ServeHTTP(ww, r)
 			log.Info().
 				Str("method", r.Method).
-				Str("path", r.URL.Path).
+				Str("path", logredact.Path(r.URL.Path)).
 				Int("status", ww.Status()).
 				Dur("latency", time.Since(start)).
 				Msg("request")
