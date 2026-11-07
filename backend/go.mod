@@ -12,7 +12,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.52.8
 	github.com/boombuler/barcode v1.0.1
 	github.com/danielgtaylor/huma/v2 v2.38.0
-	github.com/go-chi/chi/v5 v5.3.0
+	github.com/go-chi/chi/v5 v5.5.0
 	github.com/go-chi/cors v1.2.2
 	github.com/go-pdf/fpdf v0.9.0
 	github.com/go-webauthn/webauthn v0.17.4
