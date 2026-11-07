@@ -152,7 +152,7 @@ github.com/aws/smithy-go/transport/http/protocol/restjson1
 ## explicit
 github.com/aymerick/douceur/css
 github.com/aymerick/douceur/parser
-# github.com/boombuler/barcode v1.0.1
+# github.com/boombuler/barcode v1.1.0
 ## explicit
 github.com/boombuler/barcode
 github.com/boombuler/barcode/qr
