@@ -169,6 +169,10 @@ func newRouter(d routeDeps) *chi.Mux {
 	r.Use(chimw.Recoverer)
 	r.Use(middleware.Metrics)
 	r.Use(securityHeaders)
+	// One allowed origin. The JSON-only CSRF guard on the public
+	// POSTs (handlers.requireJSON: /auth/verify, /join, /join/confirm) relies
+	// on a cross-origin JSON POST failing preflight here; adding origins
+	// breaks it.
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{cfg.FrontendURL},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
@@ -210,7 +214,11 @@ func newRouter(d routeDeps) *chi.Mux {
 			r.Group(func(r chi.Router) {
 				r.Use(strictRL)
 				r.Post("/magic-link", magicLinkHandler.HandleRequestMagicLink)
+				// The login link opens the SPA page /login/verify, whose
+				// button POSTs the token; only the POST consumes it. The GET
+				// redirects links mailed before that to the page.
 				r.Get("/verify", magicLinkHandler.HandleVerifyMagicLink)
+				r.Post("/verify", magicLinkHandler.HandleConsumeMagicLink)
 			})
 
 			r.Group(func(r chi.Router) {

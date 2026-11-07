@@ -55,3 +55,27 @@ func TestJoinAddressSearchRateLimit(t *testing.T) {
 		t.Error("the address search used up the standard budget")
 	}
 }
+
+// POST /auth/verify logs in, so it shares the strict per-IP budget with the
+// magic-link request and the GET: the sixth request in a minute is refused
+// before the handler.
+func TestLoginVerifyRateLimit(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+	r := inertRouterWithRedis(t, auth.NewSessionService(nil), nil, rdb)
+
+	// Without a JSON Content-Type the handler answers 415 before it needs
+	// a database, so the limiter is all these requests exercise.
+	for i := range 5 {
+		if rec := serveAs(r, http.MethodPost, "/api/v1/auth/verify", ""); rec.Code != http.StatusUnsupportedMediaType {
+			t.Fatalf("request %d: %d %s, want 415", i+1, rec.Code, rec.Body.String())
+		}
+	}
+	if rec := serveAs(r, http.MethodPost, "/api/v1/auth/verify", ""); rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("request 6: %d, want 429", rec.Code)
+	}
+	if rec := serveAs(r, http.MethodGet, "/api/v1/auth/verify?token=x", ""); rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("GET after the budget: %d, want 429 (shared budget)", rec.Code)
+	}
+}

@@ -361,7 +361,41 @@
     "forgotPassword": "Zapomniałeś hasła?",
     "vipps": "Zaloguj się przez Vipps",
     "or": "lub",
-    "otherMethods": "Inne metody logowania"
+    "otherMethods": "Inne metody logowania",
+    "verify": {
+      "title": "Zaloguj się",
+      "body": "Naciśnij przycisk, aby dokończyć logowanie.",
+      "button": "Zaloguj się",
+      "requestNew": "Poproś o nowy link logowania",
+      "problems": {
+        "login_token_missing": {
+          "title": "Otwórz link z e-maila",
+          "body": "Ta strona potrzebuje linku logowania z e-maila. Otwórz ponownie link z e-maila lub poproś o nowy."
+        },
+        "login_token_invalid": {
+          "title": "Ten link nie działa",
+          "body": "Nie rozpoznajemy tego linku logowania. Skopiuj cały link z e-maila lub poproś o nowy."
+        },
+        "login_token_used": {
+          "title": "Ten link został już użyty",
+          "body": "Każdy link logowania działa tylko raz. Poproś o nowy, aby się zalogować."
+        },
+        "login_token_expired": {
+          "title": "Ten link wygasł",
+          "body": "Linki logowania są ważne 15 minut. Poproś o nowy, aby się zalogować."
+        },
+        "failed": {
+          "title": "Coś poszło nie tak",
+          "body": "Nie udało się Cię zalogować. Spróbuj ponownie lub poproś o nowy link logowania."
+        }
+      },
+      "sessionFailed": {
+        "title": "Jesteś zalogowany, ale strona się nie załadowała",
+        "body": "Logowanie się powiodło, ale nie udało się wczytać Twojego konta. Spróbuj ponownie lub przejdź do stron członkowskich.",
+        "retry": "Spróbuj ponownie",
+        "portal": "Przejdź do stron członkowskich"
+      }
+    }
   },
   "merchandise": {
     "title": "Sklep",

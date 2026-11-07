@@ -66,6 +66,7 @@ pkgs.runCommand "brygge-caddy-log-check"
       "http://127.0.0.1:18080$1"
   }
   req "/api/v1/auth/verify?token=SECRET-A&x=1"
+  req "/login/verify?token=SECRET-L"
   req "/api/v1/unsubscribe?a=1&token=SECRET-B"
   req "/join/confirm?token=SECRET-C"
   req "/api/v1/join/confirm/SECRET-D"

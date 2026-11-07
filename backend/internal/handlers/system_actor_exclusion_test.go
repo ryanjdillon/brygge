@@ -546,7 +546,7 @@ func TestIntegration_SystemActorMagicLinkVerifyIssuesNoSession(t *testing.T) {
 		t.Fatalf("seed magic link: %v", err)
 	}
 	h := NewMagicLinkHandler(e.db, e.cfg, &email.MockSender{}, auth.NewSessionService(e.db), zerolog.Nop())
-	rec := e.do(t, http.MethodGet, "/auth/verify", "/auth/verify?token=synthetic-system-token", h.HandleVerifyMagicLink, "")
+	rec := e.do(t, http.MethodPost, "/auth/verify", "/auth/verify", h.HandleConsumeMagicLink, `{"token":"synthetic-system-token"}`)
 	if rec.Code < 400 {
 		t.Errorf("verify for the system actor answered %d, want an error; body: %s", rec.Code, rec.Body.String())
 	}

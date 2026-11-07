@@ -134,6 +134,13 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/LoginView.vue'),
   },
   {
+    // The login email links here (loginVerifyURL). Public: the visitor has no
+    // session until the page's POST consumes the token.
+    path: '/login/verify',
+    name: 'login-verify',
+    component: () => import('@/views/LoginVerifyView.vue'),
+  },
+  {
     path: '/portal',
     component: () => import('@/views/PortalView.vue'),
     meta: { requiresAuth: true },

@@ -6,7 +6,7 @@ Some URLs carry a bearer secret. A log line that records the URL records the sec
 
 | URL | Secret | Lifetime |
 |-----|--------|----------|
-| `GET /api/v1/auth/verify?token=` | magic-link login token (stored hashed since BRY-652) | 15 minutes, one use |
+| `/login/verify?token=`, `GET /api/v1/auth/verify?token=` (old links, redirects to the page) | magic-link login token (stored hashed since BRY-652) | 15 minutes, one use |
 | `/join/confirm?token=`, `/api/v1/join/confirm/{token}` | join confirmation token | per application |
 | `/api/v1/unsubscribe?token=` | unsubscribe token | long-lived |
 | `/betal/{token}`, `/betal/{token}/kvittering`, `/betal/bruker/{token}` | pay and payables tokens | until paid; payables are durable |
@@ -62,6 +62,6 @@ Owner steps, once, after the first deploy that carries the filter:
 
 5. **Optional, destructive:** `journalctl --rotate && journalctl --vacuum-time=1s` removes the exposed entries at once. It wipes the logs of every service on the host, not just Caddy's.
 
-## Open follow-up
+## Login links (done, BRY-658)
 
-A magic link is still a GET that logs the user in, so a mail scanner that follows the link can consume it, and the token is in a URL for the browser history and any proxy in between. Moving verification to an SPA landing page that POSTs the token (as `POST /join/confirm` already does) would keep it out of every URL. Not done; tracked as a follow-up.
+A login link used to be a GET that logged the user in, so a mail scanner that followed it consumed it. It now opens the SPA page `/login/verify?token=…`, which consumes nothing on load, drops the token from the address bar and logs in only when the member presses the button (`POST /api/v1/auth/verify`, JSON body). The token is still in the link's URL for the first request, where the `token` query rule above redacts it, including in the Location of the old `GET /api/v1/auth/verify` redirect. See the invariant "Consuming a login token requires a POST; GETs never consume".

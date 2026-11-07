@@ -21,7 +21,7 @@ func NewAPI(router chi.Router, cfg Config) huma.API {
 			Type:        "apiKey",
 			In:          "cookie",
 			Name:        "brygge_session",
-			Description: "Session cookie set by /api/v1/auth/verify after a successful magic-link click.",
+			Description: "Session cookie set by POST /api/v1/auth/verify after a successful magic-link login.",
 		},
 	}
 

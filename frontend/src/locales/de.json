@@ -361,7 +361,41 @@
     "forgotPassword": "Passwort vergessen?",
     "vipps": "Mit Vipps anmelden",
     "or": "oder",
-    "otherMethods": "Andere Anmeldemethoden"
+    "otherMethods": "Andere Anmeldemethoden",
+    "verify": {
+      "title": "Anmelden",
+      "body": "Drücken Sie die Schaltfläche, um die Anmeldung abzuschließen.",
+      "button": "Anmelden",
+      "requestNew": "Neuen Anmeldelink anfordern",
+      "problems": {
+        "login_token_missing": {
+          "title": "Öffnen Sie den Link aus Ihrer E-Mail",
+          "body": "Diese Seite braucht den Anmeldelink aus Ihrer E-Mail. Öffnen Sie den Link aus der E-Mail erneut oder fordern Sie einen neuen an."
+        },
+        "login_token_invalid": {
+          "title": "Dieser Link funktioniert nicht",
+          "body": "Wir erkennen diesen Anmeldelink nicht. Kopieren Sie den ganzen Link aus der E-Mail oder fordern Sie einen neuen an."
+        },
+        "login_token_used": {
+          "title": "Dieser Link wurde bereits verwendet",
+          "body": "Jeder Anmeldelink funktioniert nur einmal. Fordern Sie einen neuen an, um sich anzumelden."
+        },
+        "login_token_expired": {
+          "title": "Dieser Link ist abgelaufen",
+          "body": "Anmeldelinks gelten 15 Minuten. Fordern Sie einen neuen an, um sich anzumelden."
+        },
+        "failed": {
+          "title": "Etwas ist schiefgelaufen",
+          "body": "Wir konnten Sie nicht anmelden. Versuchen Sie es erneut oder fordern Sie einen neuen Anmeldelink an."
+        }
+      },
+      "sessionFailed": {
+        "title": "Sie sind angemeldet, aber die Seite wurde nicht geladen",
+        "body": "Die Anmeldung hat geklappt, aber wir konnten Ihr Konto nicht laden. Versuchen Sie es erneut oder gehen Sie zu den Mitgliederseiten.",
+        "retry": "Erneut versuchen",
+        "portal": "Zu den Mitgliederseiten"
+      }
+    }
   },
   "merchandise": {
     "title": "Shop",

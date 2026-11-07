@@ -78,10 +78,20 @@ func registerAuthOps(api huma.API) {
 		Method:      http.MethodGet,
 		Path:        "/api/v1/auth/verify",
 		Tags:        []string{"Auth"},
-		Summary:     "Consume a magic-link token, set session cookie, redirect",
+		Summary:     "Redirect an old login link to the login page",
+		Description: "Consumes nothing: answers 302 to the SPA page /login/verify with the same token, where the member logs in with POST /api/v1/auth/verify. Kept for login links mailed before the page existed.",
 	}, stub[struct {
 		Token string `query:"token" doc:"Magic-link token from the email"`
 	}, struct{}]())
+
+	huma.Register(api, huma.Operation{
+		OperationID: "consume-magic-link",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/auth/verify",
+		Tags:        []string{"Auth"},
+		Summary:     "Log in with a magic-link token",
+		Description: "Uses the token up and sets the session cookie. 410 with code login_token_invalid, login_token_used or login_token_expired; 415 unless Content-Type is application/json; 429 over the strict per-IP budget shared with the magic-link request.",
+	}, stub[struct{ Body MagicLinkVerifyRequest }, struct{ Body MagicLinkVerifyResponse }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "session-logout",

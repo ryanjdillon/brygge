@@ -436,6 +436,7 @@ func (h *PasskeyHandler) HandleLoginFinish(w http.ResponseWriter, r *http.Reques
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
+	endPriorSession(ctx, r, h.sessions, sessionID, h.log)
 	middleware.SetSessionCookie(w, sessionID, cookieSecure(h.config))
 
 	// A user-verifying assertion proves possession + inherence — enough to also

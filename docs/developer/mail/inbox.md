@@ -241,7 +241,8 @@ sudo -u postgres psql brygge -c \
        FROM users u WHERE u.email = '<your-email>';"
 
 curl -sS -o /dev/null -w 'verify=%{http_code}\n' \
-  "https://<domain>/api/v1/auth/verify?token=$TOKEN"
+  -H 'Content-Type: application/json' -d "{\"token\":\"$TOKEN\"}" \
+  "https://<domain>/api/v1/auth/verify"
 ```
 
 Inspect the resulting Stalwart principal (should be `bu<12hex>` with `bu…@<club_domain>` synthetic email, bcrypt-hashed secret, `description: "Brygge user"`, and `urls` holding `urn:brygge:managed-by:brygge-user` plus `urn:brygge:user:<user uuid>`):

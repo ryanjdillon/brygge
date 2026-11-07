@@ -292,6 +292,17 @@ func GetSessionInfo(ctx context.Context) *auth.SessionInfo {
 	return info
 }
 
+// SessionCookieValue returns the session ID the request's cookie carries, or
+// "" when there is none. It does not validate the session; a login handler
+// uses it to end the session it replaces.
+func SessionCookieValue(r *http.Request) string {
+	cookie, err := r.Cookie(sessionCookieName)
+	if err != nil {
+		return ""
+	}
+	return cookie.Value
+}
+
 // SetSessionCookie sets the session cookie on the response.
 func SetSessionCookie(w http.ResponseWriter, sessionID string, secure bool) {
 	http.SetCookie(w, &http.Cookie{ // #nosec G124 -- Secure follows the configured origin scheme; false only for plain-http local dev

@@ -5,8 +5,10 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -137,15 +139,57 @@ func (h *MagicLinkHandler) HandleRequestMagicLink(w http.ResponseWriter, r *http
 	JSON(w, http.StatusOK, resp)
 }
 
-// HandleVerifyMagicLink validates a magic link token and returns user info.
-// In the session-based flow (DIL-26), this will create a session and set a cookie.
-// For now, it returns the user info as JSON (to be wired with session creation).
+// HandleVerifyMagicLink answers the GET login links mailed before BRY-658,
+// which pointed here. It consumes nothing: it sends the browser on to the SPA
+// page the links now go to, where the member logs in with a button (POST), so
+// a mail scanner that prefetches an old link cannot use it up. Links live
+// magicLinkExpiry, so this route can go one release after BRY-658 ships.
 func (h *MagicLinkHandler) HandleVerifyMagicLink(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+	http.Redirect(w, r, loginVerifyURL(h.config, r.URL.Query().Get("token")), http.StatusFound)
+}
 
-	token := r.URL.Query().Get("token")
+type magicLinkVerifyRequest struct {
+	Token string `json:"token"`
+}
+
+type magicLinkVerifyResponse struct {
+	Status string `json:"status"`
+}
+
+// Error codes the login verify page matches on.
+const (
+	codeLoginTokenInvalid = "login_token_invalid"
+	codeLoginTokenUsed    = "login_token_used"
+	codeLoginTokenExpired = "login_token_expired"
+)
+
+// HandleConsumeMagicLink logs in with a magic-link token sent in a JSON body:
+// it consumes the token, creates the session and sets its cookie. Only a POST
+// consumes a login token, so opening the link (a GET) changes nothing.
+//
+// Login CSRF: requireJSON (exact media type application/json, else 415) keeps
+// another site from logging a visitor in as someone else, but only together
+// with the single-origin CORS allow-list in newRouter (cfg.FrontendURL). A
+// cross-site HTML form cannot send application/json, and a cross-origin fetch
+// that does needs a preflight, which that allow-list fails. Widening
+// AllowedOrigins breaks this guard. POST /join/confirm relies on the same pair.
+//
+// A session the request already carries is deleted once the new one exists,
+// so logging in as someone else does not leave the previous login live.
+func (h *MagicLinkHandler) HandleConsumeMagicLink(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if !requireJSON(w, r) {
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
+	var req magicLinkVerifyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	token := strings.TrimSpace(req.Token)
 	if token == "" {
-		Error(w, http.StatusBadRequest, "token is required")
+		loginTokenRefused(w, codeLoginTokenInvalid)
 		return
 	}
 
@@ -158,9 +202,8 @@ func (h *MagicLinkHandler) HandleVerifyMagicLink(w http.ResponseWriter, r *http.
 		 RETURNING email, club_id`,
 		magicLinkTokenHash(token),
 	).Scan(&linkEmail, &clubID)
-
-	if err == pgx.ErrNoRows {
-		Error(w, http.StatusBadRequest, "invalid or expired login link")
+	if errors.Is(err, pgx.ErrNoRows) {
+		loginTokenRefused(w, h.refusalCode(ctx, token))
 		return
 	}
 	if err != nil {
@@ -169,29 +212,31 @@ func (h *MagicLinkHandler) HandleVerifyMagicLink(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// Look up user
 	var userID string
 	err = h.db.QueryRow(ctx,
 		`SELECT id FROM users WHERE email = $1 AND club_id = $2
 		   AND kind = 'person' AND deactivated_at IS NULL`,
 		linkEmail, clubID,
 	).Scan(&userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// The user was deactivated (or never was a person) after the link
+		// was sent: the link is spent and logs no one in.
+		loginTokenRefused(w, codeLoginTokenInvalid)
+		return
+	}
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to look up user after magic link verification")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	// Create session
-	ip := r.RemoteAddr
-	ua := r.UserAgent()
-	sessionID, err := h.sessions.CreateSession(ctx, userID, clubID, ip, ua)
+	sessionID, err := h.sessions.CreateSession(ctx, userID, clubID, r.RemoteAddr, r.UserAgent())
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to create session")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-
+	endPriorSession(ctx, r, h.sessions, sessionID, h.log)
 	middleware.SetSessionCookie(w, sessionID, cookieSecure(h.config))
 
 	// Lazy Stalwart provisioning (DIL-321). Detached so login
@@ -213,8 +258,32 @@ func (h *MagicLinkHandler) HandleVerifyMagicLink(w http.ResponseWriter, r *http.
 		}(userID, linkEmail)
 	}
 
-	// Redirect to frontend
-	http.Redirect(w, r, h.config.FrontendURL+"/portal", http.StatusFound)
+	JSON(w, http.StatusOK, magicLinkVerifyResponse{Status: "logged_in"})
+}
+
+// refusalCode says why a token could not be consumed, so the page can tell
+// the member whether to ask for a new link because theirs expired or was
+// already used. Only the holder of the token can learn this.
+func (h *MagicLinkHandler) refusalCode(ctx context.Context, token string) string {
+	var used, expired bool
+	err := h.db.QueryRow(ctx,
+		`SELECT used, expires_at <= NOW() FROM magic_links WHERE token_hash = $1`,
+		magicLinkTokenHash(token),
+	).Scan(&used, &expired)
+	switch {
+	case err != nil:
+		return codeLoginTokenInvalid
+	case used:
+		return codeLoginTokenUsed
+	case expired:
+		return codeLoginTokenExpired
+	default:
+		return codeLoginTokenInvalid
+	}
+}
+
+func loginTokenRefused(w http.ResponseWriter, code string) {
+	JSON(w, http.StatusGone, map[string]string{"error": "invalid or expired login link", "code": code})
 }
 
 // mayProvisionMail reports whether a login may create the user's Stalwart
@@ -233,10 +302,9 @@ func (h *MagicLinkHandler) mayProvisionMail(ctx context.Context, userID, clubID 
 }
 
 // issueMagicLink stores a single-use login link for email in clubID and
-// returns its URL. The URL is the backend verify endpoint: it consumes the
-// token, sets the session cookie and redirects to /portal in one request.
-// email must be the address as stored on the user, which verify matches
-// exactly. Only the token's hash is stored; the URL carries the token.
+// returns its URL, the SPA page /login/verify (loginVerifyURL). email must be
+// the address as stored on the user, which verify matches exactly. Only the
+// token's hash is stored; the URL carries the token.
 func issueMagicLink(ctx context.Context, db *pgxpool.Pool, cfg *config.Config, clubID, email string) (string, error) {
 	token, err := generateToken()
 	if err != nil {
@@ -248,7 +316,18 @@ func issueMagicLink(ctx context.Context, db *pgxpool.Pool, cfg *config.Config, c
 	); err != nil {
 		return "", fmt.Errorf("store magic link: %w", err)
 	}
-	return fmt.Sprintf("%s/api/v1/auth/verify?token=%s", cfg.FrontendURL, token), nil
+	return loginVerifyURL(cfg, token), nil
+}
+
+// loginVerifyURL is the SPA page a login link opens. Opening it changes
+// nothing: the page logs in with a POST, so a mail scanner that prefetches
+// links cannot use the token up. An empty token gives the bare page, which
+// says the link is invalid.
+func loginVerifyURL(cfg *config.Config, token string) string {
+	if token == "" {
+		return publicSiteBase(cfg) + "/login/verify"
+	}
+	return publicSiteBase(cfg) + "/login/verify?token=" + url.QueryEscape(token)
 }
 
 // magicLinkTokenHash is what magic_links.token_hash stores: sha256 hex, the
@@ -267,6 +346,20 @@ func (h *MagicLinkHandler) HandleSessionLogout(w http.ResponseWriter, r *http.Re
 	}
 	middleware.ClearSessionCookie(w, cookieSecure(h.config))
 	JSON(w, http.StatusOK, map[string]string{"message": "logged out"})
+}
+
+// endPriorSession deletes the session the request's cookie names, if any and
+// if it is not newID, so a login replaces the browser's previous session
+// rather than leaving it valid server-side. Best effort: a failure is logged
+// and the login goes ahead, since the new cookie replaces the old one anyway.
+func endPriorSession(ctx context.Context, r *http.Request, sessions *auth.SessionService, newID string, log zerolog.Logger) {
+	old := middleware.SessionCookieValue(r)
+	if old == "" || old == newID || sessions == nil {
+		return
+	}
+	if err := sessions.DeleteSession(ctx, old); err != nil {
+		log.Warn().Err(err).Msg("failed to delete the previous session on login")
+	}
 }
 
 // cookieSecure decides the session cookie's Secure flag from the configured

@@ -187,6 +187,14 @@ type JoinConfirmResponse struct {
 	OrderToken  string `json:"order_token" doc:"The order's checkout token, as in /betal/{token}"`
 }
 
+type MagicLinkVerifyRequest struct {
+	Token string `json:"token" minLength:"1" doc:"The token from the login link"`
+}
+
+type MagicLinkVerifyResponse struct {
+	Status string `json:"status" enum:"logged_in" doc:"Always logged_in; the session cookie is set"`
+}
+
 type JoinBankInvoiceResponse struct {
 	InvoiceID     string  `json:"invoice_id" doc:"The join faktura's UUID"`
 	InvoiceNumber int     `json:"invoice_number" doc:"The faktura number"`

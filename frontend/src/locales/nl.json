@@ -361,7 +361,41 @@
     "forgotPassword": "Wachtwoord vergeten?",
     "vipps": "Inloggen met Vipps",
     "or": "of",
-    "otherMethods": "Andere inlogmethoden"
+    "otherMethods": "Andere inlogmethoden",
+    "verify": {
+      "title": "Inloggen",
+      "body": "Druk op de knop om het inloggen af te ronden.",
+      "button": "Inloggen",
+      "requestNew": "Nieuwe inloglink aanvragen",
+      "problems": {
+        "login_token_missing": {
+          "title": "Open de link uit je e-mail",
+          "body": "Deze pagina heeft de inloglink uit je e-mail nodig. Open de link uit de e-mail opnieuw, of vraag een nieuwe aan."
+        },
+        "login_token_invalid": {
+          "title": "Deze link werkt niet",
+          "body": "We herkennen deze inloglink niet. Kopieer de hele link uit de e-mail, of vraag een nieuwe aan."
+        },
+        "login_token_used": {
+          "title": "Deze link is al gebruikt",
+          "body": "Elke inloglink werkt één keer. Vraag een nieuwe aan om in te loggen."
+        },
+        "login_token_expired": {
+          "title": "Deze link is verlopen",
+          "body": "Inloglinks werken 15 minuten. Vraag een nieuwe aan om in te loggen."
+        },
+        "failed": {
+          "title": "Er ging iets mis",
+          "body": "We konden je niet inloggen. Probeer het opnieuw, of vraag een nieuwe inloglink aan."
+        }
+      },
+      "sessionFailed": {
+        "title": "Je bent ingelogd, maar de pagina is niet geladen",
+        "body": "Het inloggen is gelukt, maar we konden je account niet laden. Probeer het opnieuw, of ga naar de ledenpagina's.",
+        "retry": "Opnieuw proberen",
+        "portal": "Naar de ledenpagina's"
+      }
+    }
   },
   "merchandise": {
     "title": "Winkel",

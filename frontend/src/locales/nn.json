@@ -417,7 +417,41 @@
     "or": "eller",
     "otherMethods": "Andre innloggingsmetodar",
     "noAccount": "Har du ikkje konto?",
-    "forgotPassword": "Gløymt passord?"
+    "forgotPassword": "Gløymt passord?",
+    "verify": {
+      "title": "Logg inn",
+      "body": "Trykk på knappen for å fullføre innlogginga.",
+      "button": "Logg inn",
+      "requestNew": "Be om ei ny innloggingslenkje",
+      "problems": {
+        "login_token_missing": {
+          "title": "Opne lenkja frå e-posten",
+          "body": "Denne sida treng innloggingslenkja frå e-posten. Opne lenkja frå e-posten på nytt, eller be om ei ny."
+        },
+        "login_token_invalid": {
+          "title": "Lenkja verkar ikkje",
+          "body": "Vi kjenner ikkje att denne innloggingslenkja. Kopier heile lenkja frå e-posten, eller be om ei ny."
+        },
+        "login_token_used": {
+          "title": "Lenkja er alt brukt",
+          "body": "Kvar innloggingslenkje verkar éin gong. Be om ei ny for å logge inn."
+        },
+        "login_token_expired": {
+          "title": "Lenkja har gått ut",
+          "body": "Innloggingslenkjer verkar i 15 minutt. Be om ei ny for å logge inn."
+        },
+        "failed": {
+          "title": "Noko gjekk gale",
+          "body": "Vi fekk ikkje logga deg inn. Prøv igjen, eller be om ei ny innloggingslenkje."
+        }
+      },
+      "sessionFailed": {
+        "title": "Du er logga inn, men sida vart ikkje lasta",
+        "body": "Innlogginga gjekk gjennom, men vi fekk ikkje lasta kontoen din. Prøv igjen, eller gå til medlemssidene.",
+        "retry": "Prøv igjen",
+        "portal": "Gå til medlemssidene"
+      }
+    }
   },
   "portal": {
     "payables": {

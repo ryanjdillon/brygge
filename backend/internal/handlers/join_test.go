@@ -440,7 +440,7 @@ func TestJoinBranchesSameResponse(t *testing.T) {
 	if n := e.count(t, `SELECT count(*) FROM magic_links WHERE email = $1 AND used = false`, member); n != 1 {
 		t.Error("the member got no login link")
 	}
-	if !strings.Contains(e.mailsTo(member)[0].HTML, "/api/v1/auth/verify?token=") {
+	if !strings.Contains(e.mailsTo(member)[0].HTML, "/login/verify?token=") {
 		t.Error("the already-member mail carries no login link")
 	}
 	if got := e.roles(t, memberID); !slices.Equal(got, []string{"member"}) {
@@ -795,7 +795,7 @@ func TestMagicLinkSkipsMailProvisioningForApplicants(t *testing.T) {
 	ml := NewMagicLinkHandler(e.db, e.cfg, nil, auth.NewSessionService(e.db), zerolog.Nop())
 	ml.MailProvisioner = fake
 	r := chi.NewRouter()
-	r.Get("/auth/verify", ml.HandleVerifyMagicLink)
+	r.Post("/auth/verify", ml.HandleConsumeMagicLink)
 
 	login := func(addr string) {
 		t.Helper()
@@ -804,9 +804,11 @@ func TestMagicLinkSkipsMailProvisioningForApplicants(t *testing.T) {
 			t.Fatal(err)
 		}
 		token := loginURL[strings.Index(loginURL, "token=")+len("token="):]
+		req := httptest.NewRequest(http.MethodPost, "/auth/verify", strings.NewReader(`{"token":"`+token+`"}`))
+		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
-		r.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/auth/verify?token="+token, nil))
-		assertStatus(t, rec, http.StatusFound)
+		r.ServeHTTP(rec, req)
+		assertStatus(t, rec, http.StatusOK)
 	}
 
 	login("applicant.mail@example.com")

@@ -361,7 +361,41 @@
     "forgotPassword": "Mot de passe oublié ?",
     "vipps": "Se connecter avec Vipps",
     "or": "ou",
-    "otherMethods": "Autres méthodes de connexion"
+    "otherMethods": "Autres méthodes de connexion",
+    "verify": {
+      "title": "Se connecter",
+      "body": "Appuyez sur le bouton pour terminer la connexion.",
+      "button": "Se connecter",
+      "requestNew": "Demander un nouveau lien de connexion",
+      "problems": {
+        "login_token_missing": {
+          "title": "Ouvrez le lien de votre e-mail",
+          "body": "Cette page a besoin du lien de connexion de votre e-mail. Ouvrez à nouveau le lien de l'e-mail, ou demandez-en un nouveau."
+        },
+        "login_token_invalid": {
+          "title": "Ce lien ne fonctionne pas",
+          "body": "Nous ne reconnaissons pas ce lien de connexion. Copiez le lien complet depuis l'e-mail, ou demandez-en un nouveau."
+        },
+        "login_token_used": {
+          "title": "Ce lien a déjà été utilisé",
+          "body": "Chaque lien de connexion ne fonctionne qu'une fois. Demandez-en un nouveau pour vous connecter."
+        },
+        "login_token_expired": {
+          "title": "Ce lien a expiré",
+          "body": "Les liens de connexion sont valables 15 minutes. Demandez-en un nouveau pour vous connecter."
+        },
+        "failed": {
+          "title": "Une erreur est survenue",
+          "body": "Nous n'avons pas pu vous connecter. Réessayez, ou demandez un nouveau lien de connexion."
+        }
+      },
+      "sessionFailed": {
+        "title": "Vous êtes connecté, mais la page ne s'est pas chargée",
+        "body": "La connexion a réussi, mais nous n'avons pas pu charger votre compte. Réessayez, ou allez aux pages membres.",
+        "retry": "Réessayer",
+        "portal": "Aller aux pages membres"
+      }
+    }
   },
   "merchandise": {
     "title": "Boutique",

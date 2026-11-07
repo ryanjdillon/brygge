@@ -1360,10 +1360,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Consume a magic-link token, set session cookie, redirect */
+        /**
+         * Redirect an old login link to the login page
+         * @description Consumes nothing: answers 302 to the SPA page /login/verify with the same token, where the member logs in with POST /api/v1/auth/verify. Kept for login links mailed before the page existed.
+         */
         get: operations["verify-magic-link"];
         put?: never;
-        post?: never;
+        /**
+         * Log in with a magic-link token
+         * @description Uses the token up and sets the session cookie. 410 with code login_token_invalid, login_token_used or login_token_expired; 415 unless Content-Type is application/json; 429 over the strict per-IP budget shared with the magic-link request.
+         */
+        post: operations["consume-magic-link"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4775,6 +4782,29 @@ export interface components {
             readonly $schema?: string;
             /** @description Legal documents */
             documents: components["schemas"]["LegalDocument"][] | null;
+        };
+        MagicLinkVerifyRequest: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/MagicLinkVerifyRequest.json
+             */
+            readonly $schema?: string;
+            /** @description The token from the login link */
+            token: string;
+        };
+        MagicLinkVerifyResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/MagicLinkVerifyResponse.json
+             */
+            readonly $schema?: string;
+            /**
+             * @description Always logged_in; the session cookie is set
+             * @enum {string}
+             */
+            status: "logged_in";
         };
         MapMarker: {
             /**
@@ -9623,6 +9653,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "consume-magic-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MagicLinkVerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MagicLinkVerifyResponse"];
+                };
             };
             /** @description Error */
             default: {

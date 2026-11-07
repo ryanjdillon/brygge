@@ -15,7 +15,7 @@ func TestJoinLocale(t *testing.T) {
 
 func TestJoinEmails(t *testing.T) {
 	const confirmURL = "https://club.example.test/join/confirm?token=abc_DEF-123"
-	const loginURL = "https://club.example.test/api/v1/auth/verify?token=xyz"
+	const loginURL = "https://club.example.test/login/verify?token=xyz"
 
 	cases := []struct {
 		name, subject, body, wantSubject, wantText, url string

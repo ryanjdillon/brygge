@@ -424,7 +424,41 @@
     "or": "or",
     "otherMethods": "Other login methods",
     "noAccount": "Don't have an account?",
-    "forgotPassword": "Forgot password?"
+    "forgotPassword": "Forgot password?",
+    "verify": {
+      "title": "Log in",
+      "body": "Press the button to finish logging in.",
+      "button": "Log in",
+      "requestNew": "Request a new login link",
+      "problems": {
+        "login_token_missing": {
+          "title": "Open the link from your email",
+          "body": "This page needs the login link from your email. Open the link from the email again, or request a new one."
+        },
+        "login_token_invalid": {
+          "title": "This link doesn't work",
+          "body": "We don't recognise this login link. Copy the whole link from the email, or request a new one."
+        },
+        "login_token_used": {
+          "title": "This link has been used",
+          "body": "Each login link works once. Request a new one to log in."
+        },
+        "login_token_expired": {
+          "title": "This link has expired",
+          "body": "Login links work for 15 minutes. Request a new one to log in."
+        },
+        "failed": {
+          "title": "Something went wrong",
+          "body": "We could not log you in. Try again, or request a new login link."
+        }
+      },
+      "sessionFailed": {
+        "title": "You are logged in, but the page did not load",
+        "body": "Your login went through, but we could not load your account. Try again, or go to the member pages.",
+        "retry": "Try again",
+        "portal": "Go to the member pages"
+      }
+    }
   },
   "portal": {
     "payables": {

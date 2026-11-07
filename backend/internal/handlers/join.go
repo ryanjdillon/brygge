@@ -433,8 +433,12 @@ var joinAccepted = map[string]string{"status": "received"}
 
 // requireJSON answers 415 unless the request declares a JSON body. A
 // cross-site HTML form can only send form or text types, and CORS does not
-// stop such a "simple" POST from reaching the handler, so this is what keeps
-// another site from submitting or confirming a join in a visitor's browser.
+// stop such a "simple" POST from reaching the handler. A cross-origin fetch
+// that does send application/json needs a preflight, which the single-origin
+// CORS allow-list in newRouter (cfg.FrontendURL) fails. Together, and only
+// together, they keep another site from submitting or confirming a join, or
+// consuming a login link (HandleConsumeMagicLink), in a visitor's browser:
+// widening AllowedOrigins breaks this guard.
 func requireJSON(w http.ResponseWriter, r *http.Request) bool {
 	mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || mt != "application/json" {

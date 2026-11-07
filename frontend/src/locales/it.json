@@ -361,7 +361,41 @@
     "forgotPassword": "Password dimenticata?",
     "vipps": "Accedi con Vipps",
     "or": "o",
-    "otherMethods": "Altri metodi di accesso"
+    "otherMethods": "Altri metodi di accesso",
+    "verify": {
+      "title": "Accedi",
+      "body": "Premi il pulsante per completare l'accesso.",
+      "button": "Accedi",
+      "requestNew": "Richiedi un nuovo link di accesso",
+      "problems": {
+        "login_token_missing": {
+          "title": "Apri il link dalla tua e-mail",
+          "body": "Questa pagina richiede il link di accesso dalla tua e-mail. Apri di nuovo il link dall'e-mail o richiedine uno nuovo."
+        },
+        "login_token_invalid": {
+          "title": "Questo link non funziona",
+          "body": "Non riconosciamo questo link di accesso. Copia l'intero link dall'e-mail o richiedine uno nuovo."
+        },
+        "login_token_used": {
+          "title": "Questo link è già stato usato",
+          "body": "Ogni link di accesso funziona una sola volta. Richiedine uno nuovo per accedere."
+        },
+        "login_token_expired": {
+          "title": "Questo link è scaduto",
+          "body": "I link di accesso valgono 15 minuti. Richiedine uno nuovo per accedere."
+        },
+        "failed": {
+          "title": "Qualcosa è andato storto",
+          "body": "Non siamo riusciti a farti accedere. Riprova o richiedi un nuovo link di accesso."
+        }
+      },
+      "sessionFailed": {
+        "title": "Hai effettuato l'accesso, ma la pagina non si è caricata",
+        "body": "L'accesso è riuscito, ma non siamo riusciti a caricare il tuo account. Riprova o vai alle pagine dei soci.",
+        "retry": "Riprova",
+        "portal": "Vai alle pagine dei soci"
+      }
+    }
   },
   "merchandise": {
     "title": "Shop",
