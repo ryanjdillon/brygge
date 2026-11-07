@@ -49,7 +49,7 @@ Audience: deployers, contributors, and anyone troubleshooting at the OS / protoc
 
 | Subdir | Description |
 |--------|-------------|
-| [security/](security/) | TOTP / 2FA — enrollment, recovery, admin reset |
+| [security/](security/) | TOTP / 2FA, the auth middleware matrix, the member lifecycle (join to purge), developer DB query access |
 | [mail/](mail/) | Self-hosted Stalwart + Bulwark — setup, shared inbox, internals, BIMI |
 | [otel/](otel/) | OpenTelemetry — instrumentation, collectors, alerting |
 
@@ -63,6 +63,7 @@ Backend internals carry their own `README.md` next to the source — load when y
 - [`backend/internal/sesevents/README.md`](../../backend/internal/sesevents/README.md) — SES delivery-event worker: SQS long poll, idempotent insert, status rank, DLQ, retention
 - [`backend/internal/middleware/README.md`](../../backend/internal/middleware/README.md) — middleware ordering, TOTP gating flavors, browser-navigation detection
 - [`backend/internal/finance/README.md`](../../backend/internal/finance/README.md) — invoice data contract, KID generation, Norwegian formatting
+- [`backend/internal/membership/README.md`](../../backend/internal/membership/README.md) — granting membership when a join payment settles, the hourly membership sweep, join refund and expiry notices
 
 Frontend:
 

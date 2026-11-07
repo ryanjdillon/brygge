@@ -74,7 +74,7 @@ The public contact form (`POST /api/v1/contact`) mails each message to the club'
 
 ### Board notification address
 
-When a join payment settles, the board gets a "Nytt medlem" email; a refunded or credited join payment sends it an "Innmeldingsbetaling refundert" email, and a paid join whose grant was withheld an "Innmelding må kontrollerast" email (BRY-630). The recipient is resolved when the email is sent (`boardNotificationAddress` in `backend/internal/handlers/membership_notice_sender.go`), first match wins:
+When a join payment settles, the board gets a "Nytt medlem" email; a refunded or credited join payment sends it an "Innmeldingsbetaling refundert" email, and a paid join whose grant was withheld, or an expired join with part of the money in (BRY-631), an "Innmelding må kontrollerast" email (BRY-630). A member cancelling online, undoing it, or a year-end end refused for the last admin sends "Utmelding", "Utmelding angra" and "Utmelding må handsamast" (BRY-633). The recipient of all of these is resolved when the email is sent (`boardNotificationAddress` in `backend/internal/handlers/membership_notice_sender.go`), first match wins:
 
 1. `clubs.board_notification_email`, the club setting under Admin > Site settings ("Varsel om medlemskap til"; `board_notification_email` on `GET`/`PATCH /admin/settings/site`, a bare mailbox or empty). Empty is the default.
 2. The deployment's general shared mailbox: the `board_mailboxes` entry with `from_brand_only` in the board-mailbox spec (`BRYGGE_MAILBOXES_PATH`), conventionally `post@<domain>`. The spec is deployment-wide and a deployment serves one club, so this applies only to the club whose slug is `CLUB_SLUG`.

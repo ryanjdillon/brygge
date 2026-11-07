@@ -1,6 +1,6 @@
 # Bli medlem (self-service join)
 
-> Audience: board members and site admins who open joining to the public and answer questions from people joining. Members joining follow the pages themselves.
+> Audience: people joining the club, and the board members and site admins who open joining and answer questions about it. The board's part is [Opening joining](#opening-joining-innmeldingspris), [What the board is told](#what-the-board-is-told) and [When a join is never paid](#when-a-join-is-never-paid).
 
 Anyone can join the club from the website without a board member doing anything, as long as joining is open. The flow is three short pages and one email, and works on a phone.
 
@@ -19,17 +19,32 @@ Until then the page says **Innmelding er ikkje opna enno** (*Innmelding er ikke 
 
 1. **The joining price.** In **Økonomi-innstillingar**, under **Innmeldingspris**, choose the price item a new member pays (treasurer or admin, with a fresh two-factor code). Only active price items with a fixed amount can be chosen; items in the **Medlemskap** category are listed first. Create the item under **Prisar** first if it does not exist. Choosing **Ingen (innmelding stengd)** closes joining.
 2. **The legal documents.** Personvernerklæring, Vedtekter, Hamnereglement and Salsvilkår must each have a published version, under **GDPR-administrasjon** → **Juridiske dokument**. Only a site admin can publish them; a treasurer sees a note asking an administrator to do it.
+3. **The club's municipalities.** Residency is worked out from the joiner's address and the club's municipality numbers (kommunenummer; see [Home address and residency](#home-address-and-residency)). They are not shown or edited in the app: ask whoever runs the server to check they hold the current numbers, and to update them after a municipal merger or split. Joining is open without them, but then nobody who joins is counted as living in the municipality.
 
 Below the selector Brygge shows whether joining is open. When it is closed, it lists what is missing (no price chosen, the price archived or not a fixed amount, or a document not published) with a link to **Prisar** and, for an admin, to the legal documents. Archiving the chosen price item, or deleting it, closes joining until you choose another.
 
-The board address gets an email when someone joins and pays, and when a join payment is refunded or held back; each email opens the person in **Medlemmer**. Applicants and the members who got their membership this year have their own filters there; see [members.md](members.md#applicants-and-new-members).
+## What the board is told
+
+The board gets an email, never a task to approve. Each one names the person; open them in **Medlemmer** (applicants and this year's new members have their own filters there, see [members.md](members.md#applicants-and-new-members)).
+
+| Email (Nynorsk subject) | When |
+|---|---|
+| **Nytt medlem: {namn}** | A join was paid and the person is now a member. |
+| **Innmeldingsbetaling refundert: {namn}** | A join payment was refunded or its faktura credited. The person stays a member; deactivate them by hand if they should not. |
+| **Innmelding må kontrollerast: {namn}** | Money came in for a join but membership was held back: the amount or the faktura does not match the join, the person was deactivated meanwhile, or a join that ran out after 60 days had part of the fee paid. Check the payment and settle it by hand. |
+
+Cancellations have their own emails; see [membership.md](membership.md#for-the-board-following-up-a-cancellation).
+
+**Where they go.** Under **Nettstadsinnstillingar**, **Varsel om medlemskap til** sets the address (treasurer or admin). Left empty, the emails go to the club's shared mailbox (post@), or, without one, to the secretary, else the chair. If none is set, the emails wait and are sent once an address exists.
+
+A person the board has marked **Kan ikkje melde seg inn att** gets an email asking them to contact the board instead of a confirmation link; the board is not emailed. See [members.md](members.md#cant-rejoin).
 
 ## What the person joining does
 
 1. **Fill in the form.** Name, email, phone and home address are required. They tick one box accepting the statutes and harbour rules, the privacy policy and the terms of sale. Each document opens in a new tab (`/vilkar/...`). The newsletter box is optional and starts unticked. The page shows the membership fee for the current year. See [Home address and residency](#home-address-and-residency) for the address.
 2. **Check their email.** The page always says **Sjekk e-posten din**, whatever the address: it never tells a visitor whether an address is already known. The email holds a confirmation link that works for 24 hours.
 3. **Confirm.** The link opens **Hei {namn}, stadfest innmeldinga** (*bekreft innmeldingen*) with one button. Opening the link changes nothing (so mail scanners cannot use it up); pressing the button creates their account as an applicant, records their consents, signs them in on that device and takes them to the payment page.
-4. **Pay online.** Membership starts as soon as the online payment is through. When they pay on the device where they confirmed (so they are signed in), the receipt page says **Velkomen som medlem!** (*Velkommen som medlem!*) and links to the member portal; paid while signed out, it shows the plain receipt.
+4. **Pay online.** Membership starts as soon as the online payment is through, and a welcome email follows. When they pay on the device where they confirmed (so they are signed in), the receipt page says **Velkomen som medlem!** (*Velkommen som medlem!*) and links to the member portal; paid while signed out, it shows the plain receipt.
 
 If they leave without paying, signing in later takes them to **Fullfør innmeldinga** (*Fullfør innmeldingen*, `/bli-medlem/fullfor`). Until they have paid, an applicant can open only that page, their profile, their fakturas and the privacy pages (**Personvern og data** and the privacy policy).
 
@@ -41,6 +56,7 @@ The form no longer asks whether the person lives in the municipality. It is work
 - **Residency.** For a picked address, Brygge looks it up in the register again when the form is sent, stores the register's spelling of the address, and records the member as living in the municipality when the address is in one of the club's municipalities (the municipality codes in the club settings). The board can still change **Lokal** on the member afterwards.
 - **Typing it by hand.** **Finn du ikkje adressa? Skriv ho inn manuelt** (*Finner du ikke adressen? Skriv den inn manuelt*) shows the street, postal code and town fields, all required. If the address search is down, the form switches to these fields by itself with a short notice. Joining never waits for the register.
 - **Unverified addresses.** An address typed by hand, or one the register could not confirm when the form was sent, is saved as **not verified**, and the member is not counted as living in the municipality until the board says so. A verified address shows that the address exists; it does not prove the person lives there.
+- **For the board.** **Medlemmer** does not yet mark which addresses are unverified. A new member without **Lokal** may live in the municipality with an address that could not be checked: look at their address and tick **Lokal** on the member if it is in the municipality.
 - **Phone.** Eight digits are taken as a Norwegian number; a number from another country needs its country code (for example +46).
 
 ## Fullfør innmeldinga
@@ -66,6 +82,14 @@ The confirm page explains each case and offers the next step:
 | Contact the board | The board has blocked this person from rejoining online | Contact page |
 | Joining is closed | Joining was closed after they submitted | Contact page |
 
-An unpaid join ends by itself after 60 days.
+## When a join is never paid
+
+A join ends by itself 60 days after the last step taken on it (confirming, or choosing bank transfer). Nobody needs to do anything:
+
+- **Nothing billed** (they never chose bank transfer): the person is deactivated, and their details are erased shortly after.
+- **A bank faktura issued and unpaid:** the faktura is cancelled with a credit note ("Innmelding ikkje fullført"), which is emailed to them, and the person is deactivated. The faktura and credit note stay in the books; nothing is deleted.
+- **Part of the fee paid:** nothing is ended. The board gets **Innmelding må kontrollerast** and decides.
+
+A person whose join ended can simply join again.
 
 A member who later wants to leave follows [membership.md](membership.md).

@@ -571,6 +571,14 @@ The public checkout answers 409 `order_locked` to `POST /checkout/{token}/lines`
 
 `GET /join/status` lists why joining is closed in `missing`: `club` (no clubs row for `CLUB_SLUG`), `price_item_unset` (`clubs.join_price_item_id` is NULL), `price_item_other_club`, `price_item_inactive`, `price_item_not_flat` (`pricing_kind` is not `flat`), and the type of every required legal document (`privacy`, `statutes`, `harbour_rules`, `terms_of_sale`) the club has not published. Empty when open. The `membership.join_requested` audit `outcome` values are listed in [audit-actions.md](audit-actions.md#membership-join).
 
+### Applicant and membership-end codes (no column, BRY-628, BRY-633)
+
+| `code` | Status | Where | Meaning |
+|---|---|---|---|
+| `membership_not_completed` | 403 | Any session route not in `middleware.ApplicantRoutes` | The session's only role is `applicant`: the join is not paid yet (`middleware.ErrMembershipNotCompleted`). The SPA sends the user to `/bli-medlem/fullfor`. |
+| `membership_ended` | 409 | `POST /members/me/membership/undo` | The member has been deactivated, so the cancellation can no longer be undone; the board reactivates instead. |
+| `membership_ended` | (skip code) | `POST /admin/financials/invoices/bulk` result, `skipped[].code` | The member's `membership_ends_on` is before the fiscal period's `start_date`, so no faktura was made; `ends_on` carries the date (`skipMembershipEnded`). |
+
 ### Club settings 400 codes (no column)
 
 `PATCH /admin/settings/site` answers a refused value as `{error, code}` when the SPA words it next to the field; other refusals are a plain `{error}`.

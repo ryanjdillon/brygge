@@ -31,7 +31,7 @@ See [README.md](README.md) for the format. The board task inbox spec and its imp
 
 ### BRD-6: Membership becomes a fully online process
 
-- **Status:** accepted · 2026-10-29 · BRY-476
+- **Status:** superseded by BRD-17 · 2026-10-29 · BRY-476
 - **Decision:** applying, paying, becoming a member and cancelling all happen online without board steps, and the board gets an overview of active members. Until that ships, membership applications are inbox tasks.
 
 ### BRD-7: Harbour share (moloandel) offers follow a recorded board decision
@@ -101,3 +101,32 @@ See [README.md](README.md) for the format. The board task inbox spec and its imp
 - **Decision:** the join form requires a phone number and the home address, and no longer asks "do you live in the municipality?". The address is searched in Kartverket's open address register (Adresse-API, free, no key, CC BY 4.0) and picked from the matches; the server looks the picked address up again, stores the register's street, postal code and city, and sets `is_local` from whether the address's municipality number is one of the club's `municipality_codes`. An address the register cannot confirm (not found, the register down or slow, or typed by hand) is saved unverified, with residency unknown, and the join goes through anyway. A verified address proves the address exists, not that the person lives there.
 - **Why:** the self-declared answer was easy to get wrong in both directions, and a typed address had no check against typos. Proving residency (Folkeregisteret, or a login that carries it such as BankID or Vipps Login) costs money or needs a legal basis the club does not have, so it was rejected. The register gives a fuzzy, typo-forgiving search and a municipality for free, which is the most the club can know without those.
 - **Consequences:** migration 000140 (`address_verified`, `address_kommunenummer`, `address_verified_at` on `users` and `membership_applications`); `GET /join/address-search` and the re-lookup in `backend/internal/handlers/join_address.go`; `KARTVERKET_ADDRESS_URL` in [configuration.md](../developer/configuration.md). `is_local` stays NOT NULL: an unverified join stores `false` with `address_verified = false`, which reads as "unknown" for the board to settle. The board sees no note about an unverified address yet (follow-up to BRY-634). Residency is only as right as the club's `municipality_codes`: they must hold the current municipality numbers, and a municipal merger or split (new numbers) needs the codes updated. A club with no codes gets verified addresses with residency left unknown (`is_local = false`, a logged warning), never computed as non-local. Rule in [invariants.md](../developer/reference/invariants.md).
+
+### BRD-17: Self-service membership: join online, pay, member; cancel online at year end
+
+- **Status:** accepted · 2026-10-29, 2026-11-06 · BRY-476 (implemented in BRY-627 to BRY-634, BRY-637, BRY-639)
+- **Decision:** joining and leaving the club are online, with no board step. This replaces the interim rule in BRD-6 that applications are inbox tasks.
+  - **D1 Membership only.** The join form (`/bli-medlem`, also `/join`) takes no boat details; a member joins the waiting list afterwards.
+  - **D2 Identity by email confirmation.** The joiner confirms a link sent to their address. Vipps Login was rejected because it has been a paid service since 2024-08. No new login method: returning applicants use the normal magic link.
+  - **D3 Full-year price.** Joining costs the club's join price (Innmeldingspris) for the current calendar year, whatever the date.
+  - **D4 Member when paid.** Before payment the person is an applicant who can sign in, pay and see their own fakturas and profile, nothing more.
+  - **D5 Cancel online, effective at year end.** Membership runs to 31 December with no refund and no billing for the next year; the member is deactivated from 1 January. The confirmation email is the written notice. This is separate from GDPR erasure, which follows retention.
+  - **D6 Consents at join.** One required checkbox covers the privacy policy, statutes, harbour rules and terms of sale (each published by the club and recorded at its version), plus an optional, unticked newsletter opt-in. Phone and home address are required (BRD-16).
+  - **D7 Board overview, no approval.** The member list has "Søkjarar" and "Ny i år" filters, a "Medlem sidan" column and an "Utmeld" badge. The board is told by email when a join is paid and when a member cancels or undoes a cancellation, at the club's board notification address (a club setting, defaulting to the shared `post@` mailbox, else the secretary or chair; never hard-coded).
+  - **D8 Renewal and non-payment stay manual.** The board deactivates non-payers by hand; automating renewal and non-payment is deferred (BRY-626).
+  - **D9 Low friction.** Few fields and steps, one consent checkbox, and it works on a phone.
+- **Why:** the owner wants one path to membership: follow the steps online, pay, and you are a member; to leave, cancel on the website. The board only needs an overview. The old join page posted to a route that did not exist, so every online application was lost.
+- **Consequences:** a review of the spec shaped the implementation:
+  - **R1** Membership is granted only on real money, inside the settlement's transaction in a savepoint, so a failed grant never blocks the payment. The grant is idempotent, and an hourly sweep heals a failed one.
+  - **R2** An applicant-only session is walled off from member routes, and optional-session routes treat it as anonymous.
+  - **R3** Confirming creates an order, not a faktura. A faktura exists only when the joiner chooses bank transfer ("Betal med bankoverføring").
+  - **R4** The join price is an explicit club setting (`clubs.join_price_item_id`), not inferred from the price list.
+  - **R5** The emailed link opens a page that only reads; confirming is a POST, because link scanners prefetch GETs.
+  - **R6** Pending joins live in `membership_applications`, which stores only the token's hash. No user exists before confirmation.
+  - **R7** Every address gets the same answer: new, applicant, deactivated, member or blocked.
+  - **R8** Deactivation and waiting-list withdrawal are shared services. A daily job ends cancelled memberships, and the dues run skips members whose membership has ended.
+  - **R9** Board notices are emails sent through the `deliveries` queue, not in-app notifications.
+  - **R10** The join form has a fail-closed per-IP limit, a keyed per-recipient throttle and a club-wide daily mail cap.
+  - **R11** Consent versions are resolved on the server; a stale version answers 409.
+
+  Later decisions refine this record: rejoin is blocked only by the board's mark (BRD-15); residency comes from a Kartverket-verified address (BRD-16); an unpaid join ends after 60 days with its faktura credited, never deleted (ACC-14, [accounting.md](accounting.md)). The rules the code keeps are the membership invariants in [invariants.md](../developer/reference/invariants.md#an-applicant-only-session-reaches-only-what-finishes-joining) (from the applicant gate to the year-end end); the lifecycle from applicant to purge is in [member-lifecycle.md](../developer/security/member-lifecycle.md); the board and member guides are [join.md](../user/join.md), [members.md](../user/members.md) and [membership.md](../user/membership.md).

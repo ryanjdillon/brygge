@@ -1,28 +1,88 @@
-# Member lifecycle: deactivate, erase, purge
+# Member lifecycle: join, cancel, deactivate, erase, purge
 
+A person enters the club through the self-service join (or the board adds
+them) and leaves through a cancellation, a deactivation or an erasure.
 Removing a member is not a single "delete". Norwegian bookkeeping law
 (bokføringsloven §13) requires the club to keep financially-relevant records —
 invoices above all — for ~5 years after the accounting year they belong to,
 while GDPR requires personal data to be erased once it is no longer needed. The
-two obligations meet on the member record, so brygge splits "removal" into three
-distinct states.
+two obligations meet on the member record, so brygge splits "removal" into
+deactivation (reversible, keeps everything) and erasure (anonymises in place,
+never deletes the row).
 
-## The three actions
+The decisions behind the join and cancel paths are BRD-17, BRD-15, BRD-16
+([board-workflows.md](../../adr/board-workflows.md)) and ACC-14
+([accounting.md](../../adr/accounting.md)); the board and member guides are
+[join.md](../../user/join.md), [members.md](../../user/members.md) and
+[membership.md](../../user/membership.md).
+
+## The lifecycle
+
+| Stage | Entered by | State | Code |
+|---|---|---|---|
+| **Pending join** | `POST /join` | A `membership_applications` row (token hash, typed details, consent versions shown). No user, role or order. The link is valid 24 hours; the hourly sweep deletes the row once it has expired, confirmed or not. | `handlers/join.go` |
+| **Applicant** | `POST /join/confirm` | A `users` row (new, or a deactivated former member reactivated) holding only `applicant`, consents recorded, a pending `membership_join` order. Can sign in, pay and see their own fakturas, nothing else ([applicant gate](../reference/invariants.md#an-applicant-only-session-reaches-only-what-finishes-joining)). | `confirmJoinUser` |
+| **Member** | Real money settles the join (card/Vipps capture, or a bank payment of the join faktura), or the board gives the `member` role | `member` replaces `applicant`; `member_since` set if unset. | `membership.grantJoinMembershipTx` |
+| **Cancelled** | The member cancels online | Still an active member; `membership_cancelled_at`, `membership_ends_on` (31 December), optional reason. Undo while active. | `handlers/membership_cancel.go` |
+| **Ended** | The daily job, from the day after `membership_ends_on`; or the board's Deactivate at any time | Deactivated through `DeactivateMemberTx`; waiting-list entries withdrawn (the job only). Reversible by Reactivate. | `handlers.EndCancelledMemberships` |
+| **Purged** | The daily purge, once retention clears; or an admin erase, or a processed GDPR request | Identity anonymised in place, audit identity scrubbed. Not reversible. | `accounting.PurgeExpiredMemberPII` |
+
+Side paths:
+
+- **Expiry.** An applicant whose join stays unpaid 60 days after its last activity is deactivated through `revokeMemberAccess`, with a join faktura credited, never deleted. See [An abandoned join ends in deactivation](#an-abandoned-join-ends-in-deactivation).
+- **Rejoin.** A deactivated former member (not yet erased) who joins again is reactivated at confirm as an applicant: every role they held is removed, the typed details replace the old ones, and any cancellation is cleared. `member_since` is kept, so the grant does not move it. An erased member's address no longer matches, so they join as a new user. The board blocks a person from rejoining with `users.rejoin_blocked` (BRD-15): the form then creates nothing and mails them a pointer to the board.
+- **GDPR deletion.** A member's own request, processed by an admin after 14 days, locks them out and erases identity now or once retention clears. See [GDPR deletion requests](#gdpr-deletion-requests).
+
+## Two deactivation paths
+
+Every deactivation sets `users.deactivated_at`, but there are two services, and
+which one a path uses decides what survives:
+
+| | `DeactivateMemberTx` (`handlers/member_lifecycle.go`) | `revokeMemberAccess` (`handlers/gdpr.go`) |
+|---|---|---|
+| Used by | The board's Deactivate (`HandleDeactivateUser`) and the year-end end of a cancelled membership | Admin erase (`HandleDeleteUser`), GDPR processing (`HandleProcessDeletion`, both outcomes) and join expiry |
+| Purpose | Reversible: the person left, and may be reactivated | Scrubbing: end every way to authenticate before the identity goes, or for an applicant who never paid |
+| Removes | Sessions and developer tokens | Sessions, developer tokens, passkeys, TOTP and recovery codes, magic links for the email, the durable pay link |
+| Keeps | Passkeys and TOTP, so Reactivate restores the member as they were | Nothing to log in with |
+| Last-admin guard | Takes `lockClubAdmins` and refuses the club's only active admin (`errLastAdmin`) | None of its own; the erase and GDPR callers take the lock and check first; join expiry selects applicant-only users, who cannot be admins |
+| Audit | Writes `user.deactivated` | Writes none; the caller logs its own action (`delete_user`, `gdpr.deletion_processed`, `membership.join_expired`) |
+
+A new path that deactivates someone for a membership reason uses
+`DeactivateMemberTx`; one that removes access before erasure uses
+`revokeMemberAccess`; these two are the only writers that set `deactivated_at`.
+
+## The actions
 
 | Action | What it does | Reversible | When to use |
 |---|---|---|---|
-| **Deactivate** | Sets `users.deactivated_at`. Hides the member from active lists, member counts, the directory, broadcast/bulk-send recipients and dues runs; blocks login and drops their sessions. Their row, invoices and history are fully retained. | Yes — **Reactivate** clears it. | The normal "this person left the club" action. |
+| **Deactivate** (board or admin, `DeactivateMemberTx`) | Sets `users.deactivated_at`. Hides the member from active lists, member counts, the directory, broadcast/bulk-send recipients and dues runs; blocks login and drops their sessions. Their row, invoices and history are fully retained. | Yes — **Reactivate** clears it. | The normal "this person left the club" action. |
 | **Erase** (`DELETE /admin/users/{id}`, admin only) | Anonymises the row in place, deactivates it, removes the member's Stalwart mailbox and scrubs their identity from the audit log. The row is never deleted: other tables reference it and payments cascade from it (BRD-10). A `?erasure=true` from an older caller is ignored. Locks the member out first, see [Locking a member out](#locking-a-member-out). Refused for the club's last active admin, see [Who may change an admin](#who-may-change-an-admin). | No | Rare. Prefer Deactivate; the scheduled purge handles PII erasure automatically. |
 | **Cancel** (member, `POST /members/me/membership/cancel`) | The member cancels online (BRY-633). Sets `membership_cancelled_at`, `membership_ends_on` (31 December of the year cancelled) and the optional `membership_cancel_reason`; the member stays active until then. From the day after `ends_on` the daily membership-end job deactivates them, see [Cancelling online](#cancelling-online). | While the member is active: `POST …/undo`. After: the board reactivates (the waiting-list place is not restored). | The member leaving at year end. |
 | **Purge** (automatic) | A daily background sweep (`accounting.PurgeExpiredMemberPII`) anonymizes the PII of *deactivated* members whose most recent invoice has cleared retention. Never deletes the row. | No | Nothing to do — it runs itself. |
 
 ## An abandoned join ends in deactivation
 
-An applicant whose self-service join stays unpaid for 60 days (BRY-631, [ACC-14](../../adr/accounting.md)) is deactivated by the hourly sweep (`InvoiceHandler.ExpireUnpaidJoins`) through `revokeMemberAccess`, the access-scrubbing step the GDPR and erasure paths share (the membership paths, a cancellation's end and the board's deactivate, use `DeactivateMemberTx` instead), with `deactivated_by` the club's system actor (or NULL without one). Their join faktura, if one was issued, is credited, never deleted. No path deletes the `users` row or rewrites their audit rows: an applicant with no faktura is purge-eligible at once, so the purge erases their identity on its next run, and the scrub stays the audit log's one sanctioned rewrite.
+An applicant whose self-service join stays unpaid 60 days after its last
+activity (BRY-631, [ACC-14](../../adr/accounting.md)) is ended by the hourly
+sweep (`InvoiceHandler.ExpireUnpaidJoins`):
+
+- **Never billed** (only the pending join order): the order is expired and the
+  applicant deactivated. With no faktura they are purge-eligible at once, so
+  the purge erases their identity on its next run.
+- **Billed** (they chose "Betal med bankoverføring"): the join faktura is credited in
+  full, never deleted, and the applicant deactivated; the purge erases them
+  once the faktura's retention clears.
+- **Part of the money in:** nothing is ended; the board gets one review notice.
+
+Deactivation goes through `revokeMemberAccess` (see
+[Two deactivation paths](#two-deactivation-paths)), with `deactivated_by` the
+club's system actor (or NULL without one). No path deletes the `users` row or
+rewrites their audit rows. The rules are in
+[invariants.md](../reference/invariants.md#an-unpaid-join-expires-after-60-days-a-faktura-is-credited-never-deleted).
 
 ## Cancelling online
 
-Decided in D5 and R8 of the self-service membership spec (BRY-476): a member
+Decided in BRD-17 (D5 and R8, BRY-476): a member
 cancels from the portal, the cancellation takes effect at the end of the year
 (31 December, server-local), nothing paid is refunded, and the confirmation
 email is the written notice. The member stays a full member until then and may
@@ -64,8 +124,11 @@ undo answers 409 `membership_ended`.
   waiting-list entries the job withdrew: the member's place is lost, and the
   reactivate confirmation says so.
 - **Erasure.** `membership_cancel_reason` is the member's own text: every
-  erasure path clears it (`accounting.EraseMemberMembershipData`), and it never
-  enters the audit log (`membership.cancelled` records only `reason_given`).
+  erasure path clears it (`accounting.EraseMemberMembershipData`, which also
+  clears the address-verification columns and deletes the club's
+  `membership_applications` for the member's address), and it never enters the
+  audit log (`membership.cancelled` records only `reason_given`). See
+  [invariants.md](../reference/invariants.md#erasure-clears-the-cancellation-reason-the-address-check-and-the-join-requests).
 
 ## The system actor is outside the lifecycle
 
@@ -87,14 +150,11 @@ until someone rewrites it.
 
 `revokeMemberAccess` (`handlers/gdpr.go`) is the single step that ends every way
 a member can authenticate. It runs in the caller's transaction, before the
-identity is anonymised because magic links are keyed by the old email. Both
-`HandleProcessDeletion`, `HandleDeleteUser` and the join expiry (BRY-631) call it; `HandleDeactivateUser`
-(reversible) only sets `deactivated_at`, drops sessions and revokes the member's
-developer tokens, since reactivation must keep passkeys and TOTP. That
-deactivation is `DeactivateMemberTx` (`handlers/member_lifecycle.go`), shared with
-the year-end end of a cancelled membership. So a member is deactivated by two
-paths: `DeactivateMemberTx` (reversible: the board's button and the
-membership-end job) and `revokeMemberAccess` (erasure, GDPR deletion and join expiry: the scrubbing path).
+identity is anonymised because magic links are keyed by the old email.
+`HandleProcessDeletion`, `HandleDeleteUser` and the join expiry (BRY-631) call
+it. The reversible deactivation (`DeactivateMemberTx`) removes less, so that
+reactivation keeps passkeys and TOTP; the two are compared in
+[Two deactivation paths](#two-deactivation-paths).
 
 ### Developer tokens
 

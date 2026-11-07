@@ -25,7 +25,7 @@ Until 31 December the section shows **Utmeld frå 31.12.YYYY** with an **Angre**
 
 ### On 1 January
 
-Your account is deactivated: you can no longer log in, and you are taken off the waiting list. Your fakturas and payment history are kept, as the bookkeeping rules require.
+Your account is deactivated: you can no longer log in, and you are taken off the waiting list. Your fakturas and payment history are kept, as the bookkeeping rules require; your name and contact details are erased once the bookkeeping period for your last faktura is over. To come back later, join again on the website.
 
 ## For the board: following up a cancellation
 
@@ -33,6 +33,7 @@ Your account is deactivated: you can no longer log in, and you are taken off the
 - **The members list.** A member who has cancelled carries an amber **Utmeld** badge with the end date in **Medlemmer** until the membership ends.
 - **Next year's dues.** A bulk faktura run for a period that starts after the member's end date skips them, with the reason "medlemskapen blir avslutta 31.12.YYYY, før perioden startar" in the run's skipped list. The run for the year they cancelled in bills them as usual.
 - **1 January.** Brygge deactivates the member and withdraws their waiting-list entries automatically, as the system. If the member is the club's **only administrator**, they are not deactivated: the board gets **Utmelding må handsamast** instead. Make another member an administrator; the next daily run then ends the membership.
-- **Taking a member back.** Reactivating a deactivated member under **Medlemmer** also clears their ended cancellation. Their place on the waiting list is **not** restored; enrol them again if they should have one.
+- **Taking a member back.** Reactivating a deactivated member under **Medlemmer** also clears their ended cancellation. Their place on the waiting list is **not** restored; enrol them again if they should have one. A former member can also join again on the website themselves and pay the joining price, unless the board has marked them **Kan ikkje melde seg inn att** ([members.md](members.md#cant-rejoin)).
+- **Members who do not pay their yearly dues** are not cancelled automatically. Deactivate them by hand under **Medlemmer**.
 
 How people join in the first place, and how the board opens joining, is described in [join.md](join.md).

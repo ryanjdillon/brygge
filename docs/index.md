@@ -32,7 +32,9 @@ Audience: site admins (in-app club setup, config, data correction), board member
 |----------|-------------|
 | [user/faktura.md](user/faktura.md) | Treasurer's guide to the invoicing module (price catalogue, send, reconcile, card refunds and disputes) |
 | [user/migrating-from-previous-system.md](user/migrating-from-previous-system.md) | Moving from a previous accounting system: exports, faktura import, open items, opening balance, the reference year |
-| [user/members.md](user/members.md) | The Members page signals: the email rejected badge and what to do about it |
+| [user/join.md](user/join.md) | Self-service joining (**Bli medlem**): opening it, the joiner's path to payment, the board's emails, the 60-day expiry |
+| [user/members.md](user/members.md) | The Members page signals: applicant and new-member filters, **Medlem sidan**, the can't-rejoin mark, the email rejected badge |
+| [user/membership.md](user/membership.md) | Cancelling membership online (**Meld deg ut**) and the board's follow-up |
 | [user/payments-overview.md](user/payments-overview.md) | The Payments page: reading it, and setting up its filter groups (names, icons, order, prices) |
 | [user/harbor-share-import.md](user/harbor-share-import.md) | Site admin's guide to importing harbor share (moloandel) owners from the member sheet: the CSV UTF-8 file format and the preview |
 | [user/harbor-qr.md](user/harbor-qr.md) | Harbor master's guide to QR payment targets: full-page posters and 2/4/6-up card sheets |
@@ -68,6 +70,7 @@ Colocated with the code they describe; load when you enter the package:
 - [`../backend/internal/email/README.md`](../backend/internal/email/README.md) — outbound senders, templates, `formatNOK`
 - [`../backend/internal/middleware/README.md`](../backend/internal/middleware/README.md) — middleware ordering, TOTP gating flavors
 - [`../backend/internal/finance/README.md`](../backend/internal/finance/README.md) — invoice data contract, KID generation
+- [`../backend/internal/membership/README.md`](../backend/internal/membership/README.md) — granting membership when a join payment settles, the hourly membership sweep, join refund and expiry notices
 - [`../frontend/src/views/admin/README.md`](../frontend/src/views/admin/README.md) — admin sidebar, click-time TOTP gating, `useNavGate`
 
 ### Subject subdirs under [developer/](developer/)
@@ -94,6 +97,7 @@ Each is a self-contained module covering one subject in depth. Per the deep-modu
 | Document | Audience | Description |
 |----------|----------|-------------|
 | [developer/security/2fa.md](developer/security/2fa.md) | Board members + Operators | Two-factor authentication: enrollment, recovery codes, admin reset |
+| [developer/security/member-lifecycle.md](developer/security/member-lifecycle.md) | Operators + Developers | Join to purge: applicant, grant, cancel, the two deactivation paths, erasure, retention, GDPR deletion |
 
 ## Architecture Overview
 

@@ -8,12 +8,14 @@ This guide covers the signals on the Members page that need someone to act. The 
 
 The status filter next to the search box (it shows **Aktive** by default) has two choices for people who joined on the website:
 
-- **Søkjarar** lists applicants: people who confirmed the join form but have not paid yet. They carry the **Søkjar** role and cannot use the member portal until they pay. A join left unpaid for 60 days ends on its own.
+- **Søkjarar** lists applicants: people who confirmed the join form but have not paid yet. They carry the **Søkjar** role and cannot use the member portal until they pay. A join left unpaid for 60 days ends on its own ([join.md](join.md#when-a-join-is-never-paid)).
 - **Ny i år: fekk medlemskap i år** lists active members who got their membership this calendar year: those who joined and paid on the website, and those the board gave the **Medlem** role (adding them, ticking the role, or a CSV import with the `member` role).
 
 Both show active people only. **Alle** and **Deaktiverte** still show everyone and former members.
 
-The **Medlem sidan** column shows the date a person got their membership: the day they paid their join on the website, or the day the board first gave them the **Medlem** role. A date already recorded is never moved. It is hidden by default: turn it on under **Kolonnar**, and click the heading to sort by it. It is empty for members registered before Brygge recorded the date, and the detail view shows it as well.
+The **Medlem sidan** column shows the date a person got their membership: the day they paid their join on the website, or the day the board first gave them the **Medlem** role. A date already recorded is never moved. It is hidden by default: turn it on under **Kolonnar**, and click the heading to sort by it. It is empty for members registered before Brygge recorded the date, and the detail view shows it as well. A former member who joins again on the website keeps their first date, so they show under **Søkjarar** while they pay but not under **Ny i år** afterwards.
+
+The join form checks the home address against Kartverket's register, but the list does not yet show which addresses could not be checked; see [join.md](join.md#home-address-and-residency) for what that means for **Lokal**. What the board is emailed about joins, and where those emails go, is in [join.md](join.md#what-the-board-is-told).
 
 ## Can't rejoin
 
@@ -21,7 +23,7 @@ A red **Kan ikkje melde seg inn att** badge next to a name means the board has s
 
 To set or clear it, open the member and tick or untick **Kan ikkje melde seg inn att** (board or admin). The box appears for deactivated members, and for anyone who already has the mark so it can always be cleared. Brygge asks for a fresh two-factor code when you click it, and every change is logged.
 
-The mark does not deactivate anyone: deactivate the member as usual. Other former members can join again freely.
+The mark does not deactivate anyone: deactivate the member as usual. Other former members can join again freely: they come back as applicants, with none of the roles they held before, and become members when they pay.
 
 ## Email rejected badge
 
