@@ -41,7 +41,7 @@ services:
 
   # ── Database Migrations ──────────────────────────────────────
   migrate:
-    image: migrate/migrate:v4.18.2@sha256:acded13a336f2b6f35fd9ce14a32834cf1e6b2a7887fe5dfc977b3e563eba39e
+    image: migrate/migrate:v4.20.1@sha256:76cc2074cb6642631f34a898ced71e6aeaa6b1a4d78c4daa743275a22e0c5be7
     command: ["-path=/migrations", "-database", "${DATABASE_URL}", "up"]
     volumes:
       - ../backend/migrations:/migrations:ro
