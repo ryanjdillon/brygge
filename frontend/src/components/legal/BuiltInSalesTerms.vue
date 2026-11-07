@@ -3,6 +3,10 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useClubStore } from '@/stores/club'
 
+// The terms of sale shipped with Brygge, shown wherever the club has not
+// published its own terms_of_sale document. Vipps requires a terms page that
+// always resolves, so this is the floor under LegalDocumentView.
+
 const { t } = useI18n()
 const club = useClubStore()
 club.ensureLoaded()
@@ -11,27 +15,31 @@ const lastUpdated = '2026-06-24'
 
 // Cancellation contact for recurring payments / membership (Vipps "krav til
 // nettside" — the agreement-cancellation requirement). Prefer the treasurer
-// (kasserar), who handles dues, then chair, then the general club mailbox.
+// (kasserar), who handles dues, then chair, then the club's post@ mailbox.
+// With no address and no phone the sentence points to the contact page, so
+// the copy stays grammatical for any club.
 const cancelEmail = computed(
-  () =>
-    club.treasurerEmail ||
-    club.chairmanEmail ||
-    (club.domain ? `post@${club.domain}` : 'post@klokkarvikbaatlag.no'),
+  () => club.treasurerEmail || club.chairmanEmail || (club.domain ? `post@${club.domain}` : ''),
 )
-// Only fold a phone clause into the sentence when a number exists, so the
-// copy stays grammatical for clubs without a listed phone.
-const cancelPhone = computed(() =>
-  club.phone ? t('salgsvilkar.oppsigelse.phoneFragment', { phone: club.phone }) : '',
-)
+const cancelContact = computed(() => {
+  const email = cancelEmail.value
+  const phone = club.phone
+  if (email && phone) {
+    return t('salgsvilkar.oppsigelse.emailFragment', { email }) + t('salgsvilkar.oppsigelse.phoneFragment', { phone })
+  }
+  if (email) return t('salgsvilkar.oppsigelse.emailFragment', { email })
+  if (phone) return t('salgsvilkar.oppsigelse.phoneOnlyFragment', { phone })
+  return t('salgsvilkar.oppsigelse.contactPageFragment')
+})
 
 // Each section maps to one of the mandatory headings Vipps requires
 // (Parter, Betaling, Oppseiing, Levering, Angrerett, Retur,
-// Reklamasjonshåndtering, Konfliktløsning). The body copy is the
-// seed default; per-club overrides come in a follow-up admin view.
+// Reklamasjonshåndtering, Konfliktløsning). A club replaces the whole page by
+// publishing a terms_of_sale document.
 const sections = computed(() => [
   { id: 'parter', title: t('salgsvilkar.parter.title'), body: t('salgsvilkar.parter.body', { club: club.name || 'Klubben', orgNumber: club.orgNumber || '—' }) },
   { id: 'betaling', title: t('salgsvilkar.betaling.title'), body: t('salgsvilkar.betaling.body') },
-  { id: 'oppsigelse', title: t('salgsvilkar.oppsigelse.title'), body: t('salgsvilkar.oppsigelse.body', { club: club.name || 'klubben', email: cancelEmail.value, phone: cancelPhone.value }) },
+  { id: 'oppsigelse', title: t('salgsvilkar.oppsigelse.title'), body: t('salgsvilkar.oppsigelse.body', { club: club.name || 'klubben', contact: cancelContact.value }) },
   { id: 'levering', title: t('salgsvilkar.levering.title'), body: t('salgsvilkar.levering.body') },
   { id: 'angrerett', title: t('salgsvilkar.angrerett.title'), body: t('salgsvilkar.angrerett.body') },
   { id: 'retur', title: t('salgsvilkar.retur.title'), body: t('salgsvilkar.retur.body') },
@@ -41,7 +49,7 @@ const sections = computed(() => [
 </script>
 
 <template>
-  <main class="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8">
+  <div class="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8">
     <header class="border-b border-gray-200 pb-6">
       <p class="text-xs font-medium uppercase tracking-wide text-gray-500">{{ t('salgsvilkar.eyebrow') }}</p>
       <h1 class="mt-2 text-3xl font-bold text-gray-900">{{ t('salgsvilkar.title') }}</h1>
@@ -75,5 +83,5 @@ const sections = computed(() => [
         <div v-if="club.treasurerEmail || club.chairmanEmail" class="flex gap-2"><dt class="text-gray-500 w-24 shrink-0">{{ t('salgsvilkar.fields.email') }}</dt><dd>{{ club.treasurerEmail || club.chairmanEmail }}</dd></div>
       </dl>
     </footer>
-  </main>
+  </div>
 </template>

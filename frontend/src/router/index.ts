@@ -58,9 +58,17 @@ const routes: RouteRecordRaw[] = [
   {
     // Norwegian sales-terms page required by Vipps (and good practice
     // for any club taking online payments). Linked from the footer
-    // and from every checkout step. See DIL-346.
+    // and from every checkout step. See DIL-346. Shows the club's published
+    // terms_of_sale, else the built-in terms.
     path: '/salgsvilkar',
-    component: () => import('@/views/SalgsvilkarView.vue'),
+    component: () => import('@/views/LegalDocumentView.vue'),
+    props: { docType: 'terms_of_sale' },
+  },
+  {
+    // The footer's privacy link; public, unlike the portal copy.
+    path: '/privacy',
+    component: () => import('@/views/LegalDocumentView.vue'),
+    props: { docType: 'privacy' },
   },
   {
     path: '/pricing',
@@ -91,6 +99,7 @@ const routes: RouteRecordRaw[] = [
     // form links each document it asks consent to.
     path: '/vilkar/:docType',
     component: () => import('@/views/LegalDocumentView.vue'),
+    props: true,
   },
   {
     path: '/merchandise',
@@ -220,7 +229,8 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'privacy-policy',
         name: 'portal-privacy-policy',
-        component: () => import('@/views/portal/PrivacyPolicyView.vue'),
+        component: () => import('@/views/LegalDocumentView.vue'),
+        props: { docType: 'privacy', embedded: true },
         meta: { applicantAllowed: true },
       },
       {

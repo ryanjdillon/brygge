@@ -16,4 +16,10 @@ describe('Footer', () => {
     expect(contactLink.exists()).toBe(true)
     expect(contactLink.text()).toContain('nav.contact')
   })
+
+  it('links the public terms of sale and privacy pages', () => {
+    const wrapper = mountWithPlugins(Footer)
+    expect(wrapper.find('a[href="/salgsvilkar"]').text()).toContain('footer.terms')
+    expect(wrapper.find('a[href="/privacy"]').text()).toContain('footer.privacy')
+  })
 })

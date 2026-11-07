@@ -232,6 +232,7 @@
       "terms_of_sale": "Warunki sprzedaży",
       "version": "Wersja {version}, opublikowana {date}",
       "notPublished": "Ten dokument nie został jeszcze opublikowany.",
+      "loadFailed": "Nie udało się wczytać dokumentu. Spróbuj ponownie później.",
       "notFound": "Nie znaleziono dokumentu"
     },
     "confirm": {

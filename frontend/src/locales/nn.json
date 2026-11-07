@@ -63,11 +63,6 @@
     "deselectAll": "Fjern",
     "clearSearch": "Tøm søket"
   },
-  "privacyPolicy": {
-    "title": "Personvernerklæring",
-    "version": "Versjon {version} — publisert {date}",
-    "notPublished": "Inga personvernerklæring er publisert enno. Ver venleg og kontakt styret."
-  },
   "home": {
     "welcome": "Velkomen til Brygge",
     "welcomeWith": "Velkomen til {club}",
@@ -272,6 +267,7 @@
       "terms_of_sale": "Salsvilkår",
       "version": "Versjon {version}, publisert {date}",
       "notPublished": "Dette dokumentet er ikkje publisert enno.",
+      "loadFailed": "Kunne ikkje hente dokumentet. Prøv igjen seinare.",
       "notFound": "Fann ikkje dokumentet"
     },
     "confirm": {
@@ -3354,8 +3350,11 @@
     },
     "oppsigelse": {
       "title": "Oppseiing og avslutting av faste betalingar",
-      "body": "Det er inga bindingstid. Du kan når som helst seie opp medlemskapet ditt eller stoppe ein avtale om fast betaling/trekk. For å avslutte, ta kontakt med {club} på e-post {email}{phone}. Faste Vipps-avtalar kan du i tillegg avslutte sjølv i Vipps-appen under «Avtalar». Oppseiinga tek til å gjelde frå neste betalingsperiode, og du blir ikkje belasta på nytt etter dette. Allereie betalt kontingent vert normalt ikkje refundert.",
-      "phoneFragment": " eller telefon {phone}"
+      "body": "Det er inga bindingstid. Du kan når som helst seie opp medlemskapet ditt eller stoppe ein avtale om fast betaling/trekk. For å avslutte, ta kontakt med {club}{contact}. Faste Vipps-avtalar kan du i tillegg avslutte sjølv i Vipps-appen under «Avtalar». Oppseiinga tek til å gjelde frå neste betalingsperiode, og du blir ikkje belasta på nytt etter dette. Allereie betalt kontingent vert normalt ikkje refundert.",
+      "phoneFragment": " eller telefon {phone}",
+      "emailFragment": " på e-post {email}",
+      "phoneOnlyFragment": " på telefon {phone}",
+      "contactPageFragment": " via kontaktsida på nettstaden"
     },
     "levering": {
       "title": "Levering",

@@ -18,10 +18,30 @@ Until then the page says **Innmelding er ikkje opna enno** (*Innmelding er ikke 
 ### Opening joining (Innmeldingspris)
 
 1. **The joining price.** In **Økonomi-innstillingar**, under **Innmeldingspris**, choose the price item a new member pays (treasurer or admin, with a fresh two-factor code). Only active price items with a fixed amount can be chosen; items in the **Medlemskap** category are listed first. Create the item under **Prisar** first if it does not exist. Choosing **Ingen (innmelding stengd)** closes joining.
-2. **The legal documents.** Personvernerklæring, Vedtekter, Hamnereglement and Salsvilkår must each have a published version, under **GDPR-administrasjon** → **Juridiske dokument**. Only a site admin can publish them; a treasurer sees a note asking an administrator to do it.
+2. **The legal documents.** Personvernerklæring, Vedtekter, Hamnereglement and Salsvilkår must each have a published version, under **GDPR-administrasjon** → **Juridiske dokument**. Only a site admin can publish them; a treasurer sees a note asking an administrator to do it. See [Publishing the legal documents](#publishing-the-legal-documents).
 3. **The club's municipalities.** Residency is worked out from the joiner's address and the club's municipality numbers (kommunenummer; see [Home address and residency](#home-address-and-residency)). Set them in **Økonomi-innstillingar**, under **Kommunar som gjeld som lokale**, below the joining price (treasurer or admin, with a fresh two-factor code when you save): type a four-digit number and press **Legg til**, remove one with its ×, then **Lagre**. Each number shows the municipality's name from Kartverket; a number Kartverket does not know is marked **ukjent kommunenummer** but can still be saved, and if Kartverket cannot be reached the number shows without a name. At most 20 numbers. Check each number against the municipality name the setting shows next to it, and update the list after a municipal merger or split. Joining is open without them, but then nobody who joins is counted as living in the municipality, and the join status says **Lokal tilhøyrsle kan ikkje avgjerast før kommunar er sette**.
 
 Below the selector Brygge shows whether joining is open. When it is closed, it lists what is missing (no price chosen, the price archived or not a fixed amount, or a document not published) with a link to **Prisar** and, for an admin, to the legal documents. Archiving the chosen price item, or deleting it, closes joining until you choose another.
+
+### Publishing the legal documents
+
+In the admin menu under **Nettstad**, open **GDPR-administrasjon** (`/admin/gdpr`, site admins only). Under **Juridiske dokument**, press **Opprett dokument** and fill in:
+
+- **Dokumenttype**: Personvernerklæring, Vedtekter, Hamnereglement or Salsvilkår.
+- **Versjon**: any short label members can recognise, such as the date the annual meeting adopted it (`2024-03-22`) or the month it was written (`2026-11`). The list shows it as `v2024-03-22`.
+- **Innhald** (*Innhold*): the document as **plain text**. Separate paragraphs with a blank line; line breaks are kept exactly as typed. Formatting such as bold, headings, lists or links is not interpreted, so write headings as their own line (for example `§ 3 Medlemskap`) and lists as lines starting with `-` or a number. Paste from a PDF with care: check that line breaks did not split words or swap the order of lines.
+- Tick **Publiser med ein gong** (*Publiser umiddelbart*), then **Lagre**. A document saved without the tick is not shown anywhere, and there is no later publish button, so tick it.
+
+A new version replaces the old one for readers as soon as it is published; consents members already gave stay recorded against the version they saw. Where each document is read:
+
+| Document | Public page |
+|---|---|
+| Personvernerklæring | `/privacy` (the footer's **Personvern**), `/vilkar/privacy`, and **Personvernerklæring** in the member portal |
+| Vedtekter | `/vilkar/statutes` |
+| Hamnereglement | `/vilkar/harbour_rules` |
+| Salsvilkår | `/salgsvilkar` (the footer's **Salsvilkår**, linked from Vipps) and `/vilkar/terms_of_sale` |
+
+Until a document is published its page says it is not published yet (and if the page cannot reach the server, that it could not load the document), except the terms of sale: with no published Salsvilkår, `/salgsvilkar` shows the terms built into Brygge, filled in with the club's name, org.nr., phone and email, so the page Vipps checks always works. It names the treasurer's email (else the chair's, else post@ the club's domain) and the club phone for cancelling; with neither, it points to the contact page. Publishing your own Salsvilkår replaces that text in full.
 
 ## What the board is told
 

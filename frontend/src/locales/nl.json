@@ -232,6 +232,7 @@
       "terms_of_sale": "Verkoopvoorwaarden",
       "version": "Versie {version}, gepubliceerd op {date}",
       "notPublished": "Dit document is nog niet gepubliceerd.",
+      "loadFailed": "Het document kon niet worden geladen. Probeer het later opnieuw.",
       "notFound": "Document niet gevonden"
     },
     "confirm": {

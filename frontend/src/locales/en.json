@@ -64,11 +64,6 @@
     "deselectAll": "Clear",
     "clearSearch": "Clear search"
   },
-  "privacyPolicy": {
-    "title": "Privacy policy",
-    "version": "Version {version} — published {date}",
-    "notPublished": "No privacy policy has been published yet. Please contact the club board."
-  },
   "home": {
     "welcome": "Welcome to Brygge",
     "welcomeWith": "Welcome to {club}",
@@ -275,6 +270,7 @@
       "terms_of_sale": "Terms of sale",
       "version": "Version {version}, published {date}",
       "notPublished": "This document has not been published yet.",
+      "loadFailed": "The document could not be loaded. Please try again later.",
       "notFound": "Document not found"
     },
     "confirm": {
@@ -3475,8 +3471,11 @@
     },
     "oppsigelse": {
       "title": "Cancellation and stopping recurring payments",
-      "body": "There is no binding period. You can cancel your membership or stop a recurring payment/charge at any time. To cancel, contact {club} by email {email}{phone}. Recurring Vipps agreements can also be cancelled yourself in the Vipps app under \"Agreements\". Cancellation takes effect from the next billing period, after which you will not be charged again. Membership fees already paid are normally not refunded.",
-      "phoneFragment": " or phone {phone}"
+      "body": "There is no binding period. You can cancel your membership or stop a recurring payment/charge at any time. To cancel, contact {club}{contact}. Recurring Vipps agreements can also be cancelled yourself in the Vipps app under \"Agreements\". Cancellation takes effect from the next billing period, after which you will not be charged again. Membership fees already paid are normally not refunded.",
+      "phoneFragment": " or phone {phone}",
+      "emailFragment": " by email {email}",
+      "phoneOnlyFragment": " by phone {phone}",
+      "contactPageFragment": " through the contact page on this website"
     },
     "levering": {
       "title": "Delivery",

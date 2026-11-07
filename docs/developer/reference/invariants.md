@@ -597,6 +597,12 @@ The setting itself is written only through `PATCH /admin/settings/site`, which t
 
 **Failure mode:** with two clubs on one database, the public read served whichever club published last, so a member could be shown, and consent to, another club's privacy policy or statutes; a client could record consent to a version the club never published, and a member who loaded the page before the board published a new text was recorded as consenting to a text they never saw.
 
+### The terms-of-sale page always resolves
+
+**Rule (BRY-646):** `/salgsvilkar`, `/vilkar/:docType`, `/privacy` and `/portal/privacy-policy` all render `LegalDocumentView` (`frontend/src/views/LegalDocumentView.vue`), which shows the club's published document as plain text. The request times out after 5 s, and only the latest request may set the state. A 404 or a published row with blank `content` counts as not published; any other failure (network, 5xx, timeout) is a load error. For `terms_of_sale` either case renders `components/legal/BuiltInSalesTerms.vue`; the other three types show the "not published" notice or the load error. Keep that fallback in the one view, so every terms link (the footer's `/salgsvilkar`, the join form's `/vilkar/terms_of_sale`) gets it.
+
+**Failure mode:** Vipps' website requirements need a terms page that always loads. Rendering the published document without the fallback leaves a club that has not published its own terms with an empty page at the URL Vipps checks.
+
 ### Board viewing never widens a write
 
 **Rule (BRY-372):** every board role and admin (`roles.CanViewAdmin`) may read every admin page except Developer and Site. Reads open through `middleware.RequireRoleOrBoardRead(<write roles>)`, which admits viewers only on `GET`/`HEAD` and applies `RequireRole(<write roles>)` to every other method, so a surface's write roles are the ones it had before. A handler mounted on `GET` behind it must not write, mint a credential or send anything; such a `GET` keeps its own `RequireRole` (the pay-link endpoints do). In the SPA, write controls on viewable pages hide behind `useCan()`.
