@@ -209,6 +209,22 @@ Playwright tests run against the full stack. Install browsers first:
 npx playwright install
 ```
 
+On NixOS, where the downloaded browsers do not run, point Playwright at an installed Chrome or Chromium instead: `PLAYWRIGHT_CHROMIUM_PATH=$(readlink -f "$(command -v google-chrome-stable)") just test-e2e`.
+
+Specs that need the database, Mailpit or the rate limiter (for example `e2e/magic-link-login.spec.ts`) use the helpers in `frontend/e2e/support/stack.ts`. These run `psql` through `docker exec` on the compose Postgres container and read mail from Mailpit's API, so they need no extra npm dependency. They need `just up` running (API on :8080, Vite on :5173, Postgres, Redis, Mailpit). Override the defaults with environment variables:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `E2E_DB_CONTAINER` | `deploy-db-1` | Postgres container to `docker exec` into |
+| `E2E_DB_NAME` | `brygge` | Database the API under test uses |
+| `E2E_DB_USER` | `brygge` | Role `psql` connects as |
+| `E2E_CLUB_SLUG` | `brygge` | The API's `CLUB_SLUG` |
+| `MAILPIT_URL` | `http://localhost:8025` | Mailpit API. A spec that needs mail is skipped when Mailpit is down |
+
+The helpers write to the database, so they refuse to run unless the stack is local: `DOCKER_HOST` unset or `unix://`, `docker context show` is `default`, and `BASE_URL` and `MAILPIT_URL` point at localhost. They create their own users with random `@example.test` addresses and deactivate them when the file finishes. A run also deactivates `e2e-%@example.test` users more than an hour old that an interrupted run left behind. Users are never deleted, because `audit_log` rows reference them. Login tokens are stored only as SHA-256 hashes, so a spec writes the `magic_links` row itself for a token it generated.
+
+The auth routes are limited to 5 requests a minute per IP, and locally every request reaches the API from the Vite proxy. The API treats the proxy as a trusted proxy (`TRUSTED_PROXY_CIDRS`). For a native `go run` that is the loopback default. Under `just up` the API's peer is the docker bridge gateway, so `deploy/docker-compose.dev.yml` sets `127.0.0.0/8,::1/128,172.16.0.0/12`. `isolateRateLimit(context, workerIndex)` gives each browser context its own `X-Forwarded-For` address from 198.18.0.0/15, so each test gets its own budget and the production limits stay unchanged. The addresses are unique per worker and test within a run, offset by a per-run salt (`E2E_RUN_SALT`, set in `playwright.config.ts`). Before the first test, each worker checks that the API honours the header: it spends one address's budget, with empty tokens that write nothing, and fails with a clear message if a second address is then refused.
+
 ### CI
 
 GitHub Actions runs all of the above on every push and pull request to `main`. The CI pipeline uses the Nix flake for linting and `nix flake check` for flake integrity. Go tests run with real PostgreSQL and Redis service containers. The Postgres data lives on tmpfs with durability turned off. The jobs run in parallel; `build` does not wait for the test jobs.

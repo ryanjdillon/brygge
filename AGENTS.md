@@ -276,7 +276,7 @@ Real issues that have been encountered in passing but are deliberately out of sc
 - **Go unit tests**: Use nil db/redis — no containers needed. Handler tests use `setupAuthenticatedRouter()` + `generateTestToken()`, an opaque test token the test middleware decodes into claims (not a JWT)
 - **Go integration tests**: Real Postgres/Redis via testcontainers. Run with `-count=1` to bypass cache
 - **Vue tests**: `mountWithPlugins()` from `src/test/test-utils.ts`, mock lucide-vue-next icons
-- **E2E**: Playwright specs in `e2e/`. Not yet in CI (local only)
+- **E2E**: Playwright specs in `frontend/e2e/`. Not yet in CI (local only). Stack helpers (psql via `docker exec`, Mailpit, per-test rate-limit IP) in `frontend/e2e/support/stack.ts`; env vars in CONTRIBUTING.md §6
 - **CI**: `api-types` freshness check catches stale OpenAPI types. Security jobs are `continue-on-error` — failures don't block merge
 
 # SYSTEM.md

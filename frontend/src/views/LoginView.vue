@@ -154,6 +154,7 @@ function roleColor(role: string): string {
           v-if="magicLinkSent"
           class="rounded-md bg-green-50 px-4 py-3 text-sm text-green-700"
           role="status"
+          data-testid="login-link-sent"
         >
           {{ t('login.magicLinkSent') }}
         </div>
@@ -185,6 +186,7 @@ function roleColor(role: string): string {
           <button
             type="submit"
             :disabled="submitting"
+            data-testid="login-send-link"
             class="w-full rounded-md bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 disabled:opacity-50"
           >
             {{ submitting ? t('login.sending') : t('login.sendLink') }}

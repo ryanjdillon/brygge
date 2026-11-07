@@ -27,6 +27,12 @@ services:
       - VIPPS_SUBSCRIPTION_KEY=mock-sub
       - VIPPS_WEBHOOK_SECRET=dev-webhook-secret
       - FRONTEND_URL=http://localhost:5173
+      # The Vite dev server proxies /api through the published port, so the
+      # API's peer is the docker bridge gateway, not loopback. Trust it (and
+      # loopback, which this list replaces) so X-Forwarded-For from the dev
+      # proxy is used for rate limits; the E2E specs give each test its own
+      # client IP that way (BRY-661). Same range as .env.example.
+      - TRUSTED_PROXY_CIDRS=127.0.0.0/8,::1/128,172.16.0.0/12
       # Mail goes to MailPit (mock SMTP) — captures every send and
       # exposes a web UI at http://localhost:8025 for inspection.
       # Production uses Stalwart on port 465 with auth; dev uses
