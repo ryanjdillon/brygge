@@ -3,7 +3,7 @@
 # Target platform: linux/arm64 (Hetzner CAX11)
 
 # ── Stage 1: Build frontend ─────────────────────────────────
-FROM node:lts-alpine AS frontend
+FROM node:lts-alpine@sha256:8996bb5821d62a8fd9bb27c1cb07462f3fdce6e47d640c6a881ead0b064ce216 AS frontend
 WORKDIR /frontend
 COPY frontend/package*.json ./
 RUN npm ci
@@ -25,7 +25,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} \
     go build -ldflags="-s -w" -o /brygge-seed ./cmd/seed
 
 # ── Stage 3: Minimal runtime ────────────────────────────────
-FROM gcr.io/distroless/static:nonroot AS production
+FROM gcr.io/distroless/static:nonroot@sha256:25ac8f0c3b2334a9eb05452266bd4697864a8c8ef0ef71e5e6480d7f92868329 AS production
 COPY --from=builder /brygge /brygge
 COPY --from=builder /brygge-seed /brygge-seed
 USER nonroot:nonroot

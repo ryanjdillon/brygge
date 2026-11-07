@@ -41,7 +41,7 @@ services:
 
   # ── Database Migrations ──────────────────────────────────────
   migrate:
-    image: migrate/migrate:v4.18.2
+    image: migrate/migrate:v4.18.2@sha256:acded13a336f2b6f35fd9ce14a32834cf1e6b2a7887fe5dfc977b3e563eba39e
     command: ["-path=/migrations", "-database", "${DATABASE_URL}", "up"]
     volumes:
       - ../backend/migrations:/migrations:ro
@@ -135,7 +135,7 @@ services:
 
   # ── Dendrite (Matrix homeserver) ───────────────────────────────
   dendrite:
-    image: matrixdotorg/dendrite-monolith:latest
+    image: matrixdotorg/dendrite-monolith:latest@sha256:7dafe6edfc8cfab758a68a4cf20414df1ade4a36b45b1852554d81fb70b1272c
     restart: unless-stopped
     volumes:
       - dendrite_config:/etc/dendrite
@@ -154,7 +154,7 @@ services:
 
   # ── Element Web (Matrix client) ───────────────────────────────
   element:
-    image: vectorim/element-web:latest
+    image: vectorim/element-web:latest@sha256:b0aa4b5a4fc1afaaff62e2dbd0c92d57e2b20724f3ccb2fef53aae949088c3d2
     restart: unless-stopped
     networks:
       - brygge
@@ -167,7 +167,7 @@ services:
 
   # ── Uptime Kuma (status page) ─────────────────────────────────
   uptime-kuma:
-    image: louislam/uptime-kuma:1
+    image: louislam/uptime-kuma:1@sha256:70233f4acb5163fd2a59a49909cf01e44415cecff13dba69e3a86647a2919f83
     restart: unless-stopped
     volumes:
       - uptime_data:/app/data
