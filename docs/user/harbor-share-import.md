@@ -24,6 +24,18 @@ The first row holds the column names:
 | `harbor_share_owner` | yes | `ja`, `yes`, `x`, `1` or `true` for an owner; `nei`, `no`, `0`, `false` or empty for not an owner. |
 | `harbor_share_paid_on` | no | The date the share was paid: `2026-03-15` or `15.03.2026`. Leave it empty if you don't know it; Brygge never makes one up. |
 
+The Norwegian names a member sheet usually has work too, so the headers rarely need renaming. Upper and lower case don't matter.
+
+| Column | Also accepted |
+|---|---|
+| `name` | `Navn`, `Fullt navn` |
+| `first_name`, `last_name` | `Fornavn`, `Etternavn` |
+| `email` | `E-post`, `Epost`, `E-postadresse` |
+| `harbor_share_owner` | `Moloandel`, `Moloandelseier`, `Moloandel eier` |
+| `harbor_share_paid_on` | `Moloandel betalt`, `Betalt dato` |
+
+A column whose meaning varies from club to club, such as *Fast plass*, is not read on its own. If that column is what records ownership in your sheet, rename it to `Moloandel` first. Columns Brygge doesn't know are ignored.
+
 Example:
 
 ```

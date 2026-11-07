@@ -172,6 +172,36 @@ func TestReadHarborShareInputs(t *testing.T) {
 		}
 	})
 
+	t.Run("Norwegian header names are read as their columns", func(t *testing.T) {
+		inputs, err := readHarborShareCSV(t, "Nr;Fornavn;Etternavn;E-post;Moloandel;Moloandel betalt\n1;Ada;Synthetic;ada@example.com;Ja;15.03.2026\n")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(inputs) != 1 {
+			t.Fatalf("inputs = %+v, want one row", inputs)
+		}
+		in := inputs[0]
+		if in.name != "Ada Synthetic" || in.email != "ada@example.com" || !in.owner || in.paidOn == nil || *in.paidOn != "2026-03-15" || in.err != "" {
+			t.Errorf("input = %+v, want Ada Synthetic, owner, paid 2026-03-15", in)
+		}
+	})
+
+	t.Run("a canonical header wins over its alias", func(t *testing.T) {
+		inputs, err := readHarborShareCSV(t, "name,navn,harbor_share_owner\nAda Synthetic,Bo Annen,ja\n")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if inputs[0].name != "Ada Synthetic" {
+			t.Errorf("name = %q, want the name column", inputs[0].name)
+		}
+	})
+
+	t.Run("a club-specific column is not an owner alias", func(t *testing.T) {
+		if _, err := readHarborShareCSV(t, "Fornavn,Etternavn,Fast Plass\nAda,Synthetic,Ja\n"); err == nil {
+			t.Error(`"Fast Plass" was accepted as the owner column`)
+		}
+	})
+
 	t.Run("the row cap", func(t *testing.T) {
 		var b strings.Builder
 		b.WriteString("name,harbor_share_owner\n")
