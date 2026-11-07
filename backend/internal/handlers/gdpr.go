@@ -860,25 +860,9 @@ func (h *GDPRHandler) HandleProcessDeletion(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Always wipe data carrying no retention obligation.
-	recordsWiped := []string{"push_subscriptions", "notification_preferences", "user_consents", "email_sends", "mail_delivery_events", "membership_applications", "membership_cancel_reason"}
-	for _, stmt := range []string{
-		`DELETE FROM push_subscriptions WHERE user_id = $1`,
-		`DELETE FROM notification_preferences WHERE user_id = $1`,
-		`DELETE FROM user_consents WHERE user_id = $1`,
-	} {
-		if _, err = tx.Exec(ctx, stmt, userID); err != nil {
-			h.log.Error().Err(err).Str("stmt", stmt).Msg("failed to wipe non-retained user data")
-			Error(w, http.StatusInternalServerError, "internal error")
-			return
-		}
-	}
-	if err = accounting.DeleteMemberMailLog(ctx, tx, userID); err != nil {
-		h.log.Error().Err(err).Msg("failed to delete mail log")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-	if err = accounting.EraseMemberMembershipData(ctx, tx, userID); err != nil {
-		h.log.Error().Err(err).Msg("failed to erase membership data")
+	recordsWiped := accounting.NonRetainedMemberRecords()
+	if err = accounting.EraseNonRetainedMemberData(ctx, tx, userID); err != nil {
+		h.log.Error().Err(err).Msg("failed to wipe non-retained user data")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}

@@ -278,6 +278,65 @@ most recent invoice from accounting year *Y* keeps their record in-window until
 has no obligation and is eligible for erasure immediately. Never re-derive this
 date math elsewhere — call the helper.
 
+## What erasure removes
+
+Every erasure path (the admin delete, a processed GDPR request in both
+outcomes, and the purge sweep) runs the same steps in its transaction, before
+the address is overwritten. The steps for data with no retention obligation
+run through one entry point, `accounting.EraseNonRetainedMemberData`, so the
+three paths cannot drift apart:
+
+| Data | Outcome | Step |
+|---|---|---|
+| Sessions, passkeys, TOTP and recovery codes, magic links for the address, the pay link, developer tokens | Deleted or revoked | `revokeMemberAccess` (admin delete and GDPR; a purged member was deactivated earlier) |
+| Push subscriptions, notification and email preferences, the newsletter consent | Deleted | `accounting.EraseMemberProfileData` |
+| Consents to legal documents (terms, privacy, statutes, harbour rules, terms of sale) | Kept, keyed by the anonymised id, until financial retention ends; then deleted | `purgeOneMember`, or the daily `accounting.PurgeRetentionClearedConsents` for a member erased earlier |
+| `users.admin_notes` (the board's notes) | Emptied (`''`; the column is NOT NULL). Interim: the column goes in BRY-654 | `accounting.EraseMemberProfileData` |
+| Boats | Deleted, unless a faktura line or an active slip assignment names the boat: then kept with name, registration number, MMSI and call sign blanked, model and dimensions kept | `accounting.EraseMemberProfileData` |
+| Mail log (`email_sends`, unmatched SES events) | Deleted | `accounting.DeleteMemberMailLog` |
+| Cancellation reason, address check, join requests | Cleared or deleted | `accounting.EraseMemberMembershipData` |
+| Name, email, phone, address | Overwritten | each path's own `UPDATE users` (deferred for a GDPR request inside retention) |
+| Identity keys in audit details | Removed | `audit.ScrubMemberPII` (only where identity is erased) |
+
+Boats are handled per BRD-18 ([board-workflows.md](../../adr/board-workflows.md)):
+a member's boat is an instance of a boat model, and the club keeps neither
+its name nor its registration. Released slip assignments and waiting-list
+entries keep their rows and lose the boat link (`ON DELETE SET NULL`). Faktura
+line text is a bookkeeping document and is never rewritten, even where it
+names the boat.
+
+Consents to the club's legal documents survive erasure (BRD-18): they show
+what the member accepted (GDPR Art. 5(2) and 7(1) accountability) and that the
+terms of sale were agreed for sales the club must keep under bokføringsloven.
+Once the member is anonymised they name no one. They go when the member's
+financial retention ends (`accounting.MemberFinancialRetention`): in the
+purge sweep's `purgeOneMember` for a member it erases, or in the daily
+`PurgeRetentionClearedConsents` for a member an admin delete or a GDPR request
+erased earlier. The newsletter opt-in has no such purpose and goes at erasure.
+
+`member_since`, `membership_cancelled_at` and `membership_ends_on` stay: the
+users row is kept, anonymised (BRD-10), and a date alone identifies no one.
+Roles, slip assignments, waiting-list entries, the harbor share fields,
+bookings and the deletion request row also stay; they hold ids and dates, not
+identity.
+
+Not yet covered, and listed for the owner rather than changed: the Stalwart
+mailbox on a GDPR request or the purge (only the admin delete removes it, see
+[The mailbox](#the-mailbox)); `vipps_customer_aliases` (a payer name the
+treasurer taught, mapped to the member); `deliveries` (the member's address
+and the payload of queued and sent notices, never purged); the guest name,
+email, phone and notes on the member's bookings; and content the member
+wrote (document comments, feature requests).
+
+## Magic links
+
+A `magic_links` row holds the address the link was sent to and the token. A
+link is valid 15 minutes and can only be consumed before it expires, so the
+hourly sweep (`MagicLinkHandler.PurgeExpired`) deletes every row 24 hours past
+its `expires_at`, used or not. `revokeMemberAccess` deletes the member's links
+at once. Join requests follow the same idea: `JoinHandler.PurgeExpired`
+deletes a `membership_applications` row at its `expires_at`, confirmed or not.
+
 ## What survives erasure
 
 Invoices snapshot the member's `member_name` / `member_email` at issue time, and
@@ -292,10 +351,11 @@ identity at issue"*.
 
 A member-initiated deletion request (My page → Privacy) still runs after its
 14-day cooling-off window, but reconciles with retention: data with no bookkeeping
-obligation (push subscriptions, notification preferences, consents, and the
-mail log: `email_sends` rows naming the member or sent to their address in the
-club, and SES events that matched no send but carry that address) is wiped
-immediately, while identity erasure is **deferred** when retention still
+obligation (push subscriptions, notification and email preferences, the
+newsletter consent, the board's `admin_notes`, the member's boats as in
+[What erasure removes](#what-erasure-removes), and the mail log: `email_sends`
+rows naming the member or sent to their address in the club, and SES events
+that matched no send but carry that address) is wiped immediately, while identity erasure is **deferred** when retention still
 applies, so the purge finishes the erasure once it clears. Either way the member
 is locked out in the same transaction (`revokeMemberAccess`): the account is
 deactivated, and sessions, passkeys, TOTP enrolment, recovery codes, every
@@ -307,7 +367,7 @@ and an `@deleted.local` email, which the purge sweep skips. The request row is
 locked (`FOR UPDATE`) while it is processed, so a second run is refused; an id
 that is not a UUID answers 404. The audit row (`gdpr.deletion_processed`)
 records the processing admin as actor with their IP, the erased user as the
-resource, and `request_id`, `records_wiped`, `identity_erased`,
+resource, and `request_id`, `records_wiped` (`accounting.NonRetainedMemberRecords`), `identity_erased`,
 `retention_clears_at` and `sessions_revoked` (session rows deleted, including
 expired ones the purge job had not yet removed) in its details. An admin cannot
 process their own deletion request (400). Processing needs a fresh TOTP on top of
@@ -328,6 +388,45 @@ two weeks to act. Anything that surfaces these requests as work (the planned
 board task inbox, BRY-462) should show an item from `grace_end` and mark it
 overdue at `requested_at` + 1 month, not from `requested_at`, when nobody can
 act yet.
+
+## The member's data export
+
+`GET /members/me/data-export` (My page → Privacy → "Last ned data") returns
+the caller's own data as one JSON document. It is not a dump of every row
+that mentions them: each section is one query in `dataExportSections`
+(`handlers/gdpr.go`), read in one read-only snapshot, and the response is sent
+with `Cache-Control: no-store` as `data-export-YYYY-MM-DD.json` (UTC date).
+
+Included, by section:
+
+- `profile`: names, email, phone, address, `is_local`, the address check
+  (`address_verified`, `address_kommunenummer`, `address_verified_at`),
+  language and directory settings, `member_since`, the cancellation dates and
+  the member's own cancellation reason, `created_at`.
+- `roles` (role and when granted), `harbor_share` (owner, paid on).
+- `boats`, `slip_assignments` (with the slip label), `waiting_list`.
+- `fakturas`, each with its `lines` and the member's identity snapshot.
+- `payments` and `orders` the member made or that settle one of their
+  fakturas. One that also settles another member's faktura, or that someone
+  else placed, is shown as the member's allocation only (`allocation_only:
+  true`, the amount is the sum of the member's fakturas it settles), without
+  description, provider reference or order lines.
+- `consents`, `notification_preferences`, `communication_preferences`.
+- `push_subscriptions`: the push service's host and the browser's user agent.
+- `bookings` (resource name, dates, status, the member's notes, boat size).
+- `email_sends`: kind, status and date of mail to or about the member; the
+  recipient only when it is the member's current address.
+- `exported_at`.
+
+Left out on purpose: anything naming another person (who granted a role or
+confirmed a boat, a booking's guest, a faktura's `recipient_*`, an order's
+`guest_*`, the board address of a notice about the member, provider error
+text that can quote other addresses), live capabilities (an order's pay
+token, push endpoint paths and keys, login and pay links, credentials,
+sessions), the board's `admin_notes` (interim: the notes are left out of the
+download until BRY-654 removes the field, BRD-18), the audit log, the mail log's delivery
+events, and the faktura PDF. The rules are in
+[invariants.md](../reference/invariants.md#the-member-data-export-holds-the-members-own-data-and-nothing-else).
 
 The queue and the legal-document editor (`/admin/gdpr/*`) are admin-only in the
 API as well as the SPA: GDPR is one function, assigned to the site admin by

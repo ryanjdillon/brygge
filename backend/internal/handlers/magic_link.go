@@ -23,6 +23,12 @@ import (
 
 const magicLinkExpiry = 15 * time.Minute
 
+// magicLinkRetention is how long a magic-link row is kept past its expiry.
+// The row holds the address the link was sent to and the token, and a link
+// can only be consumed before it expires, so this also bounds how long a
+// consumed one is kept.
+const magicLinkRetention = 24 * time.Hour
+
 // MailPrincipalEnsurer creates a user's Stalwart principal if it is missing.
 // *mail.UserProvisioner is the implementation.
 type MailPrincipalEnsurer interface {
@@ -270,4 +276,15 @@ func generateToken() (string, error) {
 		return "", err
 	}
 	return base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(b), nil
+}
+
+// PurgeExpired deletes magic links that expired more than magicLinkRetention
+// ago, used or not. Run by the hourly sweep.
+func (h *MagicLinkHandler) PurgeExpired(ctx context.Context) (int64, error) {
+	tag, err := h.db.Exec(ctx,
+		`DELETE FROM magic_links WHERE expires_at < now() - $1::interval`, magicLinkRetention)
+	if err != nil {
+		return 0, fmt.Errorf("purge expired magic links: %w", err)
+	}
+	return tag.RowsAffected(), nil
 }

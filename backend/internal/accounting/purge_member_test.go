@@ -190,3 +190,135 @@ func TestIntegration_PurgeOneMemberErasesMembershipData(t *testing.T) {
 		t.Errorf("applications left = %v, want only the other address and the other club", left)
 	}
 }
+
+// The sweep clears the board's notes and the member's boats: a boat on a
+// faktura line stays with its identifying columns blanked, any other is
+// deleted, and the faktura line is not rewritten.
+func TestIntegration_PurgeOneMemberErasesNotesAndBoats(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	clubID := testutil.SeedClub(t, pool)
+	svc := NewService(pool, nil, zerolog.Nop())
+
+	userID, _ := testutil.SeedUser(t, pool, clubID, []string{"member"})
+	var billed, free, invoiceID string
+	for _, q := range []struct {
+		dst *string
+		sql string
+	}{
+		{&billed, `INSERT INTO boats (user_id, club_id, name, registration_number, model, length_m)
+		           VALUES ($1, $2, 'Billed', 'REG-1', 'T-20', 6.5) RETURNING id`},
+		{&free, `INSERT INTO boats (user_id, club_id, name, registration_number)
+		         VALUES ($1, $2, 'Free', 'REG-2') RETURNING id`},
+		{&invoiceID, `INSERT INTO invoices (club_id, user_id, kid_number, total_amount, status, issue_date, due_date)
+		              VALUES ($2, $1, '8800001', 300, 'open', '2015-06-01', '2015-06-15') RETURNING id`},
+	} {
+		if err := pool.QueryRow(ctx, q.sql, userID, clubID).Scan(q.dst); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	}
+	for _, stmt := range []string{
+		`UPDATE users SET deactivated_at = now(), admin_notes = 'Synthetic board note' WHERE id = $1`,
+		`INSERT INTO user_consents (user_id, club_id, consent_type, version)
+		 SELECT $1, club_id, t, '1' FROM users, unnest(ARRAY['privacy', 'newsletter']) t WHERE id = $1`,
+		`INSERT INTO invoice_lines (invoice_id, description, quantity, unit_price, line_total, boat_id)
+		 SELECT id, 'Slip fee Billed REG-1', 1, 300, 300, '` + billed + `' FROM invoices WHERE user_id = $1`,
+	} {
+		if _, err := pool.Exec(ctx, stmt, userID); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	}
+
+	if done, err := svc.purgeOneMember(ctx, userID, clubID); err != nil || !done {
+		t.Fatalf("purgeOneMember = (%v, %v), want (true, nil)", done, err)
+	}
+
+	var notes string
+	if err := pool.QueryRow(ctx, `SELECT admin_notes FROM users WHERE id = $1`, userID).Scan(&notes); err != nil {
+		t.Fatalf("read member: %v", err)
+	}
+	if notes != "" {
+		t.Errorf("admin_notes = %q, want empty", notes)
+	}
+	var n int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM boats WHERE id = $1`, free).Scan(&n); err != nil || n != 0 {
+		t.Errorf("unreferenced boat left (%d, %v)", n, err)
+	}
+	// The sweep runs past retention, so every consent goes with the identity.
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM user_consents WHERE user_id = $1`, userID).Scan(&n); err != nil || n != 0 {
+		t.Errorf("consents left after the sweep (%d, %v)", n, err)
+	}
+	var name, reg, model string
+	if err := pool.QueryRow(ctx, `SELECT name, registration_number, model FROM boats WHERE id = $1`, billed).Scan(&name, &reg, &model); err != nil {
+		t.Fatalf("billed boat should be kept: %v", err)
+	}
+	if name != "" || reg != "" || model != "T-20" {
+		t.Errorf("billed boat = (%q, %q, %q), want identity blanked and model kept", name, reg, model)
+	}
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*) FROM invoice_lines WHERE invoice_id = $1 AND boat_id = $2 AND description = 'Slip fee Billed REG-1'`,
+		invoiceID, billed).Scan(&n); err != nil || n != 1 {
+		t.Errorf("faktura line changed (%d, %v)", n, err)
+	}
+}
+
+// Legal consents kept through erasure are deleted once the erased member's
+// retention ends, and not before; a member who is only deactivated keeps
+// theirs.
+func TestIntegration_PurgeRetentionClearedConsents(t *testing.T) {
+	testutil.SkipIfNoDB(t)
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	clubID := testutil.SeedClub(t, pool)
+	svc := NewService(pool, nil, zerolog.Nop())
+
+	seed := func(erased bool, issueDate string) string {
+		t.Helper()
+		userID, _ := testutil.SeedUser(t, pool, clubID, []string{"member"})
+		stmts := []string{
+			`UPDATE users SET deactivated_at = now() WHERE id = $1`,
+			`INSERT INTO user_consents (user_id, club_id, consent_type, version)
+			 SELECT id, club_id, 'privacy', '1' FROM users WHERE id = $1`,
+		}
+		if erased {
+			stmts = append(stmts, `UPDATE users SET email = gen_random_uuid()::text || '`+ErasedEmailSuffix+`' WHERE id = $1`)
+		}
+		if issueDate != "" {
+			stmts = append(stmts, `INSERT INTO invoices (club_id, user_id, kid_number, total_amount, status, issue_date, due_date)
+			 SELECT club_id, id, '99' || left(md5(id::text), 6), 100, 'open', '`+issueDate+`'::date, '`+issueDate+`'::date
+			   FROM users WHERE id = $1`)
+		}
+		for _, stmt := range stmts {
+			if _, err := pool.Exec(ctx, stmt, userID); err != nil {
+				t.Fatalf("seed: %v", err)
+			}
+		}
+		return userID
+	}
+	pastRetention := seed(true, "2015-06-01")
+	noInvoices := seed(true, "")
+	inRetention := seed(true, "now")
+	deactivatedOnly := seed(false, "2015-06-01")
+
+	if _, err := svc.PurgeRetentionClearedConsents(ctx); err != nil {
+		t.Fatalf("PurgeRetentionClearedConsents: %v", err)
+	}
+	for _, tc := range []struct {
+		name, userID string
+		want         int
+	}{
+		{"erased, retention ended", pastRetention, 0},
+		{"erased, no fakturas", noInvoices, 0},
+		{"erased, inside retention", inRetention, 1},
+		{"deactivated, not erased", deactivatedOnly, 1},
+	} {
+		var n int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM user_consents WHERE user_id = $1`, tc.userID).Scan(&n); err != nil {
+			t.Fatalf("count: %v", err)
+		}
+		if n != tc.want {
+			t.Errorf("%s: consents = %d, want %d", tc.name, n, tc.want)
+		}
+	}
+}

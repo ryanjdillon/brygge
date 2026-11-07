@@ -592,6 +592,13 @@ func main() {
 				} else if n > 0 {
 					log.Info().Int64("rows", n).Msg("purged expired developer tokens")
 				}
+				// A magic link holds the address it was sent to; keep it a
+				// day past expiry, used or not.
+				if n, err := magicLinkHandler.PurgeExpired(ctx); err != nil {
+					log.Warn().Err(err).Msg("magic link purge failed")
+				} else if n > 0 {
+					log.Info().Int64("rows", n).Msg("purged expired magic links")
+				}
 				// Join applications live 24 hours; the form data of one never
 				// confirmed must not outlast that (BRY-629).
 				if n, err := joinHandler.PurgeExpired(ctx); err != nil {
@@ -657,6 +664,13 @@ func main() {
 				log.Warn().Err(err).Msg("member PII purge failed")
 			} else if n > 0 {
 				log.Info().Int64("members", n).Msg("purged PII of past-retention deactivated members")
+			}
+			// An erased member's legal-document consents are kept as proof
+			// until their financial retention ends (BRD-18).
+			if n, err := accountingSvc.PurgeRetentionClearedConsents(ctx); err != nil {
+				log.Warn().Err(err).Msg("retained consent purge failed")
+			} else if n > 0 {
+				log.Info().Int64("rows", n).Msg("purged consents of past-retention erased members")
 			}
 			// Same window for external billing recipients (BRY-234): scrub a
 			// dormant non-member payer's PII once past retention; organizations

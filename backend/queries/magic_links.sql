@@ -9,7 +9,3 @@ WHERE token = $1
   AND used = false
   AND expires_at > NOW()
 RETURNING email, club_id;
-
--- name: PurgeExpiredMagicLinks :execresult
-DELETE FROM magic_links
-WHERE expires_at < NOW();

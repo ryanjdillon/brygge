@@ -299,12 +299,23 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   default-language, the legacy `bank_account` text column (read-only mirror
   pending removal), and six `feature_*` BOOLEAN columns added in migration
   000049 that override env-var defaults at runtime.
-- `users`, `user_roles` — accounts and RBAC. `users.kind` is `person` or `system`; a club's system actor (000129) is not a member. Harbour share (moloandel) ownership is on the member, not a role (000133, BRD-14): see below.
+- `users`, `user_roles` — accounts and RBAC. `users.kind` is `person` or `system`; a club's system actor (000129) is not a member. Harbour share (moloandel) ownership is on the member, not a role (000133, BRD-14): see below. `users.admin_notes` (TEXT NOT NULL, default `''`) is the board's free text about the member; every erasure path empties it, it is left out of the member's data export, and it is to be removed (BRY-654, BRD-18). `user_consents` rows for legal documents survive erasure until the member's financial retention ends; the newsletter row goes at erasure (BRD-18).
 - `slips`, `dock_fingers`, `docks` — harbor map geometry + metadata.
 - `slip_assignments` — joins `users` ↔ `slips` (a user can hold multiple
   active assignments; each slip can only be held by one active user, via
   `idx_slip_assignments_active`).
-- `boats`, `boat_models` — fleet, with manufacturer/model catalog.
+- `boats`, `boat_models` — fleet, with manufacturer/model catalog. Erasure
+  deletes a member's boats, except one still named by an `invoice_lines` row
+  or an active `slip_assignments` row: that one keeps its model and
+  dimensions with `name`, `registration_number`, `mmsi` and `call_sign`
+  blanked (`accounting.EraseMemberProfileData`, BRY-648). All three FKs into
+  `boats` are `ON DELETE SET NULL`.
+- `magic_links` — single-use login links: the raw `token` (primary key), the
+  `email` it was sent to, `expires_at` (15 minutes after issue) and `used`.
+  There is no consumed-at column; a link is consumed only before it expires,
+  so the hourly sweep (`MagicLinkHandler.PurgeExpired`) deletes every row
+  24 hours past `expires_at`, used or not (BRY-648), and `revokeMemberAccess`
+  deletes a member's links at once.
 - `price_items`, `slip_fees` — pricing catalog and per-year billing.
 - `harbor_payment_targets` (000090) — printable harbor QR targets: a public
   `token` (the QR encodes `/qr/{token}`), label/location, and the linked

@@ -73,6 +73,89 @@ func EraseMemberMembershipData(ctx context.Context, db audit.Execer, userID stri
 	return nil
 }
 
+// NonRetainedMemberRecords names what EraseNonRetainedMemberData erases, for
+// the audit trail of an erasure. Keep it in step with the three steps below.
+func NonRetainedMemberRecords() []string {
+	return []string{
+		// DeleteMemberMailLog
+		"email_sends", "mail_delivery_events",
+		// EraseMemberMembershipData
+		"membership_applications", "membership_cancel_reason", "address_verification",
+		// EraseMemberProfileData
+		"push_subscriptions", "notification_preferences", "communication_preferences",
+		"newsletter_consent", "admin_notes", "boats",
+	}
+}
+
+// EraseNonRetainedMemberData runs every erasure step for data with no
+// retention obligation: the mail log, the membership data and the profile
+// data. Every path that erases a member calls it in its transaction, before
+// the address is overwritten (the first two match on it), and a GDPR request
+// whose identity erasure is deferred calls it at once.
+func EraseNonRetainedMemberData(ctx context.Context, db audit.Execer, userID string) error {
+	if err := DeleteMemberMailLog(ctx, db, userID); err != nil {
+		return err
+	}
+	if err := EraseMemberMembershipData(ctx, db, userID); err != nil {
+		return err
+	}
+	return EraseMemberProfileData(ctx, db, userID)
+}
+
+// EraseMemberProfileData removes what the club holds about a member, outside
+// the identity columns, that no bookkeeping rule requires it to keep: push
+// subscriptions, notification and email preferences, the newsletter consent,
+// the board's admin_notes, and the member's boats. It runs as part of
+// EraseNonRetainedMemberData; none of it waits for retention.
+//
+// Consents to the club's legal documents (terms, privacy, statutes, harbour
+// rules, terms of sale) stay until the member's financial retention ends
+// (BRD-18): they prove what the member accepted (GDPR Art. 5(2) and 7(1)) and
+// that the terms of sale were agreed for sales the club still holds under
+// bokføringsloven. They name no one once the member is anonymised.
+// purgeOneMember and PurgeRetentionClearedConsents delete them.
+//
+// A boat is deleted unless a retained row still points at it: an invoice
+// line (bookkeeping) or an active slip assignment, which must name a boat
+// (active_assignment_has_boat). Such a boat stays with its identifying
+// columns blanked (name, registration number, MMSI, call sign); its model and
+// dimensions stay, because they explain the price on the line and identify
+// no one. Released slip assignments and waiting-list entries lose the link
+// (ON DELETE SET NULL). Invoice line text is a bookkeeping document and is
+// never rewritten.
+func EraseMemberProfileData(ctx context.Context, db audit.Execer, userID string) error {
+	for _, stmt := range []string{
+		`DELETE FROM push_subscriptions WHERE user_id = $1`,
+		`DELETE FROM notification_preferences WHERE user_id = $1`,
+		`DELETE FROM communication_preferences WHERE user_id = $1`,
+		`DELETE FROM user_consents WHERE user_id = $1 AND consent_type = 'newsletter'`,
+		`UPDATE users SET admin_notes = '' WHERE id = $1 AND admin_notes <> ''`,
+	} {
+		if _, err := db.Exec(ctx, stmt, userID); err != nil {
+			return fmt.Errorf("erase member profile data: %w", err)
+		}
+	}
+	if _, err := db.Exec(ctx,
+		`UPDATE boats b SET name = '', registration_number = '', mmsi = '', call_sign = '', updated_at = now()
+		  WHERE b.user_id = $1 AND (`+boatRetainedSQL+`)
+		    AND (b.name <> '' OR b.registration_number <> '' OR b.mmsi <> '' OR b.call_sign <> '')`,
+		userID,
+	); err != nil {
+		return fmt.Errorf("anonymise retained boats: %w", err)
+	}
+	if _, err := db.Exec(ctx,
+		`DELETE FROM boats b WHERE b.user_id = $1 AND NOT (`+boatRetainedSQL+`)`,
+		userID,
+	); err != nil {
+		return fmt.Errorf("delete member boats: %w", err)
+	}
+	return nil
+}
+
+// boatRetainedSQL is true for a boat b that a kept row still references.
+const boatRetainedSQL = `EXISTS (SELECT 1 FROM invoice_lines il WHERE il.boat_id = b.id)
+	OR EXISTS (SELECT 1 FROM slip_assignments sa WHERE sa.boat_id = b.id AND sa.released_at IS NULL)`
+
 // PurgeExpiredMemberPII anonymizes the PII of deactivated members whose
 // financial records have all cleared the retention window (BRY-207). It never
 // deletes the user row — invoices reference it (no ON DELETE cascade) and keep
@@ -125,6 +208,55 @@ func (s *Service) PurgeExpiredMemberPII(ctx context.Context) (int64, error) {
 		}
 	}
 	return purged, nil
+}
+
+// PurgeRetentionClearedConsents deletes the legal-document consents of
+// members whose identity is already erased (an admin delete or a GDPR request
+// processed before retention cleared) once their financial retention has
+// ended (MemberFinancialRetention). Erasure keeps those consents as proof of
+// what the member accepted while the club still holds their sales records
+// (BRD-18); after retention nothing needs them. Members erased by the sweep
+// itself lose them in purgeOneMember. Idempotent; returns the rows deleted.
+func (s *Service) PurgeRetentionClearedConsents(ctx context.Context) (int64, error) {
+	rows, err := s.db.Query(ctx,
+		`SELECT DISTINCT u.id, u.club_id FROM users u JOIN user_consents c ON c.user_id = u.id
+		  WHERE u.kind = 'person' AND (u.email LIKE '%' || $1 OR u.email = $2)`,
+		ErasedEmailSuffix, LegacyAnonymizedEmail,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("select erased members with consents: %w", err)
+	}
+	type target struct{ id, clubID string }
+	var targets []target
+	for rows.Next() {
+		var t target
+		if err := rows.Scan(&t.id, &t.clubID); err != nil {
+			rows.Close()
+			return 0, fmt.Errorf("scan consent purge target: %w", err)
+		}
+		targets = append(targets, t)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+
+	var deleted int64
+	for _, t := range targets {
+		ret, err := MemberFinancialRetention(ctx, s.db, t.clubID, t.id)
+		if err != nil {
+			return deleted, fmt.Errorf("evaluate retention of %s: %w", t.id, err)
+		}
+		if !ret.Eligible {
+			continue
+		}
+		tag, err := s.db.Exec(ctx, `DELETE FROM user_consents WHERE user_id = $1`, t.id)
+		if err != nil {
+			return deleted, fmt.Errorf("delete consents of %s: %w", t.id, err)
+		}
+		deleted += tag.RowsAffected()
+	}
+	return deleted, nil
 }
 
 // PurgeExpiredRecipientPII scrubs the PII of external billing recipients
@@ -226,10 +358,7 @@ func (s *Service) purgeOneMember(ctx context.Context, userID, clubID string) (bo
 
 	// Before the update overwrites the address it matches on. An ineligible
 	// member returns below without committing, so this rolls back with it.
-	if err := DeleteMemberMailLog(ctx, tx, userID); err != nil {
-		return false, err
-	}
-	if err := EraseMemberMembershipData(ctx, tx, userID); err != nil {
+	if err := EraseNonRetainedMemberData(ctx, tx, userID); err != nil {
 		return false, err
 	}
 
@@ -252,6 +381,11 @@ func (s *Service) purgeOneMember(ctx context.Context, userID, clubID string) (bo
 		return false, nil
 	}
 	if _, err := audit.ScrubMemberPII(ctx, tx, userID); err != nil {
+		return false, err
+	}
+	// The sweep selects only members past retention, so the legal-document
+	// consents kept through erasure go now too.
+	if _, err := tx.Exec(ctx, `DELETE FROM user_consents WHERE user_id = $1`, userID); err != nil {
 		return false, err
 	}
 	if _, err := tx.Exec(ctx,

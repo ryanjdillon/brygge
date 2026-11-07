@@ -1010,14 +1010,10 @@ func (h *AdminUsersHandler) HandleDeleteUser(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Before the anonymising update: the mail log is matched on the address.
-	if err = accounting.DeleteMemberMailLog(ctx, tx, userID); err != nil {
-		h.log.Error().Err(err).Msg("failed to delete mail log")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-	if err = accounting.EraseMemberMembershipData(ctx, tx, userID); err != nil {
-		h.log.Error().Err(err).Msg("failed to erase membership data")
+	// Before the anonymising update: the mail log and join requests are
+	// matched on the address.
+	if err = accounting.EraseNonRetainedMemberData(ctx, tx, userID); err != nil {
+		h.log.Error().Err(err).Msg("failed to erase non-retained member data")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
