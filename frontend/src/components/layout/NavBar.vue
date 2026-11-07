@@ -5,7 +5,8 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useClubStore } from '@/stores/club'
 import { useNavGate } from '@/composables/useNavGate'
-import { LogIn, LogOut, User, Shield, ShieldAlert, Bell, ChevronRight } from 'lucide-vue-next'
+import { useJoinStatus } from '@/composables/useJoinStatus'
+import { LogIn, LogOut, User, UserPlus, Shield, ShieldAlert, Bell, ChevronRight } from 'lucide-vue-next'
 import LanguageSwitcher from '@/components/layout/LanguageSwitcher.vue'
 import InboxIndicator from '@/components/layout/InboxIndicator.vue'
 import { useBreadcrumbStore } from '@/stores/breadcrumb'
@@ -17,6 +18,7 @@ const route = useRoute()
 const auth = useAuthStore()
 const breadcrumb = useBreadcrumbStore()
 const { gateToAdmin } = useNavGate()
+const { open: joinOpen } = useJoinStatus()
 
 // On the logged-in portal/admin surfaces the top-left club-name link is
 // replaced by a breadcrumb (section › page). The page label is fed by the
@@ -92,8 +94,14 @@ const logoutClass = computed(() =>
 )
 const loginClass = computed(() =>
   isHero.value
-    ? `${pillBase} bg-white text-brand-900 shadow hover:bg-brand-50`
-    : `${pillBase} bg-brand-600 text-white hover:bg-brand-700`,
+    ? `${pillBase} min-h-11 min-w-11 justify-center bg-white text-brand-900 shadow hover:bg-brand-50`
+    : `${pillBase} min-h-11 min-w-11 justify-center bg-brand-600 text-white hover:bg-brand-700`,
+)
+// Joining is for visitors, so it sits beside "Logg inn" only while signed out.
+const joinClass = computed(() =>
+  isHero.value
+    ? `${pillBase} min-h-11 min-w-11 justify-center text-white ring-1 ring-white/40 hover:bg-white/10`
+    : `${pillBase} min-h-11 min-w-11 justify-center text-brand-700 ring-1 ring-brand-200 hover:bg-brand-50`,
 )
 
 async function handleLogout() {
@@ -178,6 +186,11 @@ async function handleLogout() {
             </button>
           </template>
           <template v-else>
+            <!-- Icon-only on phones, like "Logg inn", so the club name keeps its room. -->
+            <RouterLink v-if="joinOpen" to="/join" :class="joinClass" :title="t('nav.join')" data-testid="nav-join">
+              <UserPlus class="h-4 w-4" aria-hidden="true" />
+              <span class="sr-only sm:not-sr-only">{{ t('nav.join') }}</span>
+            </RouterLink>
             <RouterLink to="/login" :class="loginClass">
               <LogIn class="h-4 w-4" />
               <span class="hidden sm:inline">{{ t('nav.login') }}</span>

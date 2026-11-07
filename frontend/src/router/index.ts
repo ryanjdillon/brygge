@@ -82,16 +82,19 @@ const routes: RouteRecordRaw[] = [
     // Self-service join (BRY-632). Public: the page itself tells a signed-in
     // member they already are one and sends an applicant on to finish.
     path: '/join',
+    name: 'join',
     component: () => import('@/views/JoinView.vue'),
   },
   {
+    // The Norwegian address printed before the join URLs were English.
     path: '/bli-medlem',
-    component: () => import('@/views/JoinView.vue'),
+    redirect: { name: 'join' },
   },
   {
     // The confirmation email links here (joinConfirmURL). Public: the visitor
     // has no session until the page's POST confirms.
-    path: '/bli-medlem/stadfest',
+    path: '/join/confirm',
+    name: 'join-confirm',
     component: () => import('@/views/JoinConfirmView.vue'),
   },
   {
@@ -141,10 +144,10 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/portal/PortalDashboard.vue'),
       },
       {
-        // An absolute child path: keeps the Norwegian address while
-        // rendering inside the portal layout, so the sidebar stays.
+        // An absolute child path: keeps the join address while rendering
+        // inside the portal layout, so the sidebar stays.
         path: APPLICANT_COMPLETE_PATH,
-        name: 'applicant-complete',
+        name: 'join-complete',
         component: () => import('@/views/ApplicantCompleteView.vue'),
         meta: { applicantAllowed: true, applicantOnly: true },
       },

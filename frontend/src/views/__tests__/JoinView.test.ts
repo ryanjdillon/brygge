@@ -1,7 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { mountWithPlugins } from '@/test/test-utils'
+import { setJoinStatus, refetchJoinStatus } from '@/test/joinStatus'
 import JoinView from '@/views/JoinView.vue'
+
+vi.mock('@/composables/useJoinStatus', async () => (await import('@/test/joinStatus')).joinStatusModule)
 
 const client = { GET: vi.fn(), POST: vi.fn() }
 
@@ -32,10 +35,13 @@ const FIKTIV = {
 // The address search's answer; a test may replace it.
 let addressSearch: () => unknown = () => ok({ addresses: [FIKTIV], fallback: false })
 
-// Routes GET calls by path; `legal` lets a test change the document versions.
-function serve(status: unknown = OPEN, legal: Record<string, string> = VERSIONS) {
+type Status = { open: boolean; price: typeof OPEN.price | null; year?: number; missing?: string[] }
+
+// Sets the join status and routes GET calls by path; `legal` lets a test
+// change the document versions.
+function serve(status: Status = OPEN, legal: Record<string, string> = VERSIONS) {
+  setJoinStatus(status)
   client.GET.mockImplementation(async (path: string, opts?: { params: { path: { docType: string } } }) => {
-    if (path === '/api/v1/join/status') return ok(status)
     if (path === '/api/v1/join/address-search') return addressSearch()
     if (path === '/api/v1/legal/{docType}') {
       const doc = opts!.params.path.docType
@@ -350,13 +356,37 @@ describe('JoinView', () => {
   })
 
   it('shows the closed state with a contact link', async () => {
-    serve({ open: false, price: null, missing: ['price_item_unset'] })
+    serve({ open: false, price: null })
     const wrapper = await mountForm()
     const closed = wrapper.find('[data-testid="join-closed"]')
     expect(closed.exists()).toBe(true)
-    expect(closed.text()).toContain('join.closed.title')
+    expect(closed.text()).toContain('join.closed.body')
     expect(closed.find('a').attributes('href')).toBe('/contact')
+    expect(wrapper.find('a[href^="mailto:"]').exists()).toBe(false)
     expect(wrapper.find('form').exists()).toBe(false)
+    expect(client.GET).not.toHaveBeenCalled()
+  })
+
+  it('offers a retry when the status cannot be loaded', async () => {
+    serve()
+    setJoinStatus({ isError: true })
+    const wrapper = await mountForm()
+    const box = wrapper.find('[data-testid="join-error"]')
+    expect(box.exists()).toBe(true)
+    await box.find('button').trigger('click')
+    expect(refetchJoinStatus).toHaveBeenCalled()
+  })
+
+  it('disables the retry and shows it busy while the status is being fetched again', async () => {
+    serve()
+    setJoinStatus({ isError: true, isFetching: true })
+    const wrapper = await mountForm()
+    const button = wrapper.find('[data-testid="join-retry"]')
+    expect(button.attributes('disabled')).toBeDefined()
+    expect(button.attributes('aria-busy')).toBe('true')
+    expect(button.find('.animate-spin').exists()).toBe(true)
+    await button.trigger('click')
+    expect(refetchJoinStatus).not.toHaveBeenCalled()
   })
 
   it('switches to the closed state when the submit answers join_closed', async () => {
@@ -367,6 +397,7 @@ describe('JoinView', () => {
     await wrapper.find('form').trigger('submit')
     await flushPromises()
     expect(wrapper.find('[data-testid="join-closed"]').exists()).toBe(true)
+    expect(refetchJoinStatus).toHaveBeenCalled()
   })
 
   it('reloads changed terms, clears the tick and resubmits with the new versions', async () => {
@@ -416,7 +447,7 @@ describe('JoinView', () => {
     const wrapper = await mountForm({ roles: ['applicant'] })
     const box = wrapper.find('[data-testid="join-applicant"]')
     expect(box.exists()).toBe(true)
-    expect(box.find('a').attributes('href')).toBe('/bli-medlem/fullfor')
+    expect(box.find('a').attributes('href')).toBe('/join/complete')
     expect(wrapper.find('form').exists()).toBe(false)
   })
 })

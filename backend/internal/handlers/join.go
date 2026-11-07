@@ -832,7 +832,7 @@ func (h *JoinHandler) send(ctx context.Context, clubID, userID, to string, kind 
 // changes nothing: the page confirms with a POST, so a mail scanner that
 // prefetches links cannot use the token up.
 func joinConfirmURL(cfg *config.Config, token string) string {
-	return publicSiteBase(cfg) + "/bli-medlem/stadfest?token=" + url.QueryEscape(token)
+	return publicSiteBase(cfg) + "/join/confirm?token=" + url.QueryEscape(token)
 }
 
 // joinApplication is a stored application as confirm reads it.

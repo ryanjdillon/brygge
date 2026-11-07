@@ -6,7 +6,7 @@
     "directions": "Anfahrt",
     "contact": "Kontakt",
     "pricing": "Preise",
-    "join": "Beitreten",
+    "join": "Mitglied werden",
     "login": "Anmelden",
     "portal": "Meine Seite",
     "admin": "Verwaltung",
@@ -67,7 +67,7 @@
     "featureBookingsDesc": "Reservieren Sie Gastliegeplätze, Räume und andere Dienste",
     "featureMembers": "Mitglieder",
     "featureMembersDesc": "Treten Sie der Gemeinschaft bei und nutzen Sie die Mitgliedervorteile",
-    "ctaJoin": "Auf die Warteliste setzen"
+    "ctaJoin": "Mitglied werden"
   },
   "calendar": {
     "title": "Vereinskalender",
@@ -176,8 +176,7 @@
       "continue": "Beitritt abschließen"
     },
     "closed": {
-      "title": "Der Beitritt ist noch nicht geöffnet",
-      "body": "Der Verein nimmt derzeit keine Online-Anträge an. Nehmen Sie Kontakt mit uns auf, wir helfen Ihnen gern.",
+      "body": "Möchten Sie Mitglied werden? Wenden Sie sich an den Vorstand, wir helfen Ihnen gern.",
       "contact": "Kontakt aufnehmen"
     },
     "sent": {
@@ -359,7 +358,6 @@
     "submit": "Anmelden",
     "submitting": "Anmeldung läuft...",
     "noAccount": "Noch kein Konto?",
-    "joinLink": "Dem Verein beitreten",
     "forgotPassword": "Passwort vergessen?",
     "vipps": "Mit Vipps anmelden",
     "or": "oder",

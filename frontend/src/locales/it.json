@@ -6,7 +6,7 @@
     "directions": "Come raggiungerci",
     "contact": "Contatti",
     "pricing": "Tariffe",
-    "join": "Iscriviti",
+    "join": "Diventa socio",
     "login": "Accedi",
     "portal": "La mia pagina",
     "admin": "Amministrazione",
@@ -67,7 +67,7 @@
     "featureBookingsDesc": "Prenota posti barca ospiti, sale e altri servizi",
     "featureMembers": "Soci",
     "featureMembersDesc": "Entra nella comunità e accedi ai vantaggi riservati ai soci",
-    "ctaJoin": "Iscriviti alla lista d'attesa"
+    "ctaJoin": "Diventa socio"
   },
   "calendar": {
     "title": "Calendario del circolo",
@@ -176,8 +176,7 @@
       "continue": "Completa l’iscrizione"
     },
     "closed": {
-      "title": "Le iscrizioni non sono ancora aperte",
-      "body": "Il club al momento non accetta domande online. Contattaci e ti aiuteremo.",
+      "body": "Vuoi diventare socio? Contatta il direttivo e ti aiuteremo.",
       "contact": "Contattaci"
     },
     "sent": {
@@ -359,7 +358,6 @@
     "submit": "Accedi",
     "submitting": "Accesso in corso...",
     "noAccount": "Non hai un account?",
-    "joinLink": "Iscriviti al circolo",
     "forgotPassword": "Password dimenticata?",
     "vipps": "Accedi con Vipps",
     "or": "o",

@@ -4,7 +4,7 @@
 // applicant to the page that finishes joining instead of to pages that fail.
 
 /** Where an applicant-only user lands from any page they may not open. */
-export const APPLICANT_COMPLETE_PATH = '/bli-medlem/fullfor'
+export const APPLICANT_COMPLETE_PATH = '/join/complete'
 
 /**
  * True when the roles are the applicant role and nothing else, mirroring

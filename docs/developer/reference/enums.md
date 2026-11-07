@@ -575,7 +575,7 @@ The public checkout answers 409 `order_locked` to `POST /checkout/{token}/lines`
 
 | `code` | Status | Where | Meaning |
 |---|---|---|---|
-| `membership_not_completed` | 403 | Any session route not in `middleware.ApplicantRoutes` | The session's only role is `applicant`: the join is not paid yet (`middleware.ErrMembershipNotCompleted`). The SPA sends the user to `/bli-medlem/fullfor`. |
+| `membership_not_completed` | 403 | Any session route not in `middleware.ApplicantRoutes` | The session's only role is `applicant`: the join is not paid yet (`middleware.ErrMembershipNotCompleted`). The SPA sends the user to `/join/complete`. |
 | `membership_ended` | 409 | `POST /members/me/membership/undo` | The member has been deactivated, so the cancellation can no longer be undone; the board reactivates instead. |
 | `membership_ended` | (skip code) | `POST /admin/financials/invoices/bulk` result, `skipped[].code` | The member's `membership_ends_on` is before the fiscal period's `start_date`, so no faktura was made; `ends_on` carries the date (`skipMembershipEnded`). |
 

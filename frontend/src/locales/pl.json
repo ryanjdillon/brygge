@@ -6,7 +6,7 @@
     "directions": "Dojazd",
     "contact": "Kontakt",
     "pricing": "Cennik",
-    "join": "Dołącz",
+    "join": "Zostań członkiem",
     "login": "Zaloguj się",
     "portal": "Moja strona",
     "admin": "Administracja",
@@ -67,7 +67,7 @@
     "featureBookingsDesc": "Zarezerwuj miejsce gościnne, pokój i inne usługi",
     "featureMembers": "Członkowie",
     "featureMembersDesc": "Dołącz do społeczności i korzystaj z przywilejów członkowskich",
-    "ctaJoin": "Zapisz się na listę oczekujących"
+    "ctaJoin": "Zostań członkiem"
   },
   "calendar": {
     "title": "Kalendarz klubowy",
@@ -176,8 +176,7 @@
       "continue": "Dokończ przystąpienie"
     },
     "closed": {
-      "title": "Zapisy nie są jeszcze otwarte",
-      "body": "Klub obecnie nie przyjmuje zgłoszeń online. Skontaktuj się z nami, a pomożemy.",
+      "body": "Chcesz zostać członkiem? Skontaktuj się z zarządem, a pomożemy.",
       "contact": "Skontaktuj się z nami"
     },
     "sent": {
@@ -359,7 +358,6 @@
     "submit": "Zaloguj się",
     "submitting": "Logowanie...",
     "noAccount": "Nie masz konta?",
-    "joinLink": "Dołącz do klubu",
     "forgotPassword": "Zapomniałeś hasła?",
     "vipps": "Zaloguj się przez Vipps",
     "or": "lub",

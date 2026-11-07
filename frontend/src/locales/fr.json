@@ -6,7 +6,7 @@
     "directions": "Itinéraire",
     "contact": "Contact",
     "pricing": "Tarifs",
-    "join": "Adhérer",
+    "join": "Devenir membre",
     "login": "Se connecter",
     "portal": "Mon espace",
     "admin": "Administration",
@@ -67,7 +67,7 @@
     "featureBookingsDesc": "Réservez des places visiteurs, des salles et d'autres services",
     "featureMembers": "Membres",
     "featureMembersDesc": "Rejoignez la communauté et accédez aux avantages membres",
-    "ctaJoin": "Rejoindre la liste d'attente"
+    "ctaJoin": "Devenir membre"
   },
   "calendar": {
     "title": "Calendrier du club",
@@ -176,8 +176,7 @@
       "continue": "Finaliser l'adhésion"
     },
     "closed": {
-      "title": "Les adhésions ne sont pas encore ouvertes",
-      "body": "Le club n'accepte pas de demandes en ligne pour le moment. Contactez-nous, nous vous aiderons.",
+      "body": "Vous souhaitez devenir membre ? Contactez le bureau, nous vous aiderons.",
       "contact": "Nous contacter"
     },
     "sent": {
@@ -359,7 +358,6 @@
     "submit": "Se connecter",
     "submitting": "Connexion en cours...",
     "noAccount": "Pas encore de compte ?",
-    "joinLink": "Rejoindre le club",
     "forgotPassword": "Mot de passe oublié ?",
     "vipps": "Se connecter avec Vipps",
     "or": "ou",

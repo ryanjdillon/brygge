@@ -29,10 +29,10 @@ async function mountAt(query: string) {
     history: createMemoryHistory(),
     routes: [
       ...['/', '/join', '/login', '/contact', '/betal/:token'].map((path) => ({ path, component: page })),
-      { path: '/bli-medlem/stadfest', component: JoinConfirmView },
+      { path: '/join/confirm', component: JoinConfirmView },
     ],
   })
-  await router.push(`/bli-medlem/stadfest${query}`)
+  await router.push(`/join/confirm${query}`)
   await router.isReady()
   const wrapper = mount(JoinConfirmView, {
     global: { plugins: [createTestingPinia({ createSpy: vi.fn }), router] },

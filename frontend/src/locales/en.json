@@ -6,7 +6,7 @@
     "directions": "Directions",
     "contact": "Contact",
     "pricing": "Pricing",
-    "join": "Join",
+    "join": "Become a member",
     "login": "Log in",
     "logout": "Log out",
     "portal": "My page",
@@ -68,14 +68,8 @@
     "welcome": "Welcome to Brygge",
     "welcomeWith": "Welcome to {club}",
     "tagline": "Your harbour club, digitally",
-    "ctaJoin": "Join the club",
+    "ctaJoin": "Become a member",
     "ctaLogin": "Log in",
-    "join": {
-      "title": "Become a member",
-      "comingSoon": "Automatic registration is coming soon.",
-      "contactPrefix": "In the meantime, write to",
-      "contactSuffix": "to request membership."
-    },
     "sectionVisit": "Visit the harbour",
     "sectionClub": "Club information",
     "featureHarbor": "Guest harbour",
@@ -214,8 +208,7 @@
       "continue": "Finish joining"
     },
     "closed": {
-      "title": "Joining is not open yet",
-      "body": "The club isn't taking online applications right now. Get in touch and we'll help.",
+      "body": "Would you like to become a member? Get in touch with the board and we'll help you.",
       "contact": "Contact us"
     },
     "sent": {
@@ -431,7 +424,6 @@
     "or": "or",
     "otherMethods": "Other login methods",
     "noAccount": "Don't have an account?",
-    "joinLink": "Join the club",
     "forgotPassword": "Forgot password?"
   },
   "portal": {

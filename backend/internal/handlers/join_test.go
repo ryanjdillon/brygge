@@ -120,7 +120,7 @@ func (e *joinEnv) do(t *testing.T, method, path string, body any) *httptest.Resp
 	return rec
 }
 
-var joinTokenInMail = regexp.MustCompile(`/bli-medlem/stadfest\?token=([A-Za-z0-9_-]+)`)
+var joinTokenInMail = regexp.MustCompile(`/join/confirm\?token=([A-Za-z0-9_-]+)`)
 
 // lastConfirmToken is the token in the newest confirmation email to addr.
 func (e *joinEnv) lastConfirmToken(t *testing.T, addr string) string {
@@ -257,7 +257,7 @@ func TestJoinHappyPath(t *testing.T) {
 	if joinTokenHash(token) != tokenHash || strings.Contains(tokenHash, token) {
 		t.Fatal("the stored hash is not the sha256 of the mailed token")
 	}
-	if !strings.HasPrefix(joinConfirmURL(e.cfg, token), "https://club.example.test/bli-medlem/stadfest?token=") {
+	if !strings.HasPrefix(joinConfirmURL(e.cfg, token), "https://club.example.test/join/confirm?token=") {
 		t.Fatalf("confirm URL = %s", joinConfirmURL(e.cfg, token))
 	}
 
@@ -1291,5 +1291,28 @@ func TestAdminSetsRejoinBlocked(t *testing.T) {
 	_ = e.db.QueryRow(ctx, `SELECT rejoin_blocked FROM users WHERE id = $1`, foreign).Scan(&foreignBlocked)
 	if foreignBlocked {
 		t.Error("another club's member was blocked")
+	}
+}
+
+// The confirmation email links the English SPA page, on FrontendURL when set
+// and the club domain otherwise, with the token query-escaped.
+func TestJoinConfirmURL(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  *config.Config
+		want string
+	}{
+		{"frontend url", &config.Config{FrontendURL: "https://club.example.test/", Domain: "other.example.test"}, "https://club.example.test/join/confirm?token=abc_DEF-123"},
+		{"domain fallback", &config.Config{Domain: "club.example.test"}, "https://club.example.test/join/confirm?token=abc_DEF-123"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := joinConfirmURL(c.cfg, "abc_DEF-123"); got != c.want {
+				t.Fatalf("joinConfirmURL = %q, want %q", got, c.want)
+			}
+		})
+	}
+	if got := joinConfirmURL(&config.Config{Domain: "club.example.test"}, "a+b/c"); got != "https://club.example.test/join/confirm?token=a%2Bb%2Fc" {
+		t.Fatalf("token not escaped: %q", got)
 	}
 }

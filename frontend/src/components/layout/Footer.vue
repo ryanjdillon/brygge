@@ -3,6 +3,7 @@ import { RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useClubStore } from '@/stores/club'
 import { useFaqs } from '@/composables/useFaqs'
+import { useJoinStatus } from '@/composables/useJoinStatus'
 
 const { t } = useI18n()
 const club = useClubStore()
@@ -10,6 +11,7 @@ club.ensureLoaded()
 
 const { items: faqItems } = useFaqs()
 useFaqs().ensureLoaded()
+const { open: joinOpen } = useJoinStatus()
 
 const repoUrl = 'https://github.com/ryanjdillon/brygge'
 </script>
@@ -44,6 +46,9 @@ const repoUrl = 'https://github.com/ryanjdillon/brygge'
         <div>
           <p class="text-xs font-semibold uppercase tracking-wide text-gray-500">{{ t('footer.legal') }}</p>
           <ul class="mt-2 space-y-1">
+            <li v-if="joinOpen">
+              <RouterLink to="/join" class="hover:underline" data-testid="footer-join">{{ t('nav.join') }}</RouterLink>
+            </li>
             <li>
               <RouterLink to="/contact" class="hover:underline">{{ t('nav.contact') }}</RouterLink>
             </li>

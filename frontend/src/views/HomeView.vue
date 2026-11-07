@@ -13,10 +13,13 @@ import {
   ArrowRight,
   LogIn,
   HelpCircle,
+  UserPlus,
 } from 'lucide-vue-next'
 import { useFeatures } from '@/composables/useFeatures'
 import { useClubStore } from '@/stores/club'
 import { useFaqs } from '@/composables/useFaqs'
+import { useJoinStatus } from '@/composables/useJoinStatus'
+import { formatNOK } from '@/lib/format'
 import FaqList from '@/components/FaqList.vue'
 import heroImage from '@/assets/hero.jpg'
 
@@ -32,7 +35,7 @@ const hasFaq = computed(() => faqItems.value.length > 0)
 const featuredFaqs = computed(() => faqItems.value.slice(0, 5))
 
 const clubName = computed(() => club.name || 'Brygge')
-const postEmail = computed(() => (club.domain ? `post@${club.domain}` : 'post@klokkarvikbaatlag.no'))
+const { open: joinOpen, price: joinPrice, year: joinYear } = useJoinStatus()
 
 type FeatureFlag = 'bookings' | 'projects' | 'calendar' | 'commerce' | 'accounting'
 
@@ -114,13 +117,24 @@ const sections = computed<Section[]>(() => {
         <p class="mx-auto mt-4 max-w-xl text-lg text-white/90 drop-shadow">
           {{ t('home.tagline') }}
         </p>
-        <RouterLink
-          to="/login"
-          class="mt-8 inline-flex items-center gap-2 rounded-full bg-white px-7 py-3 text-sm font-semibold text-slate-900 shadow-lg shadow-black/30 transition hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-xl"
-        >
-          <LogIn class="h-4 w-4" aria-hidden="true" />
-          {{ t('home.ctaLogin') }}
-        </RouterLink>
+        <div class="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <RouterLink
+            to="/login"
+            class="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-7 py-3 text-sm font-semibold text-slate-900 shadow-lg shadow-black/30 transition hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-xl"
+          >
+            <LogIn class="h-4 w-4" aria-hidden="true" />
+            {{ t('home.ctaLogin') }}
+          </RouterLink>
+          <RouterLink
+            v-if="joinOpen"
+            to="/join"
+            class="inline-flex min-h-11 items-center gap-2 rounded-full px-7 py-3 text-sm font-semibold text-white ring-1 ring-white/60 backdrop-blur-sm transition hover:-translate-y-0.5 hover:bg-white/10"
+            data-testid="hero-join"
+          >
+            <UserPlus class="h-4 w-4" aria-hidden="true" />
+            {{ t('home.ctaJoin') }}
+          </RouterLink>
+        </div>
       </div>
     </section>
 
@@ -181,20 +195,34 @@ const sections = computed<Section[]>(() => {
       <FaqList :items="featuredFaqs" />
     </section>
 
-    <!-- Bli medlem: self-service registration isn't wired up yet, so point
-         prospective members at the club mailbox. The wave backdrop sets off a
-         high-contrast card; the section is sized to its content so the page
-         ends naturally with the footer flush below. -->
+    <!-- Bli medlem: the join form while the club takes joins, otherwise the
+         contact page. The wave backdrop sets off a high-contrast card; the
+         section is sized to its content so the footer sits flush below. -->
     <section class="wave-bg px-4 py-14 sm:py-20">
-      <div class="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+      <div class="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-8" data-testid="home-join">
         <Anchor class="mx-auto h-8 w-8 text-slate-400" aria-hidden="true" />
-        <h2 class="mt-3 text-2xl font-bold text-slate-900">{{ t('home.join.title') }}</h2>
-        <p class="mt-3 text-slate-600">{{ t('home.join.comingSoon') }}</p>
-        <p class="mt-2 text-slate-600">
-          {{ t('home.join.contactPrefix') }}
-          <a :href="`mailto:${postEmail}`" class="font-semibold text-brand-700 underline hover:text-brand-900">{{ postEmail }}</a>
-          {{ t('home.join.contactSuffix') }}
-        </p>
+        <h2 class="mt-3 text-2xl font-bold text-slate-900">{{ t('join.title') }}</h2>
+        <template v-if="joinOpen">
+          <p v-if="joinPrice" class="mt-3 text-slate-600" data-testid="home-join-price">
+            {{ t('join.form.price', { year: joinYear, amount: formatNOK(joinPrice.amount) }) }}
+          </p>
+          <RouterLink
+            to="/join"
+            class="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 sm:w-auto"
+          >
+            <UserPlus class="h-4 w-4" aria-hidden="true" />
+            {{ t('nav.join') }}
+          </RouterLink>
+        </template>
+        <template v-else>
+          <p class="mt-3 text-slate-600">{{ t('join.closed.body') }}</p>
+          <RouterLink
+            to="/contact"
+            class="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-md border border-slate-300 px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:w-auto"
+          >
+            {{ t('join.closed.contact') }}
+          </RouterLink>
+        </template>
       </div>
     </section>
   </div>

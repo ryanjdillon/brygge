@@ -7,11 +7,13 @@ import { LogIn, Users, Fingerprint } from 'lucide-vue-next'
 import Input from '@/components/ui/form/Input.vue'
 import FormField from '@/components/ui/form/FormField.vue'
 import { usePasskey, passkeysSupported } from '@/composables/usePasskey'
+import { useJoinStatus } from '@/composables/useJoinStatus'
 
 const { t } = useI18n()
 const router = useRouter()
 const auth = useAuthStore()
 const passkey = usePasskey()
+const { open: joinOpen } = useJoinStatus()
 
 const email = ref('')
 const submitting = ref(false)
@@ -211,10 +213,12 @@ function roleColor(role: string): string {
         </div>
       </div>
 
-      <p class="mt-6 text-center text-sm text-gray-500">
+      <!-- Only while the club takes joins; the nav and footer reach the
+           contact page otherwise. -->
+      <p v-if="joinOpen" class="mt-6 text-center text-sm text-gray-500" data-testid="login-join">
         {{ t('login.noAccount') }}
-        <router-link to="/join" class="font-medium text-brand-600 hover:text-brand-500">
-          {{ t('login.joinLink') }}
+        <router-link to="/join" class="inline-flex min-h-11 items-center font-medium text-brand-600 hover:text-brand-500">
+          {{ t('nav.join') }}
         </router-link>
       </p>
     </div>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 import { Loader2, MailCheck, UserCheck, Clock, ExternalLink } from 'lucide-vue-next'
@@ -12,17 +12,26 @@ import { formatNOK } from '@/lib/format'
 import { APPLICANT_COMPLETE_PATH } from '@/lib/applicantAccess'
 import { JOIN_LEGAL_DOCS, legalDocPath, type JoinLegalDoc } from '@/lib/joinFlow'
 import { normalizePhone } from '@/lib/phone'
+import { useJoinStatus } from '@/composables/useJoinStatus'
 
 const { t } = useI18n()
 const client = useApiClient()
 const auth = useAuthStore()
 
-type Price = { amount: number; currency: string; name: string; description: string }
+const joinStatus = useJoinStatus()
+const { price, year } = joinStatus
 
-const state = ref<'loading' | 'closed' | 'form' | 'sent' | 'error'>('loading')
-const price = ref<Price | null>(null)
-// The server's year when it gives one, so the label matches the dues it bills.
-const year = ref(new Date().getFullYear())
+// What a submit settled: sent, or closed when the server said joining closed
+// after the page loaded. Before that the page follows the join status.
+const outcome = ref<'sent' | 'closed' | null>(null)
+const legalLoaded = ref(false)
+const state = computed<'loading' | 'closed' | 'form' | 'sent' | 'error'>(() => {
+  if (outcome.value) return outcome.value
+  if (joinStatus.isLoading.value) return 'loading'
+  if (joinStatus.isError.value) return 'error'
+  if (!joinStatus.open.value) return 'closed'
+  return legalLoaded.value ? 'form' : 'loading'
+})
 
 // Versions of the documents shown, sent with the form so the server records
 // consent to exactly these texts. Sent only when all of them loaded.
@@ -85,22 +94,20 @@ async function loadLegalVersions() {
   versions.value = loaded
 }
 
-async function load() {
-  if (alreadyMember.value || applicant.value) return
-  state.value = 'loading'
-  try {
-    const status = unwrap(await client.GET('/api/v1/join/status'))
-    if (!status.open) {
-      state.value = 'closed'
-      return
-    }
-    price.value = status.price ?? null
-    if (status.year) year.value = status.year
+// The documents load once joining is open, so the form shows their versions.
+watch(
+  () => joinStatus.open.value && !alreadyMember.value && !applicant.value,
+  async (ready) => {
+    if (!ready || legalLoaded.value) return
     await loadLegalVersions()
-    state.value = 'form'
-  } catch {
-    state.value = 'error'
-  }
+    legalLoaded.value = true
+  },
+  { immediate: true },
+)
+
+function retry() {
+  if (joinStatus.isFetching.value) return
+  void joinStatus.refetch()
 }
 
 function consentVersions(): Record<string, string> | undefined {
@@ -208,7 +215,7 @@ async function handleSubmit() {
         },
       }),
     )
-    state.value = 'sent'
+    outcome.value = 'sent'
   } catch (err) {
     await handleSubmitError(err)
   } finally {
@@ -227,7 +234,8 @@ async function handleSubmitError(err: unknown) {
       return
     }
     if (err.status === 409 && err.code === 'join_closed') {
-      state.value = 'closed'
+      outcome.value = 'closed'
+      void joinStatus.refetch()
       return
     }
     if (err.status === 429) {
@@ -242,7 +250,6 @@ async function handleSubmitError(err: unknown) {
   submitError.value = t('join.form.failed')
 }
 
-onMounted(load)
 </script>
 
 <template>
@@ -279,8 +286,7 @@ onMounted(load)
     </div>
 
     <div v-else-if="state === 'closed'" class="mt-6 rounded-lg border border-slate-200 bg-white p-6" data-testid="join-closed">
-      <h2 class="text-lg font-semibold text-slate-900">{{ t('join.closed.title') }}</h2>
-      <p class="mt-2 text-slate-600">{{ t('join.closed.body') }}</p>
+      <p class="text-slate-600">{{ t('join.closed.body') }}</p>
       <RouterLink
         to="/contact"
         class="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:w-auto"
@@ -293,9 +299,13 @@ onMounted(load)
       <p class="text-red-800">{{ t('join.loadFailed') }}</p>
       <button
         type="button"
-        class="mt-4 inline-flex min-h-11 items-center justify-center rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-800"
-        @click="load"
+        class="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-800 disabled:opacity-60"
+        :disabled="joinStatus.isFetching.value"
+        :aria-busy="joinStatus.isFetching.value"
+        data-testid="join-retry"
+        @click="retry"
       >
+        <Loader2 v-if="joinStatus.isFetching.value" class="h-4 w-4 animate-spin" aria-hidden="true" />
         {{ t('join.retry') }}
       </button>
     </div>

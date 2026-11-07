@@ -64,4 +64,43 @@ describe('join locale keys', () => {
     expect(nn.join.confirm.title).not.toBe(nb.join.confirm.title)
     expect(nn.join.complete.payNow).toBe('Betal no')
   })
+
+  // Every entry point to joining (BRY-656): the join texts and the labels that
+  // lead to them never promise joining for later; closed, they point at contact.
+  const ENTRY_LABELS = ['nav.join', 'home.ctaJoin', 'join.title']
+  function at(locale: Record<string, unknown>, key: string): unknown {
+    return key.split('.').reduce<unknown>((n, k) => (n as Record<string, unknown> | undefined)?.[k], locale)
+  }
+
+  it.each(Object.keys(LOCALES))('%s never says joining is coming soon', (loc) => {
+    const texts = [
+      ...reference.map((key) => String(at(LOCALES[loc].join as Record<string, unknown>, key))),
+      ...ENTRY_LABELS.map((key) => String(at(LOCALES[loc], key))),
+      ...leaves((LOCALES[loc].home as Record<string, unknown>).join ?? {}).map(String),
+    ]
+    const soon = texts.filter((s) => /kjem snart|kommer snart|coming soon|bientôt|demnächst|presto|binnenkort|wkrótce/i.test(s))
+    expect(soon).toEqual([])
+  })
+
+  it.each(Object.keys(LOCALES))('%s labels every entry point alike', (loc) => {
+    const labels = new Set(ENTRY_LABELS.map((key) => at(LOCALES[loc], key)))
+    expect(labels.size, loc).toBe(1)
+    expect([...labels][0], loc).toBeTruthy()
+  })
+
+  it('says Bli medlem in nb and nn, with a neutral closed message', () => {
+    for (const loc of [nb, nn]) {
+      for (const key of ENTRY_LABELS) expect(at(loc, key)).toBe('Bli medlem')
+    }
+    expect(nn.join.closed.body).toBe('Vil du bli medlem? Ta kontakt med styret, så hjelper vi deg.')
+  })
+
+  it('drops the obsolete coming-soon and mailbox keys', () => {
+    for (const loc of Object.keys(LOCALES)) {
+      const l = LOCALES[loc] as { home: Record<string, unknown>; login: Record<string, unknown> }
+      expect(l.home.join, loc).toBeUndefined()
+      expect(l.login.joinLink, loc).toBeUndefined()
+    }
+    expect(reference).not.toContain('closed.title')
+  })
 })

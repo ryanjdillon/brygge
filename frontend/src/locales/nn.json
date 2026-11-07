@@ -69,12 +69,6 @@
     "tagline": "Hamneklubben din, digitalt",
     "ctaJoin": "Bli medlem",
     "ctaLogin": "Logg inn",
-    "join": {
-      "title": "Bli medlem",
-      "comingSoon": "Automatisk registrering kjem snart.",
-      "contactPrefix": "I mellomtida kan du skrive til",
-      "contactSuffix": "for å be om medlemskap."
-    },
     "sectionVisit": "Besøk hamna",
     "sectionClub": "Klubbinformasjon",
     "featureHarbor": "Gjestehamn",
@@ -211,8 +205,7 @@
       "continue": "Fullfør innmeldinga"
     },
     "closed": {
-      "title": "Innmelding er ikkje opna enno",
-      "body": "Klubben tek ikkje imot innmeldingar på nettet akkurat no. Ta kontakt med oss, så hjelper vi deg.",
+      "body": "Vil du bli medlem? Ta kontakt med styret, så hjelper vi deg.",
       "contact": "Kontakt oss"
     },
     "sent": {
@@ -424,7 +417,6 @@
     "or": "eller",
     "otherMethods": "Andre innloggingsmetodar",
     "noAccount": "Har du ikkje konto?",
-    "joinLink": "Meld deg inn",
     "forgotPassword": "Gløymt passord?"
   },
   "portal": {

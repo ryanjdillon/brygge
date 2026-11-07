@@ -8,12 +8,18 @@ UI names below are the Nynorsk labels (the club default), with the Bokmål label
 
 ## When joining is open
 
-The **Bli medlem** page (`/bli-medlem`, also `/join`) shows the form only when the club is ready to take joins:
+The **Bli medlem** page (`/join`; the old address `/bli-medlem` sends visitors there) shows the form only when the club is ready to take joins:
 
 - the club has a join price item set (Økonomi settings): an active, flat price item of the club's own; and
 - the statutes, harbour rules, privacy policy and terms of sale are all published (GDPR → legal documents).
 
-Until then the page says **Innmelding er ikkje opna enno** (*Innmelding er ikke åpnet ennå*) and links to the contact page. Nothing a visitor types is stored.
+Until then the page says **Vil du bli medlem? Ta kontakt med styret, så hjelper vi deg.** and links to the contact page (**Kontakt oss**). Nothing a visitor types is stored.
+
+### Where visitors find it
+
+While joining is open, every **Bli medlem** entry point leads to `/join`: a button on the home page's **Bli medlem** card (with **Medlemskontingent {år}: kr …** when the join price is set), a second button beside **Logg inn** in the home page's top banner, **Bli medlem** in the top bar for visitors who are not signed in, a link in the footer, and **Har du ikkje konto? Bli medlem** on the sign-in page. While it is closed, the home card shows the same contact message as the join page with a link to the contact page, and the other entry points are hidden. Nothing says joining is coming later.
+
+If the club's FAQ has a "Vil du bli medlem?" question, link its answer to `/join` (the full address, such as `https://<club domain>/join`), so it stays right whether joining is open or not: the page itself shows the contact message while joining is closed.
 
 ### Opening joining (Innmeldingspris)
 
@@ -63,10 +69,10 @@ A person the board has marked **Kan ikkje melde seg inn att** gets an email aski
 
 1. **Fill in the form.** Name, email, phone and home address are required. They tick one box accepting the statutes and harbour rules, the privacy policy and the terms of sale. Each document opens in a new tab (`/vilkar/...`). The newsletter box is optional and starts unticked. The page shows the membership fee for the current year. See [Home address and residency](#home-address-and-residency) for the address.
 2. **Check their email.** The page always says **Sjekk e-posten din**, whatever the address: it never tells a visitor whether an address is already known. The email holds a confirmation link that works for 24 hours.
-3. **Confirm.** The link opens **Hei {namn}, stadfest innmeldinga** (*bekreft innmeldingen*) with one button. Opening the link changes nothing (so mail scanners cannot use it up); pressing the button creates their account as an applicant, records their consents, signs them in on that device and takes them to the payment page.
+3. **Confirm.** The link (`/join/confirm`) opens **Hei {namn}, stadfest innmeldinga** (*bekreft innmeldingen*) with one button. Opening the link changes nothing (so mail scanners cannot use it up); pressing the button creates their account as an applicant, records their consents, signs them in on that device and takes them to the payment page.
 4. **Pay online.** Membership starts as soon as the online payment is through, and a welcome email follows. When they pay on the device where they confirmed (so they are signed in), the receipt page says **Velkomen som medlem!** (*Velkommen som medlem!*) and links to the member portal; paid while signed out, it shows the plain receipt.
 
-If they leave without paying, signing in later takes them to **Fullfør innmeldinga** (*Fullfør innmeldingen*, `/bli-medlem/fullfor`). Until they have paid, an applicant can open only that page, their profile, their fakturas and the privacy pages (**Personvern og data** and the privacy policy).
+If they leave without paying, signing in later takes them to **Fullfør innmeldinga** (*Fullfør innmeldingen*, `/join/complete`). Until they have paid, an applicant can open only that page, their profile, their fakturas and the privacy pages (**Personvern og data** and the privacy policy).
 
 ## Home address and residency
 

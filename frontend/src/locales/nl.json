@@ -67,7 +67,7 @@
     "featureBookingsDesc": "Reserveer gastligplaatsen, ruimtes en andere diensten",
     "featureMembers": "Leden",
     "featureMembersDesc": "Word lid van de gemeenschap en krijg toegang tot ledenvoordelen",
-    "ctaJoin": "Schrijf u in op de wachtlijst"
+    "ctaJoin": "Lid worden"
   },
   "calendar": {
     "title": "Clubkalender",
@@ -176,8 +176,7 @@
       "continue": "Aanmelding afronden"
     },
     "closed": {
-      "title": "Aanmelden is nog niet open",
-      "body": "De club neemt op dit moment geen online aanmeldingen aan. Neem contact met ons op, dan helpen we je.",
+      "body": "Wil je lid worden? Neem contact op met het bestuur, dan helpen we je.",
       "contact": "Contact opnemen"
     },
     "sent": {
@@ -359,7 +358,6 @@
     "submit": "Inloggen",
     "submitting": "Bezig met inloggen...",
     "noAccount": "Nog geen account?",
-    "joinLink": "Lid worden",
     "forgotPassword": "Wachtwoord vergeten?",
     "vipps": "Inloggen met Vipps",
     "or": "of",

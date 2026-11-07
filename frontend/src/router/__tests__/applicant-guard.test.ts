@@ -16,8 +16,7 @@ function createTestRouter(): Router {
     routes: [
       { path: '/', component: page },
       { path: '/join', component: page },
-      { path: '/bli-medlem', component: page },
-      { path: '/bli-medlem/stadfest', component: page },
+      { path: '/join/confirm', component: page },
       { path: '/vilkar/:docType', component: page },
       { path: '/login', component: page },
       { path: '/betal/:token', component: page },
@@ -150,7 +149,7 @@ describe('the completion page', () => {
 })
 
 describe('the public join routes', () => {
-  const JOIN_PATHS = ['/join', '/bli-medlem', '/bli-medlem/stadfest?token=abc', '/vilkar/statutes']
+  const JOIN_PATHS = ['/join', '/join/confirm?token=abc', '/vilkar/statutes']
 
   beforeEach(() => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('', { status: 401 }))
@@ -187,7 +186,24 @@ describe('the public join routes', () => {
   })
 
   it('keeps the completion page apart from the public join pages', () => {
-    expect(appRouter.resolve('/bli-medlem').matched[0].path).toBe('/bli-medlem')
+    expect(appRouter.resolve('/join').matched[0].path).toBe('/join')
+    expect(appRouter.resolve('/join/confirm').matched[0].path).toBe('/join/confirm')
     expect(appRouter.resolve(APPLICANT_COMPLETE_PATH).matched[0].path).toBe('/portal')
+  })
+
+  it('names the join routes', () => {
+    expect(appRouter.resolve({ name: 'join' }).path).toBe('/join')
+    expect(appRouter.resolve({ name: 'join-confirm' }).path).toBe('/join/confirm')
+    expect(appRouter.resolve({ name: 'join-complete' }).path).toBe('/join/complete')
+    expect(APPLICANT_COMPLETE_PATH).toBe('/join/complete')
+  })
+
+  it('sends the old Norwegian address to the join form', async () => {
+    await appRouter.push('/bli-medlem')
+    expect(appRouter.currentRoute.value.path).toBe('/join')
+  })
+
+  it.each(['/bli-medlem/stadfest', '/bli-medlem/fullfor'])('no longer serves %s', (path) => {
+    expect(appRouter.resolve(path).matched).toHaveLength(0)
   })
 })
