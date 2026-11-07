@@ -51,6 +51,9 @@ SELECT
     member_since, membership_cancelled_at, membership_ends_on,
     NULL::text  AS membership_cancel_reason, -- member-typed free text
     rejoin_blocked,                      -- board flag, not identity
+    address_verified,                    -- register-checked flag, not identity
+    NULL::text        AS address_kommunenummer, -- narrows where they live
+    NULL::timestamptz AS address_verified_at,
     (email IS NOT NULL) AS has_email
 FROM public.users;
 
@@ -96,7 +99,7 @@ FROM public.clubs;
 
 -- Unconfirmed join requests: the applicant's identity is NULL and so is the
 -- link token's hash (a credential). What stays answers "did a join request
--- arrive, and was it confirmed": timestamps, the two flags and the consent
+-- arrive, and was it confirmed": timestamps, the flags and the consent
 -- versions (document version strings, not personal).
 CREATE VIEW dev_masked.membership_applications AS
 SELECT
@@ -110,7 +113,10 @@ SELECT
     NULL::text AS city,
     is_local, newsletter,
     NULL::text AS token_hash,
-    consent_versions, created_at, expires_at, consumed_at
+    consent_versions, created_at, expires_at, consumed_at,
+    address_verified,
+    NULL::text        AS address_kommunenummer,
+    NULL::timestamptz AS address_verified_at
 FROM public.membership_applications;
 
 CREATE VIEW dev_masked.billing_recipients AS

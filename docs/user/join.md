@@ -26,12 +26,22 @@ The board address gets an email when someone joins and pays, and when a join pay
 
 ## What the person joining does
 
-1. **Fill in the form.** Name, email, postal code and town are required; phone and street address are optional. They answer whether they live in the municipality where the club is based, and tick one box accepting the statutes and harbour rules, the privacy policy and the terms of sale. Each document opens in a new tab (`/vilkar/...`). The newsletter box is optional and starts unticked. The page shows the membership fee for the current year.
+1. **Fill in the form.** Name, email, phone and home address are required. They tick one box accepting the statutes and harbour rules, the privacy policy and the terms of sale. Each document opens in a new tab (`/vilkar/...`). The newsletter box is optional and starts unticked. The page shows the membership fee for the current year. See [Home address and residency](#home-address-and-residency) for the address.
 2. **Check their email.** The page always says **Sjekk e-posten din**, whatever the address: it never tells a visitor whether an address is already known. The email holds a confirmation link that works for 24 hours.
 3. **Confirm.** The link opens **Hei {namn}, stadfest innmeldinga** (*bekreft innmeldingen*) with one button. Opening the link changes nothing (so mail scanners cannot use it up); pressing the button creates their account as an applicant, records their consents, signs them in on that device and takes them to the payment page.
 4. **Pay online.** Membership starts as soon as the online payment is through. When they pay on the device where they confirmed (so they are signed in), the receipt page says **Velkomen som medlem!** (*Velkommen som medlem!*) and links to the member portal; paid while signed out, it shows the plain receipt.
 
 If they leave without paying, signing in later takes them to **Fullfør innmeldinga** (*Fullfør innmeldingen*, `/bli-medlem/fullfor`). Until they have paid, an applicant can open only that page, their profile, their fakturas and the privacy pages (**Personvern og data** and the privacy policy).
+
+## Home address and residency
+
+The form no longer asks whether the person lives in the municipality. It is worked out from the address instead.
+
+- **Searching.** Under **Heimeadresse** (*Hjemmeadresse*) they start typing the street and number; matching addresses from Kartverket's address register appear in a list, and small typos are forgiven. Picking one shows the address with an **Endre** button to search again. The register is credited under the field (**Adressedata: © Kartverket**).
+- **Residency.** For a picked address, Brygge looks it up in the register again when the form is sent, stores the register's spelling of the address, and records the member as living in the municipality when the address is in one of the club's municipalities (the municipality codes in the club settings). The board can still change **Lokal** on the member afterwards.
+- **Typing it by hand.** **Finn du ikkje adressa? Skriv ho inn manuelt** (*Finner du ikke adressen? Skriv den inn manuelt*) shows the street, postal code and town fields, all required. If the address search is down, the form switches to these fields by itself with a short notice. Joining never waits for the register.
+- **Unverified addresses.** An address typed by hand, or one the register could not confirm when the form was sent, is saved as **not verified**, and the member is not counted as living in the municipality until the board says so. A verified address shows that the address exists; it does not prove the person lives there.
+- **Phone.** Eight digits are taken as a Norwegian number; a number from another country needs its country code (for example +46).
 
 ## Fullfør innmeldinga
 

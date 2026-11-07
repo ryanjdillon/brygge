@@ -50,6 +50,16 @@ describe('join locale keys', () => {
     expect(named).toEqual([])
   })
 
+  // Residency follows from the address (BRY-639): the form no longer asks it.
+  it('has no residency question and credits Kartverket for the address data', () => {
+    expect(reference).not.toContain('form.isLocal')
+    expect(reference).not.toContain('form.chooseOne')
+    for (const loc of Object.keys(LOCALES)) {
+      const form = (LOCALES[loc].join as { form: { address: { attribution: string } } }).form
+      expect(form.address.attribution, loc).toMatch(/© Kartverket$/)
+    }
+  })
+
   it('nn is Nynorsk, not a copy of nb', () => {
     expect(nn.join.confirm.title).not.toBe(nb.join.confirm.title)
     expect(nn.join.complete.payNow).toBe('Betal no')

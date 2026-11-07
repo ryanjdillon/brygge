@@ -1892,9 +1892,29 @@ export interface paths {
         put?: never;
         /**
          * Apply for membership
-         * @description Emails a confirmation link (or, for an address that already belongs to the club, a login link). Every accepted request gets the same 202 whatever the address; the per-address work runs after the response. 400 on invalid fields or accept_terms false (code terms_not_accepted), 409 join_closed, 409 legal_document_stale (with the current versions) when consent_versions is not current, 415 unless Content-Type is application/json, 429 over the per-IP budget, 503 rate_limit_unavailable when the limiter cannot be read (fails closed).
+         * @description Emails a confirmation link (or, for an address that already belongs to the club, a login link). Every accepted request gets the same 202 whatever the address; the per-address work runs after the response, including the re-lookup of address_id in the address register. Phone, address_line, postal_code and city are required. 400 on invalid fields (an implausible phone number included) or accept_terms false (code terms_not_accepted), 409 join_closed, 409 legal_document_stale (with the current versions) when consent_versions is not current, 415 unless Content-Type is application/json, 429 over the per-IP budget, 503 rate_limit_unavailable when the limiter cannot be read (fails closed).
          */
         post: operations["submit-join"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/join/address-search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search the address register for the join form
+         * @description Proxies Kartverket's open address register (Adresse-API, CC BY 4.0): a prefix search, then a fuzzy one when that finds nothing. At most 8 results, cached briefly. A register error or timeout answers 200 with fallback true and no addresses. 400 address_query_invalid unless q is 3 to 100 characters; 429 over the per-IP budget (30 a minute).
+         */
+        get: operations["search-join-address"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2999,6 +3019,8 @@ export interface components {
             readonly $schema?: string;
             /** @description Street address */
             address_line: string;
+            /** @description Detail only. true when the address came from Kartverket's address register, false when a joiner typed it by hand (is_local is then unknown), null when it predates the check or the board entered it */
+            address_verified?: boolean;
             /** @description Free-text admin notes (admin-only) */
             admin_notes: string;
             /** @description City */
@@ -4546,6 +4568,32 @@ export interface components {
              */
             position: number;
         };
+        JoinAddress: {
+            /** @description Postal town */
+            city: string;
+            /** @description The register's id for the address; send it as address_id */
+            id: string;
+            /** @description The municipality number */
+            kommunenummer: string;
+            /** @description Street, postal code and city on one line */
+            label: string;
+            /** @description Postal code */
+            postal_code: string;
+            /** @description Street and number */
+            street: string;
+        };
+        JoinAddressSearchResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/JoinAddressSearchResponse.json
+             */
+            readonly $schema?: string;
+            /** @description At most 8 matches */
+            addresses: components["schemas"]["JoinAddress"][] | null;
+            /** @description The register could not be searched (error or timeout); the form switches to manual entry */
+            fallback: boolean;
+        };
         JoinBankInvoiceResponse: {
             /**
              * Format: uri
@@ -4657,7 +4705,10 @@ export interface components {
             readonly $schema?: string;
             /** @description Consent to the privacy policy, statutes, harbour rules and terms of sale; must be true */
             accept_terms: boolean;
-            address_line?: string;
+            /** @description The id of the address picked from GET /join/address-search. The server looks it up again, stores the register's street, postal code and city, and derives residency from its municipality. Without it, or when the register cannot confirm it, the typed address is saved unverified with residency unknown */
+            address_id?: string;
+            /** @description The home address */
+            address_line: string;
             city: string;
             /** @description The version of each required document (privacy, statutes, harbour_rules, terms_of_sale) the page showed. When sent, every one must be the club's current version, else 409 legal_document_stale */
             consent_versions?: {
@@ -4666,12 +4717,11 @@ export interface components {
             /** Format: email */
             email: string;
             first_name: string;
-            /** @description Lives in the club's municipality */
-            is_local: boolean;
             last_name: string;
             /** @description Optional newsletter opt-in */
             newsletter: boolean;
-            phone?: string;
+            /** @description Stored as E.164: eight Norwegian digits get +47; another country needs its + code */
+            phone: string;
             postal_code: string;
             /** @description Honeypot; leave empty. A non-empty value gets the answer a real submission would and is then dropped */
             website?: string;
@@ -10734,6 +10784,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatusResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "search-join-address": {
+        parameters: {
+            query?: {
+                /** @description What the visitor has typed */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JoinAddressSearchResponse"];
                 };
             };
             /** @description Error */

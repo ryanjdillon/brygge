@@ -604,6 +604,17 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   (`end_refused:<user>:<ends_on>`) is queued once. The kinds need no CHECK
   change: 000138's `membership_*` branch admits them. Index only; **the
   down** drops it.
+- **Join address verification.** 000140 (BRY-639, BRD-16) adds
+  `address_verified BOOLEAN`, `address_kommunenummer TEXT` and
+  `address_verified_at TIMESTAMPTZ` to `users` (all nullable: NULL is "never
+  checked") and to `membership_applications` (`address_verified NOT NULL
+  DEFAULT false`), and the `BEFORE UPDATE` trigger
+  `users_clear_stale_address_verification`, which clears a verified user's
+  three columns when the street, postal code or city changes without a new
+  verification. `is_local` stays NOT NULL; `address_verified = false` means
+  it is unknown. Values in [enums.md](reference/enums.md). `dev_masked`
+  passes `address_verified` through and NULLs the other two. **The down**
+  drops the trigger, its function and the columns.
 - `invoice_pdf_archive` (migration 000050) — preserves prior PDF bytes when
   `invoices.pdf_data` is regenerated, so Norwegian bokføringsloven §13's
   5-year retention requirement is satisfied.

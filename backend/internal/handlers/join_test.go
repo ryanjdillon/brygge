@@ -34,6 +34,7 @@ type joinEnv struct {
 	mailer      *email.MockSender
 	h           *JoinHandler
 	router      *chi.Mux
+	register    *fakeAddressRegister
 }
 
 // setupJoinEnv seeds a club that takes joins: a flat, active join price item
@@ -49,11 +50,15 @@ func setupJoinEnv(t *testing.T) *joinEnv {
 	if err := db.QueryRow(ctx, `SELECT slug FROM clubs WHERE id = $1`, clubID).Scan(&slug); err != nil {
 		t.Fatalf("club slug: %v", err)
 	}
+	// The club's municipality is the fake register's 4601; never the real API.
+	register := newFakeAddressRegister(t)
+	mustExec(t, db, ctx, `UPDATE clubs SET municipality_codes = '{4601}' WHERE id = $1`, clubID)
 	cfg := &config.Config{
-		ClubSlug:    slug,
-		ClubName:    "Testklubben",
-		Domain:      "club.example.test",
-		FrontendURL: "https://club.example.test",
+		ClubSlug:             slug,
+		ClubName:             "Testklubben",
+		Domain:               "club.example.test",
+		FrontendURL:          "https://club.example.test",
+		KartverketAddressURL: register.srv.URL,
 	}
 
 	var priceItemID string
@@ -79,11 +84,12 @@ func setupJoinEnv(t *testing.T) *joinEnv {
 
 	r := chi.NewRouter()
 	r.Get("/join/status", h.HandleJoinStatus)
+	r.Get("/join/address-search", h.HandleAddressSearch)
 	r.Post("/join", h.HandleJoin)
 	r.Get("/join/confirm/{token}", h.HandleJoinConfirmStatus)
 	r.Post("/join/confirm", h.HandleJoinConfirm)
 
-	return &joinEnv{db: db, mr: mr, cfg: cfg, clubID: clubID, priceItemID: priceItemID, mailer: mailer, h: h, router: r}
+	return &joinEnv{db: db, mr: mr, cfg: cfg, clubID: clubID, priceItemID: priceItemID, mailer: mailer, h: h, router: r, register: register}
 }
 
 func joinBody(addr string) map[string]any {
@@ -91,11 +97,10 @@ func joinBody(addr string) map[string]any {
 		"first_name":   "Kari",
 		"last_name":    "Testesen",
 		"email":        addr,
-		"phone":        "+4700000001",
+		"phone":        "400 00 001",
 		"address_line": "Testvegen 1",
 		"postal_code":  "0001",
 		"city":         "Testby",
-		"is_local":     true,
 		"newsletter":   true,
 		"accept_terms": true,
 	}
@@ -285,16 +290,19 @@ func TestJoinHappyPath(t *testing.T) {
 		t.Fatal("confirm set no session cookie")
 	}
 
+	// A typed address is unverified, so residency is unknown (false) and the
+	// phone is stored in E.164.
 	var userID, firstName, phone string
 	var isLocal bool
+	var verified *bool
 	if err := e.db.QueryRow(ctx,
-		`SELECT id, first_name, phone, is_local FROM users WHERE club_id = $1 AND email = $2 AND kind = 'person' AND deactivated_at IS NULL`,
+		`SELECT id, first_name, phone, is_local, address_verified FROM users WHERE club_id = $1 AND email = $2 AND kind = 'person' AND deactivated_at IS NULL`,
 		e.clubID, addr,
-	).Scan(&userID, &firstName, &phone, &isLocal); err != nil {
+	).Scan(&userID, &firstName, &phone, &isLocal, &verified); err != nil {
 		t.Fatalf("user after confirm: %v", err)
 	}
-	if firstName != "Kari" || phone != "+4700000001" || !isLocal {
-		t.Errorf("user = %s %s %v", firstName, phone, isLocal)
+	if firstName != "Kari" || phone != "+4740000001" || isLocal || verified == nil || *verified {
+		t.Errorf("user = %s %s local=%v verified=%v", firstName, phone, isLocal, verified)
 	}
 	if got := e.roles(t, userID); !slices.Equal(got, []string{"applicant"}) {
 		t.Errorf("roles = %v, want [applicant]", got)
@@ -512,6 +520,10 @@ func TestJoinValidation(t *testing.T) {
 		func(b map[string]any) { b["email"] = "someone@system.invalid" },
 		func(b map[string]any) { b["first_name"] = "" },
 		func(b map[string]any) { b["city"] = "" },
+		func(b map[string]any) { b["address_line"] = "" },
+		func(b map[string]any) { b["phone"] = "" },
+		func(b map[string]any) { b["phone"] = "12345" },
+		func(b map[string]any) { b["address_id"] = strings.Repeat("9", joinMaxAddressID+1) },
 		func(b map[string]any) { b["last_name"] = strings.Repeat("x", joinMaxName+1) },
 	} {
 		b := joinBody("valid@example.com")

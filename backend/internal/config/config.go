@@ -8,6 +8,9 @@ import (
 	"time"
 )
 
+// DefaultKartverketAddressURL is Kartverket's public, keyless Adresse-API.
+const DefaultKartverketAddressURL = "https://ws.geonorge.no/adresser/v1"
+
 type Config struct {
 	Port        int
 	DatabaseURL string
@@ -75,6 +78,12 @@ type Config struct {
 	// club in a rolling day, across every address (BRY-629). 0 or less uses
 	// the handler's default. Tunable via JOIN_DAILY_MAIL_CAP.
 	JoinDailyMailCap int
+
+	// KartverketAddressURL is the base of Kartverket's open address API
+	// (Adresse-API), which the join form's address search and the join's
+	// address check call (BRY-639). Defaults to the public endpoint; tests
+	// and other deployments point it elsewhere via KARTVERKET_ADDRESS_URL.
+	KartverketAddressURL string
 
 	// Throttle between bulk-reminder sends (per recipient). The bulk
 	// handler enqueues jobs; a single in-process worker drains the
@@ -189,6 +198,8 @@ func Load() Config {
 		FreshTOTPWindow:   envDuration("AUTH_FRESH_TOTP_WINDOW", 10*time.Minute),
 		BulkSendThrottle:  envDuration("BULK_SEND_THROTTLE", 1*time.Second),
 		JoinDailyMailCap:  envInt("JOIN_DAILY_MAIL_CAP", 0),
+
+		KartverketAddressURL: envStr("KARTVERKET_ADDRESS_URL", DefaultKartverketAddressURL),
 
 		SMTPHost:        envStr("SMTP_HOST", ""),
 		SMTPPort:        envInt("SMTP_PORT", 587),

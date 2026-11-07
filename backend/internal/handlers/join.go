@@ -136,6 +136,12 @@ type JoinHandler struct {
 	audit    *audit.Service
 	log      zerolog.Logger
 
+	// addresses is the address register the form searches and the join
+	// re-looks the picked address up in (BRY-639).
+	addresses addressRegister
+	// addressTimeout overrides addressLookupTimeout; tests shorten it.
+	addressTimeout time.Duration
+
 	// emailKey keys the HMAC that stands in for an address in Redis keys and
 	// the audit log, so neither can be reversed by hashing guessed addresses.
 	emailKey []byte
@@ -194,6 +200,7 @@ func NewJoinHandler(
 		audit:    auditSvc,
 		log:      log.With().Str("handler", "join").Logger(),
 	}
+	h.addresses = newKartverketAddresses(cfg)
 	h.emailKey = joinEmailKey(cfg, h.log)
 	h.async = func(f func()) { go runJoinJob(h.log, f) }
 	return h
@@ -345,7 +352,11 @@ type joinRequest struct {
 	AddressLine string `json:"address_line"`
 	PostalCode  string `json:"postal_code"`
 	City        string `json:"city"`
-	IsLocal     bool   `json:"is_local"`
+	// AddressID is the address the visitor picked from the register search.
+	// The server looks it up again and stores the register's address in
+	// place of the typed one. Residency (is_local) is never taken from the
+	// client: it follows from a verified address, and is unknown otherwise.
+	AddressID   string `json:"address_id"`
 	Newsletter  bool   `json:"newsletter"`
 	AcceptTerms bool   `json:"accept_terms"`
 	// ConsentVersions is optional: the version of each required document the
@@ -361,8 +372,18 @@ type joinRequest struct {
 type joinInput struct {
 	firstName, lastName, email, phone string
 	addressLine, postalCode, city     string
-	isLocal, newsletter               bool
+	addressID                         string
+	newsletter                        bool
+
+	// Set by verifyJoinAddress: whether the register confirmed the address,
+	// its municipality, and residency derived from it.
+	addressVerified bool
+	kommunenummer   string
+	isLocal         bool
 }
+
+// joinMaxAddressID bounds the register id a visitor can send.
+const joinMaxAddressID = 64
 
 // clean validates the request and returns the stored form, or a message.
 func (req joinRequest) clean() (joinInput, string) {
@@ -373,12 +394,12 @@ func (req joinRequest) clean() (joinInput, string) {
 		addressLine: cleanSingleLine(req.AddressLine),
 		postalCode:  cleanSingleLine(req.PostalCode),
 		city:        cleanSingleLine(req.City),
-		isLocal:     req.IsLocal,
+		addressID:   strings.TrimSpace(req.AddressID),
 		newsletter:  req.Newsletter,
 	}
 	if in.firstName == "" || in.lastName == "" || strings.TrimSpace(req.Email) == "" ||
-		in.postalCode == "" || in.city == "" {
-		return in, "first_name, last_name, email, postal_code and city are required"
+		in.phone == "" || in.addressLine == "" || in.postalCode == "" || in.city == "" {
+		return in, "first_name, last_name, email, phone, address_line, postal_code and city are required"
 	}
 	if utf8.RuneCountInString(in.firstName) > joinMaxName ||
 		utf8.RuneCountInString(in.lastName) > joinMaxName ||
@@ -386,9 +407,15 @@ func (req joinRequest) clean() (joinInput, string) {
 		utf8.RuneCountInString(in.phone) > joinMaxPhone ||
 		utf8.RuneCountInString(in.addressLine) > joinMaxAddress ||
 		utf8.RuneCountInString(in.postalCode) > joinMaxPostalCode ||
-		utf8.RuneCountInString(in.city) > joinMaxCity {
+		utf8.RuneCountInString(in.city) > joinMaxCity ||
+		len(in.addressID) > joinMaxAddressID {
 		return in, "a field is too long"
 	}
+	phone, ok := normalizePhone(in.phone)
+	if !ok {
+		return in, "invalid phone number"
+	}
+	in.phone = phone
 	addr, ok := parseBareEmail(req.Email)
 	if !ok || isReservedEmailDomain(addr) {
 		return in, "invalid email address"
@@ -703,6 +730,8 @@ func (h *JoinHandler) joinBranch(ctx context.Context, st joinState, in joinInput
 		return joinOutcomeMember, ""
 	}
 
+	in = h.verifyJoinAddress(ctx, st.clubID, in)
+
 	token, err := generateToken()
 	if err != nil {
 		h.log.Error().Err(err).Msg("join: generate token failed")
@@ -756,11 +785,14 @@ func (h *JoinHandler) storeApplication(ctx context.Context, st joinState, in joi
 	if err := tx.QueryRow(ctx,
 		`INSERT INTO membership_applications
 		        (club_id, first_name, last_name, email, phone, address_line, postal_code, city,
-		         is_local, newsletter, token_hash, consent_versions, expires_at)
-		 VALUES ($1, $2, $3, $4, NULLIF($5, ''), $6, $7, $8, $9, $10, $11, $12, now() + $13::interval)
+		         is_local, newsletter, token_hash, consent_versions, expires_at,
+		         address_verified, address_kommunenummer, address_verified_at)
+		 VALUES ($1, $2, $3, $4, NULLIF($5, ''), $6, $7, $8, $9, $10, $11, $12, now() + $13::interval,
+		         $14, NULLIF($15, ''), CASE WHEN $14 THEN now() END)
 		 RETURNING id`,
 		st.clubID, in.firstName, in.lastName, in.email, in.phone, in.addressLine, in.postalCode, in.city,
 		in.isLocal, in.newsletter, tokenHash, versions, fmt.Sprintf("%d seconds", int(joinTokenTTL.Seconds())),
+		in.addressVerified, in.kommunenummer,
 	).Scan(&id); err != nil {
 		return false, "", fmt.Errorf("insert application: %w", err)
 	}
@@ -813,6 +845,10 @@ type joinApplication struct {
 	versions                          map[string]string
 	expiresAt                         time.Time
 	consumed                          bool
+
+	addressVerified   bool
+	kommunenummer     *string
+	addressVerifiedAt *time.Time
 }
 
 // loadJoinApplication reads the club's application behind token and reports
@@ -822,7 +858,8 @@ func loadJoinApplication(ctx context.Context, q pgxQuerier, clubID, token string
 		return nil, codeJoinTokenInvalid, nil
 	}
 	query := `SELECT id, first_name, last_name, email, COALESCE(phone, ''), address_line, postal_code, city,
-	                 is_local, newsletter, consent_versions, expires_at, consumed_at IS NOT NULL
+	                 is_local, newsletter, consent_versions, expires_at, consumed_at IS NOT NULL,
+	                 address_verified, address_kommunenummer, address_verified_at
 	            FROM membership_applications
 	           WHERE token_hash = $1 AND club_id = $2`
 	if forUpdate {
@@ -835,6 +872,7 @@ func loadJoinApplication(ctx context.Context, q pgxQuerier, clubID, token string
 	err := q.QueryRow(ctx, query, joinTokenHash(token), clubID).Scan(
 		&a.id, &a.firstName, &a.lastName, &a.email, &a.phone, &a.addressLine, &a.postalCode, &a.city,
 		&a.isLocal, &a.newsletter, &versions, &a.expiresAt, &a.consumed,
+		&a.addressVerified, &a.kommunenummer, &a.addressVerifiedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, codeJoinTokenInvalid, nil
@@ -1064,11 +1102,13 @@ func confirmJoinUser(ctx context.Context, tx pgx.Tx, clubID string, app *joinApp
 		// A row appearing between the lookup and here (a concurrent confirm
 		// or admin create) means the address is taken.
 		err = tx.QueryRow(ctx,
-			`INSERT INTO users (club_id, email, first_name, last_name, phone, address_line, postal_code, city, is_local)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			`INSERT INTO users (club_id, email, first_name, last_name, phone, address_line, postal_code, city, is_local,
+			                    address_verified, address_kommunenummer, address_verified_at)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 			 ON CONFLICT (club_id, email) DO NOTHING
 			 RETURNING id`,
 			clubID, app.email, app.firstName, app.lastName, app.phone, app.addressLine, app.postalCode, app.city, app.isLocal,
+			app.addressVerified, app.kommunenummer, app.addressVerifiedAt,
 		).Scan(&userID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return "", false, errJoinAlreadyMember
@@ -1084,10 +1124,12 @@ func confirmJoinUser(ctx context.Context, tx pgx.Tx, clubID string, app *joinApp
 			    SET deactivated_at = NULL, deactivated_by = NULL,
 			        first_name = $3, last_name = $4, phone = $5, address_line = $6,
 			        postal_code = $7, city = $8, is_local = $9,
+			        address_verified = $10, address_kommunenummer = $11, address_verified_at = $12,
 			        membership_cancelled_at = NULL, membership_ends_on = NULL,
 			        membership_cancel_reason = NULL, updated_at = now()
 			  WHERE id = $1 AND club_id = $2`,
 			u.id, clubID, app.firstName, app.lastName, app.phone, app.addressLine, app.postalCode, app.city, app.isLocal,
+			app.addressVerified, app.kommunenummer, app.addressVerifiedAt,
 		); err != nil {
 			return "", false, fmt.Errorf("reactivate user: %w", err)
 		}
@@ -1104,9 +1146,12 @@ func confirmJoinUser(ctx context.Context, tx pgx.Tx, clubID string, app *joinApp
 		if _, err := tx.Exec(ctx,
 			`UPDATE users
 			    SET first_name = $3, last_name = $4, phone = $5, address_line = $6,
-			        postal_code = $7, city = $8, is_local = $9, updated_at = now()
+			        postal_code = $7, city = $8, is_local = $9,
+			        address_verified = $10, address_kommunenummer = $11, address_verified_at = $12,
+			        updated_at = now()
 			  WHERE id = $1 AND club_id = $2`,
 			u.id, clubID, app.firstName, app.lastName, app.phone, app.addressLine, app.postalCode, app.city, app.isLocal,
+			app.addressVerified, app.kommunenummer, app.addressVerifiedAt,
 		); err != nil {
 			return "", false, fmt.Errorf("update applicant: %w", err)
 		}

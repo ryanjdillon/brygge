@@ -28,6 +28,17 @@ import (
 // closed port and fail open.
 func inertRouter(t *testing.T, sessions *auth.SessionService, wrapOptional func(func(http.Handler) http.Handler) func(http.Handler) http.Handler) *chi.Mux {
 	t.Helper()
+	rdb := redis.NewClient(&redis.Options{
+		Addr: "127.0.0.1:1", MaxRetries: -1, DialTimeout: 50 * time.Millisecond, DialerRetries: 1, DialerRetryTimeout: time.Millisecond,
+	})
+	t.Cleanup(func() { _ = rdb.Close() })
+	return inertRouterWithRedis(t, sessions, wrapOptional, rdb)
+}
+
+// inertRouterWithRedis is inertRouter with the rate limiters on rdb, for the
+// tests that need a limiter to count.
+func inertRouterWithRedis(t *testing.T, sessions *auth.SessionService, wrapOptional func(func(http.Handler) http.Handler) func(http.Handler) http.Handler, rdb *redis.Client) *chi.Mux {
+	t.Helper()
 	cfg := &config.Config{
 		FrontendURL:           "https://club.example.test",
 		DevQueryTokensEnabled: true,
@@ -35,10 +46,6 @@ func inertRouter(t *testing.T, sessions *auth.SessionService, wrapOptional func(
 			Bookings: true, Projects: true, Calendar: true, Commerce: true, Accounting: true, DemoAuth: true,
 		},
 	}
-	rdb := redis.NewClient(&redis.Options{
-		Addr: "127.0.0.1:1", MaxRetries: -1, DialTimeout: 50 * time.Millisecond, DialerRetries: 1, DialerRetryTimeout: time.Millisecond,
-	})
-	t.Cleanup(func() { _ = rdb.Close() })
 	return newRouter(routeDeps{
 		wrapOptionalSession:     wrapOptional,
 		cfg:                     cfg,

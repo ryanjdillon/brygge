@@ -48,8 +48,9 @@ func DeleteMemberMailLog(ctx context.Context, db audit.Execer, userID string) er
 
 // EraseMemberMembershipData clears what the join and cancel flows hold about a
 // member outside the users identity columns: the member's own free-text reason
-// for cancelling, and every join request made with their current address in
-// their club. Neither has a retention obligation, so every path that erases a
+// for cancelling, the register check of their home address (its municipality
+// and when it was checked), and every join request made with their current
+// address in their club. Neither has a retention obligation, so every path that erases a
 // member's identity calls this, in its transaction and before the address is
 // overwritten.
 func EraseMemberMembershipData(ctx context.Context, db audit.Execer, userID string) error {
@@ -61,10 +62,13 @@ func EraseMemberMembershipData(ctx context.Context, db audit.Execer, userID stri
 		return fmt.Errorf("delete member join requests: %w", err)
 	}
 	if _, err := db.Exec(ctx,
-		`UPDATE users SET membership_cancel_reason = NULL WHERE id = $1`,
+		`UPDATE users
+		    SET membership_cancel_reason = NULL,
+		        address_verified = NULL, address_kommunenummer = NULL, address_verified_at = NULL
+		  WHERE id = $1`,
 		userID,
 	); err != nil {
-		return fmt.Errorf("clear cancellation reason: %w", err)
+		return fmt.Errorf("clear cancellation reason and address check: %w", err)
 	}
 	return nil
 }

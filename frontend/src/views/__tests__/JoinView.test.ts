@@ -20,10 +20,23 @@ function fail(status: number, error: unknown) {
 const OPEN = { open: true, price: { amount: 650, currency: 'NOK', name: 'Kontingent', description: 'Kontingent' }, missing: [] }
 const VERSIONS: Record<string, string> = { statutes: 's-1', harbour_rules: 'h-1', privacy: 'p-1', terms_of_sale: 't-1' }
 
+const FIKTIV = {
+  id: 'v:4601:90001:12:',
+  label: 'Fiktivvegen 12, 5999 Testby',
+  street: 'Fiktivvegen 12',
+  postal_code: '5999',
+  city: 'Testby',
+  kommunenummer: '4601',
+}
+
+// The address search's answer; a test may replace it.
+let addressSearch: () => unknown = () => ok({ addresses: [FIKTIV], fallback: false })
+
 // Routes GET calls by path; `legal` lets a test change the document versions.
 function serve(status: unknown = OPEN, legal: Record<string, string> = VERSIONS) {
   client.GET.mockImplementation(async (path: string, opts?: { params: { path: { docType: string } } }) => {
     if (path === '/api/v1/join/status') return ok(status)
+    if (path === '/api/v1/join/address-search') return addressSearch()
     if (path === '/api/v1/legal/{docType}') {
       const doc = opts!.params.path.docType
       return legal[doc] ? ok({ version: legal[doc], content: '', doc_type: doc, id: doc, published_at: '' }) : fail(404, { error: 'document not found' })
@@ -44,14 +57,37 @@ async function mountForm(user: { roles: string[] } | null = null) {
   return wrapper
 }
 
-async function fillValid(wrapper: Awaited<ReturnType<typeof mountForm>>) {
+type Wrapper = Awaited<ReturnType<typeof mountForm>>
+
+async function fillPerson(wrapper: Wrapper) {
   await wrapper.find('#join-first-name').setValue('Kari')
   await wrapper.find('#join-last-name').setValue('Testesen')
   await wrapper.find('#join-email').setValue('kari@example.com')
+  await wrapper.find('#join-phone').setValue('400 00 001')
+  await wrapper.find('#join-accept').setValue(true)
+}
+
+// Fills every required field, with the address typed by hand.
+async function fillValid(wrapper: Wrapper) {
+  await fillPerson(wrapper)
+  await wrapper.find('[data-testid="join-address-manual"]').trigger('click')
+  await wrapper.find('#join-address').setValue('Testvegen 1')
   await wrapper.find('#join-postal-code').setValue('0001')
   await wrapper.find('#join-city').setValue('Testby')
-  await wrapper.find('#join-local-no').setValue(true)
-  await wrapper.find('#join-accept').setValue(true)
+}
+
+// Types into the address search and waits out the debounce. Only the timers
+// are faked: a faked clock would date the listeners Vue attaches after the
+// search later than the events a test then fires, and Vue drops those.
+async function typeAddress(wrapper: Wrapper, text: string) {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    await wrapper.find('#join-address-search').setValue(text)
+    await vi.advanceTimersByTimeAsync(300)
+  } finally {
+    vi.useRealTimers()
+  }
+  await flushPromises()
 }
 
 describe('JoinView', () => {
@@ -59,16 +95,25 @@ describe('JoinView', () => {
     client.GET.mockReset()
     client.POST.mockReset()
     vi.restoreAllMocks()
+    addressSearch = () => ok({ addresses: [FIKTIV], fallback: false })
   })
 
-  it('shows the short form with the price and no boat fields', async () => {
+  it('shows the short form with the price, an address search and no boat or residency fields', async () => {
     serve()
     const wrapper = await mountForm()
     expect(wrapper.find('[data-testid="join-form"]').exists()).toBe(true)
-    for (const id of ['first-name', 'last-name', 'email', 'phone', 'address', 'postal-code', 'city']) {
+    for (const id of ['first-name', 'last-name', 'email', 'phone', 'address-search']) {
       expect(wrapper.find(`#join-${id}`).exists()).toBe(true)
     }
     expect(wrapper.find('#join-boat-name').exists()).toBe(false)
+    // Residency follows from the address; it is never asked.
+    expect(wrapper.find('input[name="is_local"]').exists()).toBe(false)
+    expect(wrapper.find('[role="radiogroup"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('join.form.isLocal')
+    expect(wrapper.find('[data-testid="address-attribution"]').text()).toBe('join.form.address.attribution')
+    const phone = wrapper.find('#join-phone')
+    expect(phone.attributes('inputmode')).toBe('tel')
+    expect(phone.attributes('autocomplete')).toBe('tel')
     expect(wrapper.find('[data-testid="join-price"]').text()).toContain('join.form.price')
     expect(wrapper.find('#join-newsletter').element).toHaveProperty('checked', false)
   })
@@ -96,7 +141,7 @@ describe('JoinView', () => {
     expect(hp.element.closest('[aria-hidden="true"]')).not.toBeNull()
   })
 
-  it('refuses to submit until the required fields, the local answer and the terms are given', async () => {
+  it('refuses to submit until the required fields, an address and the terms are given', async () => {
     serve()
     const wrapper = await mountForm()
     await wrapper.find('form').trigger('submit')
@@ -104,12 +149,39 @@ describe('JoinView', () => {
     expect(client.POST).not.toHaveBeenCalled()
     const text = wrapper.text()
     expect(text).toContain('join.form.required')
-    expect(text).toContain('join.form.chooseOne')
+    expect(text).toContain('join.form.address.pickRequired')
     expect(text).toContain('join.form.acceptRequired')
+    expect(wrapper.find('#join-phone-error').text()).toBe('join.form.required')
 
     await wrapper.find('#join-email').setValue('not-an-email')
     await wrapper.find('form').trigger('submit')
     expect(wrapper.text()).toContain('join.form.invalidEmail')
+  })
+
+  it('requires a plausible phone number, as the server does', async () => {
+    serve()
+    const wrapper = await mountForm()
+    await fillValid(wrapper)
+    for (const bad of ['12345', '0000 0000', '+47 400 00', 'tel:40000001']) {
+      await wrapper.find('#join-phone').setValue(bad)
+      await wrapper.find('form').trigger('submit')
+      await flushPromises()
+      expect(wrapper.find('#join-phone-error').text()).toBe('join.form.invalidPhone')
+    }
+    expect(client.POST).not.toHaveBeenCalled()
+  })
+
+  it('requires every manual address field', async () => {
+    serve()
+    const wrapper = await mountForm()
+    await fillPerson(wrapper)
+    await wrapper.find('[data-testid="join-address-manual"]').trigger('click')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    for (const id of ['join-address', 'join-postal-code', 'join-city']) {
+      expect(wrapper.find(`#${id}-error`).text()).toBe('join.form.required')
+    }
+    expect(client.POST).not.toHaveBeenCalled()
   })
 
   it('focuses the first invalid field and announces a summary', async () => {
@@ -123,12 +195,11 @@ describe('JoinView', () => {
     await wrapper.find('#join-first-name').setValue('Kari')
     await wrapper.find('#join-last-name').setValue('Testesen')
     await wrapper.find('#join-email').setValue('kari@example.com')
-    await wrapper.find('#join-postal-code').setValue('0001')
-    await wrapper.find('#join-city').setValue('Testby')
+    await wrapper.find('#join-phone').setValue('40000001')
     await wrapper.find('form').trigger('submit')
     await flushPromises()
-    // The yes/no group is next: its first option takes focus.
-    expect(document.activeElement?.id).toBe('join-local-yes')
+    // The address search is next.
+    expect(document.activeElement?.id).toBe('join-address-search')
     wrapper.unmount()
   })
 
@@ -137,15 +208,16 @@ describe('JoinView', () => {
     const wrapper = await mountForm()
     await wrapper.find('form').trigger('submit')
     await flushPromises()
-    for (const id of ['join-first-name', 'join-last-name', 'join-email', 'join-postal-code', 'join-city']) {
+    for (const id of ['join-first-name', 'join-last-name', 'join-email', 'join-phone']) {
       const input = wrapper.find(`#${id}`)
       expect(input.attributes('aria-invalid')).toBe('true')
       expect(input.attributes('aria-describedby')).toBe(`${id}-error`)
       expect(wrapper.find(`#${id}-error`).text()).toBe('join.form.required')
     }
-    const group = wrapper.find('fieldset')
-    expect(group.attributes('aria-invalid')).toBe('true')
-    expect(wrapper.find(`#${group.attributes('aria-describedby')}`).text()).toBe('join.form.chooseOne')
+    const search = wrapper.find('#join-address-search')
+    expect(search.attributes('aria-invalid')).toBe('true')
+    expect(search.attributes('aria-describedby')?.split(' ')).toEqual(['join-address-search-error', 'join-address-helper'])
+    expect(wrapper.find('#join-address-search-error').text()).toBe('join.form.address.pickRequired')
     const accept = wrapper.find('#join-accept')
     expect(accept.attributes('aria-invalid')).toBe('true')
     expect(wrapper.find(`#${accept.attributes('aria-describedby')}`).text()).toBe('join.form.acceptRequired')
@@ -161,12 +233,88 @@ describe('JoinView', () => {
     wrapper.unmount()
   })
 
+  it('submits a picked address by its register id, without any residency answer', async () => {
+    serve()
+    client.POST.mockResolvedValue(ok({ status: 'received' }, 202))
+    const wrapper = await mountForm()
+    await fillPerson(wrapper)
+    await typeAddress(wrapper, 'fiktivv')
+    await wrapper.find('[role="option"]').trigger('mousedown')
+    await flushPromises()
+    // Focus moves to the change button once the search is gone.
+    expect(document.activeElement?.id).toBe('join-address-change')
+    const picked = wrapper.find('[data-testid="join-address-picked"]')
+    expect(picked.text()).toContain('Fiktivvegen 12')
+    expect(picked.text()).toContain('5999 Testby')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    const body = client.POST.mock.calls[0][1].body
+    expect(body).toMatchObject({
+      phone: '+4740000001',
+      address_id: 'v:4601:90001:12:',
+      address_line: 'Fiktivvegen 12',
+      postal_code: '5999',
+      city: 'Testby',
+    })
+    expect(body).not.toHaveProperty('is_local')
+    expect(wrapper.find('[data-testid="join-sent"]').exists()).toBe(true)
+  })
+
+  it('changes a picked address back to the search', async () => {
+    serve()
+    const wrapper = await mountForm()
+    await typeAddress(wrapper, 'fiktivv')
+    await wrapper.find('[role="option"]').trigger('mousedown')
+    await wrapper.find('[data-testid="join-address-change"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="join-address-picked"]').exists()).toBe(false)
+    expect(document.activeElement?.id).toBe('join-address-search')
+    wrapper.unmount()
+  })
+
+  it('switches to manual entry by the link, and back to the search', async () => {
+    serve()
+    const wrapper = await mountForm()
+    await wrapper.find('[data-testid="join-address-manual"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('#join-address-search').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="join-address-unavailable"]').exists()).toBe(false)
+    for (const id of ['address', 'postal-code', 'city']) expect(wrapper.find(`#join-${id}`).exists()).toBe(true)
+    await wrapper.find('[data-testid="join-address-search-again"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('#join-address-search').exists()).toBe(true)
+  })
+
+  it.each([
+    ['the search errors', () => fail(500, { error: 'internal error' })],
+    ['the register is unavailable', () => ok({ addresses: [], fallback: true })],
+  ])('switches to manual entry with a notice when %s', async (_, answer) => {
+    serve()
+    addressSearch = answer
+    client.POST.mockResolvedValue(ok({ status: 'received' }, 202))
+    const wrapper = await mountForm()
+    await fillPerson(wrapper)
+    await typeAddress(wrapper, 'fiktivv')
+    expect(wrapper.find('[data-testid="join-address-unavailable"]').attributes('role')).toBe('status')
+    // The search may be back later: the way back to it stays.
+    expect(wrapper.find('[data-testid="join-address-search-again"]').exists()).toBe(true)
+    await wrapper.find('#join-address').setValue('Testvegen 1')
+    await wrapper.find('#join-postal-code').setValue('0001')
+    await wrapper.find('#join-city').setValue('Testby')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+    const body = client.POST.mock.calls[0][1].body
+    expect(body).toMatchObject({ address_line: 'Testvegen 1', postal_code: '0001', city: 'Testby' })
+    expect(body).not.toHaveProperty('address_id')
+  })
+
   it('submits the payload with consent versions and the honeypot, then asks to check email', async () => {
     serve()
     client.POST.mockResolvedValue(ok({ status: 'received' }, 202))
     const wrapper = await mountForm()
     await fillValid(wrapper)
-    await wrapper.find('#join-phone').setValue('+4700000001')
+    await wrapper.find('#join-phone').setValue('+47 400 00 001')
     await wrapper.find('#join-newsletter').setValue(true)
     await wrapper.find('#join-website').setValue('http://spam.example')
     await wrapper.find('form').trigger('submit')
@@ -177,11 +325,10 @@ describe('JoinView', () => {
         first_name: 'Kari',
         last_name: 'Testesen',
         email: 'kari@example.com',
-        phone: '+4700000001',
-        address_line: undefined,
+        phone: '+4740000001',
+        address_line: 'Testvegen 1',
         postal_code: '0001',
         city: 'Testby',
-        is_local: false,
         newsletter: true,
         accept_terms: true,
         consent_versions: VERSIONS,

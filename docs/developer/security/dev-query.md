@@ -96,8 +96,8 @@ Unqualified names (`users`) resolve to the view through the role's search_path;
 
 | Table | NULL-masked (identity / credential / free text / blob) | Derived hint |
 |-------|--------------------------------------------------------|--------------|
-| `users` | email, phone, address_line, postal_code, city, first_name, last_name, full_name, admin_notes, totp_secret_encrypted, webauthn_handle, payables_token, membership_cancel_reason (member-typed) | `has_email` (`kind`, `harbor_share_owner`, `harbor_share_paid_on`, `member_since`, `membership_cancelled_at`, `membership_ends_on`, `rejoin_blocked` pass through) |
-| `membership_applications` | first_name, last_name, email, phone, address_line, postal_code, city, token_hash (credential) | — (`is_local`, `newsletter`, `consent_versions`, the timestamps pass through) |
+| `users` | email, phone, address_line, postal_code, city, first_name, last_name, full_name, admin_notes, totp_secret_encrypted, webauthn_handle, payables_token, membership_cancel_reason (member-typed), address_kommunenummer, address_verified_at | `has_email` (`kind`, `harbor_share_owner`, `harbor_share_paid_on`, `member_since`, `membership_cancelled_at`, `membership_ends_on`, `rejoin_blocked`, `address_verified` pass through) |
+| `membership_applications` | first_name, last_name, email, phone, address_line, postal_code, city, token_hash (credential), address_kommunenummer, address_verified_at | — (`is_local`, `newsletter`, `address_verified`, `consent_versions`, the timestamps pass through) |
 | `clubs` | config, faktura_logo_data, site_logo_data, all `*_email` (board), phone, feedback_linear_* + anthropic_api_key (secrets) | — |
 | `billing_recipients` | contact_person, email | `has_email` |
 | `orders` | guest_email, guest_name, token (pay-link capability) | `has_guest_email` |
@@ -127,6 +127,8 @@ The mail log of migration 000132 (BRY-588) keeps `recipient_domain` and `remote_
 Four columns of migration 000129 (BRY-554) pass through raw, none is PII, so the automatic-booking checks can be queried read-only: `users.kind` (`person` or `system`, which tells the system actor's bilags apart), `clubs.automatic_booking` (the club switch) and `auto_declined_at` on `vipps_import_rows` and `bank_import_rows` (when a person's undo took the row out of the automatic passes; the column exists before anything sets it). `dev_masked_test.go`'s column-parity test fails until each is classified.
 
 Migration 000135 (self-service membership) adds columns that pass through raw: the membership dates on `users` (`member_since`, `membership_cancelled_at`, `membership_ends_on`), `clubs.join_price_item_id` (a catalog id) and `purpose` on `orders` and `invoices` (a fixed code). `users.membership_cancel_reason` is the member's own free text and is NULL. Its new table `membership_applications` (unconfirmed join requests) is masked: the applicant's identity and the link token's hash are NULL, so the role can tell that a join request arrived and whether it was confirmed, and nothing about who sent it.
+
+The join form's address search results are cached in Redis for 10 minutes under the SHA-256 of the normalised query, never the query itself, and the Kartverket client is not traced, so a visitor's typed address reaches neither the cache keys nor the traces. Migration 000140 (BRY-639) adds the join address check to `users` and `membership_applications`. `address_verified` passes through (whether the register confirmed the address, a flag); `address_kommunenummer` is NULL, because the municipality narrows where a member lives, and so is `address_verified_at`.
 
 The harbour share columns of migration 000133 (BRY-77, BRD-14), `users.harbor_share_owner` and `users.harbor_share_paid_on`, pass through raw: whether and when a member bought a share is club membership data, not identity, and the role sees it only against a `user_id`.
 

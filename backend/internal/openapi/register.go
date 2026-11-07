@@ -209,9 +209,20 @@ func registerJoinOps(api huma.API) {
 		Path:          "/api/v1/join",
 		Tags:          []string{"Join"},
 		Summary:       "Apply for membership",
-		Description:   "Emails a confirmation link (or, for an address that already belongs to the club, a login link). Every accepted request gets the same 202 whatever the address; the per-address work runs after the response. 400 on invalid fields or accept_terms false (code terms_not_accepted), 409 join_closed, 409 legal_document_stale (with the current versions) when consent_versions is not current, 415 unless Content-Type is application/json, 429 over the per-IP budget, 503 rate_limit_unavailable when the limiter cannot be read (fails closed).",
+		Description:   "Emails a confirmation link (or, for an address that already belongs to the club, a login link). Every accepted request gets the same 202 whatever the address; the per-address work runs after the response, including the re-lookup of address_id in the address register. Phone, address_line, postal_code and city are required. 400 on invalid fields (an implausible phone number included) or accept_terms false (code terms_not_accepted), 409 join_closed, 409 legal_document_stale (with the current versions) when consent_versions is not current, 415 unless Content-Type is application/json, 429 over the per-IP budget, 503 rate_limit_unavailable when the limiter cannot be read (fails closed).",
 		DefaultStatus: http.StatusAccepted,
 	}, stub[struct{ Body JoinRequest }, struct{ Body StatusResponse }]())
+
+	huma.Register(api, huma.Operation{
+		OperationID: "search-join-address",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/join/address-search",
+		Tags:        []string{"Join"},
+		Summary:     "Search the address register for the join form",
+		Description: "Proxies Kartverket's open address register (Adresse-API, CC BY 4.0): a prefix search, then a fuzzy one when that finds nothing. At most 8 results, cached briefly. A register error or timeout answers 200 with fallback true and no addresses. 400 address_query_invalid unless q is 3 to 100 characters; 429 over the per-IP budget (30 a minute).",
+	}, stub[struct {
+		Q string `query:"q" minLength:"3" maxLength:"100" doc:"What the visitor has typed"`
+	}, struct{ Body JoinAddressSearchResponse }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "get-join-confirm-status",

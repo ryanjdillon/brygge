@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -321,6 +322,22 @@ func TestDevMaskedViews(t *testing.T) {
 		}
 		if _, err := rolePool.Exec(ctx, "SELECT 1 FROM public.membership_applications"); err == nil {
 			t.Error("role could read raw public.membership_applications")
+		}
+
+		// The register check (BRY-639): whether the address was verified
+		// passes through; its municipality and timestamp do not.
+		mustExec(t, pool, ctx,
+			`UPDATE users SET address_verified = true, address_kommunenummer = '4601', address_verified_at = now() WHERE id = $1`, user)
+		var addrVerified *bool
+		var addrKommune *string
+		var addrVerifiedAt *time.Time
+		if err := rolePool.QueryRow(ctx,
+			"SELECT address_verified, address_kommunenummer, address_verified_at FROM users WHERE id = $1", user,
+		).Scan(&addrVerified, &addrKommune, &addrVerifiedAt); err != nil {
+			t.Fatalf("role select address check: %v", err)
+		}
+		if addrVerified == nil || !*addrVerified || addrKommune != nil || addrVerifiedAt != nil {
+			t.Errorf("address check through dev_masked.users: verified %v, kommune %v, at %v", addrVerified, addrKommune, addrVerifiedAt)
 		}
 
 		drift := "drifttest_" + testutil.RandomHex(6)

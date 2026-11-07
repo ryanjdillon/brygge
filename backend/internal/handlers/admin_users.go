@@ -557,6 +557,10 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 		DeactivatedAt    *time.Time `json:"deactivated_at,omitempty"`
 		MembershipEndsOn *string    `json:"membership_ends_on"`
 		MemberSince      *string    `json:"member_since"`
+		// AddressVerified: true when the address came from Kartverket's
+		// register, false when a joiner typed it by hand, null when it
+		// predates the check or the board entered it (BRY-639).
+		AddressVerified *bool `json:"address_verified"`
 	}
 
 	var u userDetail
@@ -583,7 +587,8 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 		        u.rejoin_blocked,
 		        u.deactivated_at,
 		        to_char(u.membership_ends_on, 'YYYY-MM-DD'),
-		        to_char(u.member_since, 'YYYY-MM-DD')
+		        to_char(u.member_since, 'YYYY-MM-DD'),
+		        u.address_verified
 		 FROM users u
 		 LEFT JOIN user_roles ur ON ur.user_id = u.id AND ur.club_id = u.club_id
 		 WHERE u.id = $1 AND u.club_id = $2 AND u.kind = 'person'
@@ -593,7 +598,7 @@ func (h *AdminUsersHandler) HandleGetUser(w http.ResponseWriter, r *http.Request
 		&u.Phone, &u.Address, &u.PostalCd, &u.City,
 		&u.IsLocal, &u.AdminNotes, &u.CreatedAt, &u.UpdatedAt, &u.Roles, &slipsJSON,
 		&u.HarborShareOwner, &u.HarborSharePaidOn, &u.RejoinBlocked,
-		&u.DeactivatedAt, &u.MembershipEndsOn, &u.MemberSince)
+		&u.DeactivatedAt, &u.MembershipEndsOn, &u.MemberSince, &u.AddressVerified)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "user not found")
 		return

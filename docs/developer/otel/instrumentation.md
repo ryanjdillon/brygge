@@ -87,7 +87,7 @@ These external HTTP clients are wrapped with `otelhttp.NewTransport`, creating c
 - **Yr.no** (weather API) — 10s timeout
 - **Anthropic** (AI document processing) — default timeout
 
-Each span includes `http.method`, `http.url`, `http.status_code`, and propagates W3C trace context headers. The Vipps client, the Stalwart admin/JMAP clients and SMTP are not traced.
+Each span includes `http.method`, `http.url`, `http.status_code`, and propagates W3C trace context headers. The Vipps client, the Stalwart admin/JMAP clients, SMTP and the Kartverket address client (the join form's address search, BRY-639) are not traced; the address client is left out because a span's URL would carry what the visitor typed.
 
 ## Default resource attributes
 

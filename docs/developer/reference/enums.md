@@ -548,9 +548,22 @@ The public join routes (`handlers/join.go`) answer refusals as `{error, code}`.
 | `rejoin_blocked` | 409 | `POST /join/confirm` | The board marked the address "can't rejoin" (`users.rejoin_blocked`, BRD-15) after the request; nothing is changed and the token is spent. |
 | `already_member` | 409 | `POST /join/confirm` | The address became an active user with another role after the request; nothing is created and the token is spent. |
 | `rate_limit_unavailable` | 503 | `POST /join` | The per-IP limiter could not read Redis; the route fails closed. |
+| `address_query_invalid` | 400 | `GET /join/address-search` | `q` is not 3 to 100 characters after trimming and collapsing spaces; the register is not called. |
 | `not_applicant` | 409 | `POST /join/bank-invoice` | The signed-in user holds no `applicant` role (or is deactivated); nothing is issued. |
 | `no_pending_join` | 409 | `POST /join/bank-invoice` | The applicant has no owed join faktura and no pending join order to bill (it was paid, or the join expired). |
 | `payment_in_progress` | 409 | `POST /join/bank-invoice` | The join order has an `authorized` or `captured` payment attempt, or a `created` one younger than Stripe's checkout session lifetime; nothing is issued. |
+
+`GET /join/address-search` never answers an error for the register itself: a register error or timeout is 200 `{addresses: [], fallback: true}`, and the form moves to manual entry.
+
+#### `address_verified` on `users` and `membership_applications` (migration 000140, BRY-639)
+
+| Value | Meaning |
+|---|---|
+| `true` | The street, postal code and city are the Kartverket register's, re-looked up by the server from the picked id; `address_kommunenummer` and `address_verified_at` are set, and `is_local` was derived from the municipality, unless the club had no `municipality_codes` (then `is_local = false` means unknown). |
+| `false` | The address was typed by hand, or the register could not confirm the picked id. Residency is unknown: `is_local` is stored `false` for the board to settle. |
+| `NULL` (`users` only) | The address predates the check, was entered or edited by the board or the member, or was erased. Editing a verified address resets it to `NULL` (trigger `users_clear_stale_address_verification`). |
+
+The address id the form sends (`address_id`) is `v:<kommunenummer>:<adressekode>:<nummer>:<bokstav>` for a street address (vegadresse) and `m:<kommunenummer>:<gnr>:<bnr>:<fnr>:<undernummer>` for a cadastral one (matrikkeladresse); an empty last part means none.
 
 The public checkout answers 409 `order_locked` to `POST /checkout/{token}/lines` and `DELETE /checkout/{token}/lines/{lineID}` on an order with a `purpose` (fixed content; see invariants.md).
 

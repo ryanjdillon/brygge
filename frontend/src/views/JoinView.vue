@@ -5,11 +5,13 @@ import { RouterLink } from 'vue-router'
 import { Loader2, MailCheck, UserCheck, Clock, ExternalLink } from 'lucide-vue-next'
 import Input from '@/components/ui/form/Input.vue'
 import FormField from '@/components/ui/form/FormField.vue'
+import AddressCombobox, { type RegisterAddress } from '@/components/address/AddressCombobox.vue'
 import { useApiClient, unwrap, ApiError } from '@/lib/apiClient'
 import { useAuthStore } from '@/stores/auth'
 import { formatNOK } from '@/lib/format'
 import { APPLICANT_COMPLETE_PATH } from '@/lib/applicantAccess'
 import { JOIN_LEGAL_DOCS, legalDocPath, type JoinLegalDoc } from '@/lib/joinFlow'
+import { normalizePhone } from '@/lib/phone'
 
 const { t } = useI18n()
 const client = useApiClient()
@@ -34,14 +36,21 @@ const form = reactive({
   addressLine: '',
   postalCode: '',
   city: '',
-  isLocal: null as boolean | null,
   acceptTerms: false,
   newsletter: false,
   // Honeypot: hidden from people, filled only by scripts.
   website: '',
 })
 
-type Field = 'firstName' | 'lastName' | 'email' | 'postalCode' | 'city' | 'isLocal' | 'acceptTerms'
+// The home address is searched in Kartverket's register and picked, or typed
+// by hand when it can't be found or the register is unavailable. Residency is
+// derived from a picked address on the server; it is never asked.
+const addressMode = ref<'search' | 'picked' | 'manual'>('search')
+const picked = ref<RegisterAddress | null>(null)
+const addressUnavailable = ref(false)
+const addressSearch = ref<InstanceType<typeof AddressCombobox> | null>(null)
+
+type Field = 'firstName' | 'lastName' | 'email' | 'phone' | 'address' | 'addressLine' | 'postalCode' | 'city' | 'acceptTerms'
 const errors = ref<Partial<Record<Field, string>>>({})
 const submitting = ref(false)
 const submitError = ref('')
@@ -102,15 +111,44 @@ function consentVersions(): Record<string, string> | undefined {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+async function selectAddress(a: RegisterAddress) {
+  picked.value = a
+  addressMode.value = 'picked'
+  delete errors.value.address
+  await nextTick()
+  document.getElementById('join-address-change')?.focus()
+}
+
+async function searchAgain() {
+  picked.value = null
+  addressMode.value = 'search'
+  await nextTick()
+  addressSearch.value?.focus()
+}
+
+async function enterManually(unavailable = false) {
+  addressUnavailable.value = unavailable
+  picked.value = null
+  addressMode.value = 'manual'
+  delete errors.value.address
+  await nextTick()
+  if (!unavailable) document.getElementById('join-address')?.focus()
+}
+
 function validate(): boolean {
   const e: Partial<Record<Field, string>> = {}
   if (!form.firstName.trim()) e.firstName = t('join.form.required')
   if (!form.lastName.trim()) e.lastName = t('join.form.required')
   if (!form.email.trim()) e.email = t('join.form.required')
   else if (!EMAIL_RE.test(form.email.trim())) e.email = t('join.form.invalidEmail')
-  if (!form.postalCode.trim()) e.postalCode = t('join.form.required')
-  if (!form.city.trim()) e.city = t('join.form.required')
-  if (form.isLocal === null) e.isLocal = t('join.form.chooseOne')
+  if (!form.phone.trim()) e.phone = t('join.form.required')
+  else if (!normalizePhone(form.phone)) e.phone = t('join.form.invalidPhone')
+  if (addressMode.value === 'search') e.address = t('join.form.address.pickRequired')
+  if (addressMode.value === 'manual') {
+    if (!form.addressLine.trim()) e.addressLine = t('join.form.required')
+    if (!form.postalCode.trim()) e.postalCode = t('join.form.required')
+    if (!form.city.trim()) e.city = t('join.form.required')
+  }
   if (!form.acceptTerms) e.acceptTerms = t('join.form.acceptRequired')
   errors.value = e
   return Object.keys(e).length === 0
@@ -122,9 +160,11 @@ const FIELD_FOCUS: [Field, string][] = [
   ['firstName', 'join-first-name'],
   ['lastName', 'join-last-name'],
   ['email', 'join-email'],
+  ['phone', 'join-phone'],
+  ['address', 'join-address-search'],
+  ['addressLine', 'join-address'],
   ['postalCode', 'join-postal-code'],
   ['city', 'join-city'],
-  ['isLocal', 'join-local-yes'],
   ['acceptTerms', 'join-accept'],
 ]
 
@@ -132,6 +172,17 @@ async function focusFirstError() {
   await nextTick()
   const first = FIELD_FOCUS.find(([f]) => errors.value[f])
   if (first) document.getElementById(first[1])?.focus()
+}
+
+// A picked address goes with its register id: the server looks it up again
+// and keeps the register's copy. The fields are sent too, so the join is
+// saved (unverified) even if the register is down by then.
+function addressBody() {
+  const a = picked.value
+  if (addressMode.value === 'picked' && a) {
+    return { address_id: a.id, address_line: a.street, postal_code: a.postal_code, city: a.city }
+  }
+  return { address_line: form.addressLine.trim(), postal_code: form.postalCode.trim(), city: form.city.trim() }
 }
 
 async function handleSubmit() {
@@ -148,11 +199,8 @@ async function handleSubmit() {
           first_name: form.firstName.trim(),
           last_name: form.lastName.trim(),
           email: form.email.trim(),
-          phone: form.phone.trim() || undefined,
-          address_line: form.addressLine.trim() || undefined,
-          postal_code: form.postalCode.trim(),
-          city: form.city.trim(),
-          is_local: form.isLocal === true,
+          phone: normalizePhone(form.phone) ?? form.phone.trim(),
+          ...addressBody(),
           newsletter: form.newsletter,
           accept_terms: form.acceptTerms,
           consent_versions: consentVersions(),
@@ -288,51 +336,86 @@ onMounted(load)
         <Input id="join-email" v-model="form.email" :error="errors.email" type="email" name="email" autocomplete="email" inputmode="email" autocapitalize="off" spellcheck="false" :maxlength="254" :input-class="inputClass" />
       </FormField>
 
-      <FormField :label="t('join.form.phone')" for="join-phone" :helper-text="t('join.form.optional')">
-        <Input id="join-phone" v-model="form.phone" type="tel" name="phone" autocomplete="tel" inputmode="tel" :maxlength="40" :input-class="inputClass" />
+      <FormField :label="t('join.form.phone')" for="join-phone" required>
+        <Input id="join-phone" v-model="form.phone" :error="errors.phone" type="tel" name="phone" autocomplete="tel" inputmode="tel" :maxlength="40" :input-class="inputClass" />
       </FormField>
 
-      <FormField :label="t('join.form.addressLine')" for="join-address" :helper-text="t('join.form.optional')">
-        <Input id="join-address" v-model="form.addressLine" name="address_line" autocomplete="street-address" :maxlength="200" :input-class="inputClass" />
-      </FormField>
-
-      <div class="grid grid-cols-1 gap-4 md:grid-cols-[10rem_1fr]">
-        <FormField :label="t('join.form.postalCode')" for="join-postal-code" required>
-          <Input id="join-postal-code" v-model="form.postalCode" :error="errors.postalCode" name="postal_code" autocomplete="postal-code" inputmode="numeric" :maxlength="20" :input-class="inputClass" />
-        </FormField>
-        <FormField :label="t('join.form.city')" for="join-city" required>
-          <Input id="join-city" v-model="form.city" :error="errors.city" name="city" autocomplete="address-level2" :maxlength="100" :input-class="inputClass" />
-        </FormField>
-      </div>
-
-      <fieldset
-        role="radiogroup"
-        :aria-invalid="!!errors.isLocal"
-        :aria-describedby="errors.isLocal ? 'join-local-error' : undefined"
-      >
-        <legend class="mb-2 block text-xs font-medium text-gray-700">
-          {{ t('join.form.isLocal') }} <span class="text-red-500">*</span>
+      <fieldset class="space-y-3" data-testid="join-address">
+        <legend class="mb-1 block text-xs font-medium text-gray-700">
+          {{ t('join.form.address.label') }} <span class="text-red-500">*</span>
         </legend>
-        <div class="grid grid-cols-2 gap-3">
-          <label
-            v-for="opt in [{ v: true, l: t('common.yes'), id: 'join-local-yes' }, { v: false, l: t('common.no'), id: 'join-local-no' }]"
-            :key="opt.id"
-            :for="opt.id"
-            class="flex min-h-11 cursor-pointer items-center gap-3 rounded-md border px-4 text-sm"
-            :class="form.isLocal === opt.v ? 'border-brand-500 bg-brand-50 text-brand-900' : 'border-gray-300 text-gray-800'"
+        <p id="join-address-helper" class="text-xs text-gray-500">{{ t('join.form.address.helper') }}</p>
+
+        <template v-if="addressMode === 'search'">
+          <label for="join-address-search" class="sr-only">{{ t('join.form.address.label') }}</label>
+          <AddressCombobox
+            id="join-address-search"
+            ref="addressSearch"
+            :error="errors.address"
+            describedby="join-address-helper"
+            @select="selectAddress"
+            @unavailable="enterManually(true)"
+          />
+          <button
+            type="button"
+            class="inline-flex min-h-11 items-center text-left text-sm text-brand-700 underline"
+            data-testid="join-address-manual"
+            @click="enterManually()"
           >
-            <input
-              :id="opt.id"
-              type="radio"
-              name="is_local"
-              class="h-4 w-4 border-gray-300 text-brand-600 focus:ring-1 focus:ring-brand-500"
-              :checked="form.isLocal === opt.v"
-              @change="form.isLocal = opt.v"
-            />
-            {{ opt.l }}
-          </label>
+            {{ t('join.form.address.manualLink') }}
+          </button>
+        </template>
+
+        <div
+          v-else-if="addressMode === 'picked' && picked"
+          class="flex items-start justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-4 py-3"
+          data-testid="join-address-picked"
+        >
+          <p class="text-sm text-slate-900">
+            <span class="block font-medium">{{ picked.street }}</span>
+            <span class="block">{{ picked.postal_code }} {{ picked.city }}</span>
+          </p>
+          <button
+            id="join-address-change"
+            type="button"
+            class="inline-flex min-h-11 flex-none items-center rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            data-testid="join-address-change"
+            @click="searchAgain"
+          >
+            {{ t('join.form.address.change') }}
+          </button>
         </div>
-        <p v-if="errors.isLocal" id="join-local-error" class="mt-1 text-xs text-red-600">{{ errors.isLocal }}</p>
+
+        <template v-else>
+          <p
+            v-if="addressUnavailable"
+            class="rounded-md bg-amber-50 p-3 text-sm text-amber-900"
+            role="status"
+            data-testid="join-address-unavailable"
+          >
+            {{ t('join.form.address.unavailable') }}
+          </p>
+          <FormField :label="t('join.form.addressLine')" for="join-address" required>
+            <Input id="join-address" v-model="form.addressLine" :error="errors.addressLine" name="address_line" autocomplete="address-line1" :maxlength="200" :input-class="inputClass" />
+          </FormField>
+          <div class="grid grid-cols-1 gap-4 md:grid-cols-[10rem_1fr]">
+            <FormField :label="t('join.form.postalCode')" for="join-postal-code" required>
+              <Input id="join-postal-code" v-model="form.postalCode" :error="errors.postalCode" name="postal_code" autocomplete="postal-code" inputmode="numeric" :maxlength="20" :input-class="inputClass" />
+            </FormField>
+            <FormField :label="t('join.form.city')" for="join-city" required>
+              <Input id="join-city" v-model="form.city" :error="errors.city" name="city" autocomplete="address-level2" :maxlength="100" :input-class="inputClass" />
+            </FormField>
+          </div>
+          <button
+            type="button"
+            class="inline-flex min-h-11 items-center text-left text-sm text-brand-700 underline"
+            data-testid="join-address-search-again"
+            @click="searchAgain"
+          >
+            {{ t('join.form.address.searchLink') }}
+          </button>
+        </template>
+        <p v-if="addressMode === 'picked'" class="text-xs text-gray-500">{{ t('join.form.address.attribution') }}</p>
       </fieldset>
 
       <div class="space-y-3 rounded-md border border-slate-200 p-4">

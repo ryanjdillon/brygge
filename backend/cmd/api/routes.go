@@ -282,7 +282,13 @@ func newRouter(d routeDeps) *chi.Mux {
 		joinConfirmRL := middleware.NewRateLimiter(rdb, log, 10, time.Minute, func(r *http.Request) string {
 			return "join-confirm:" + r.RemoteAddr
 		})
+		// The join form's address type-ahead (BRY-639) proxies Kartverket's
+		// register; its own key keeps a fast typist off the standard budget.
+		joinAddressRL := middleware.NewRateLimiter(rdb, log, 30, time.Minute, func(r *http.Request) string {
+			return "join-address:" + r.RemoteAddr
+		})
 		r.With(standardRL).Get("/join/status", joinHandler.HandleJoinStatus)
+		r.With(joinAddressRL.Handler).Get("/join/address-search", joinHandler.HandleAddressSearch)
 		r.With(joinRL.Handler).Post("/join", joinHandler.HandleJoin)
 		r.With(joinConfirmRL.Handler).Get("/join/confirm/{token}", joinHandler.HandleJoinConfirmStatus)
 		r.With(joinConfirmRL.Handler).Post("/join/confirm", joinHandler.HandleJoinConfirm)

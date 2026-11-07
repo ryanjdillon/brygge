@@ -146,16 +146,30 @@ type JoinRequest struct {
 	FirstName   string `json:"first_name" minLength:"1" maxLength:"100"`
 	LastName    string `json:"last_name" minLength:"1" maxLength:"100"`
 	Email       string `json:"email" format:"email" maxLength:"254"`
-	Phone       string `json:"phone,omitempty" maxLength:"40"`
-	AddressLine string `json:"address_line,omitempty" maxLength:"200"`
+	Phone       string `json:"phone" minLength:"1" maxLength:"40" doc:"Stored as E.164: eight Norwegian digits get +47; another country needs its + code"`
+	AddressLine string `json:"address_line" minLength:"1" maxLength:"200" doc:"The home address"`
 	PostalCode  string `json:"postal_code" minLength:"1" maxLength:"20"`
 	City        string `json:"city" minLength:"1" maxLength:"100"`
-	IsLocal     bool   `json:"is_local" doc:"Lives in the club's municipality"`
+	AddressID   string `json:"address_id,omitempty" maxLength:"64" doc:"The id of the address picked from GET /join/address-search. The server looks it up again, stores the register's street, postal code and city, and derives residency from its municipality. Without it, or when the register cannot confirm it, the typed address is saved unverified with residency unknown"`
 	Newsletter  bool   `json:"newsletter" doc:"Optional newsletter opt-in"`
 	AcceptTerms bool   `json:"accept_terms" doc:"Consent to the privacy policy, statutes, harbour rules and terms of sale; must be true"`
 	// ConsentVersions is what the page showed; optional.
 	ConsentVersions map[string]string `json:"consent_versions,omitempty" doc:"The version of each required document (privacy, statutes, harbour_rules, terms_of_sale) the page showed. When sent, every one must be the club's current version, else 409 legal_document_stale"`
 	Website         string            `json:"website,omitempty" doc:"Honeypot; leave empty. A non-empty value gets the answer a real submission would and is then dropped"`
+}
+
+type JoinAddress struct {
+	ID            string `json:"id" doc:"The register's id for the address; send it as address_id"`
+	Label         string `json:"label" doc:"Street, postal code and city on one line"`
+	Street        string `json:"street" doc:"Street and number"`
+	PostalCode    string `json:"postal_code" doc:"Postal code"`
+	City          string `json:"city" doc:"Postal town"`
+	Kommunenummer string `json:"kommunenummer" doc:"The municipality number"`
+}
+
+type JoinAddressSearchResponse struct {
+	Addresses []JoinAddress `json:"addresses" doc:"At most 8 matches"`
+	Fallback  bool          `json:"fallback" doc:"The register could not be searched (error or timeout); the form switches to manual entry"`
 }
 
 type JoinConfirmStatusResponse struct {
@@ -886,6 +900,7 @@ type AdminUser struct {
 	RejoinBlocked      bool                  `json:"rejoin_blocked" doc:"The board's 'can't rejoin' mark: the self-service join form points this address to the board instead"`
 	MembershipEndsOn   *string               `json:"membership_ends_on" format:"date" doc:"Last day of membership when the member has cancelled (utmeld); null otherwise"`
 	MemberSince        *string               `json:"member_since" format:"date" doc:"Date membership was granted; null when unknown"`
+	AddressVerified    *bool                 `json:"address_verified,omitempty" doc:"Detail only. true when the address came from Kartverket's address register, false when a joiner typed it by hand (is_local is then unknown), null when it predates the check or the board entered it"`
 }
 
 // AdminEmailBounce is a member's last hard delivery outcome to their
