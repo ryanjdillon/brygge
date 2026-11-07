@@ -121,14 +121,19 @@ func main() {
 
 	fmt.Println("seeding database...")
 
-	// Create default club
+	// Create default club. Its municipality code is synthetic (no real
+	// municipality has 9999), so a dev join never counts as local by
+	// accident; set real codes in the settings to try residency. A re-seed
+	// keeps codes set there.
 	var clubID string
 	err = db.QueryRow(ctx, `
-		INSERT INTO clubs (slug, name, description, latitude, longitude)
-		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude
+		INSERT INTO clubs (slug, name, description, latitude, longitude, municipality_codes)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude,
+			municipality_codes = CASE WHEN clubs.municipality_codes = '{}' THEN EXCLUDED.municipality_codes
+			                          ELSE clubs.municipality_codes END
 		RETURNING id
-	`, cfg.ClubSlug, "Klokkarvik Båtlag", "En hyggelig båtklubb i Klokkarvik", 60.224303, 5.155736).Scan(&clubID)
+	`, cfg.ClubSlug, "Klokkarvik Båtlag", "En hyggelig båtklubb i Klokkarvik", 60.224303, 5.155736, []string{"9999"}).Scan(&clubID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create club: %v\n", err)
 		os.Exit(1)

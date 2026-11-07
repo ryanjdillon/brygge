@@ -11,6 +11,10 @@ import (
 // DefaultKartverketAddressURL is Kartverket's public, keyless Adresse-API.
 const DefaultKartverketAddressURL = "https://ws.geonorge.no/adresser/v1"
 
+// DefaultKartverketMunicipalityURL is Kartverket's public, keyless
+// kommuneinfo API.
+const DefaultKartverketMunicipalityURL = "https://ws.geonorge.no/kommuneinfo/v1"
+
 type Config struct {
 	Port        int
 	DatabaseURL string
@@ -84,6 +88,12 @@ type Config struct {
 	// address check call (BRY-639). Defaults to the public endpoint; tests
 	// and other deployments point it elsewhere via KARTVERKET_ADDRESS_URL.
 	KartverketAddressURL string
+
+	// KartverketMunicipalityURL is the base of Kartverket's kommuneinfo
+	// API, which names the club's municipality codes on the settings page
+	// (BRY-643). Defaults to the public endpoint; tests and other
+	// deployments point it elsewhere via KARTVERKET_MUNICIPALITY_URL.
+	KartverketMunicipalityURL string
 
 	// Throttle between bulk-reminder sends (per recipient). The bulk
 	// handler enqueues jobs; a single in-process worker drains the
@@ -199,7 +209,8 @@ func Load() Config {
 		BulkSendThrottle:  envDuration("BULK_SEND_THROTTLE", 1*time.Second),
 		JoinDailyMailCap:  envInt("JOIN_DAILY_MAIL_CAP", 0),
 
-		KartverketAddressURL: envStr("KARTVERKET_ADDRESS_URL", DefaultKartverketAddressURL),
+		KartverketAddressURL:      envStr("KARTVERKET_ADDRESS_URL", DefaultKartverketAddressURL),
+		KartverketMunicipalityURL: envStr("KARTVERKET_MUNICIPALITY_URL", DefaultKartverketMunicipalityURL),
 
 		SMTPHost:        envStr("SMTP_HOST", ""),
 		SMTPPort:        envInt("SMTP_PORT", 587),

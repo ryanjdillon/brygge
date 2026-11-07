@@ -9,6 +9,7 @@ import FileInput from '@/components/ui/form/FileInput.vue'
 import Tabs from '@/components/ui/Tabs.vue'
 import BankAccountsPanel from '@/components/admin/BankAccountsPanel.vue'
 import ExemptionsSettingsPanel from '@/components/admin/ExemptionsSettingsPanel.vue'
+import MunicipalityCodesSetting from '@/components/admin/MunicipalityCodesSetting.vue'
 
 const { t } = useI18n()
 const { ensureFreshTotp, totpAwareFetch } = useFreshTotp()
@@ -81,6 +82,12 @@ const priceItems = ref<PriceItemOption[]>([])
 // Whether the price list loaded: until it has, a stored item cannot be
 // judged, so it is not marked unusable on a failed load.
 const priceItemsState = ref<'loading' | 'loaded' | 'failed'>('loading')
+// The saved municipality codes (BRY-643): without any, a joiner's residency
+// cannot be decided, which the join status warns about.
+const municipalityCodes = ref<string[]>([])
+// Until the settings have loaded the codes are not known: neither the warning
+// nor the editor shows, so a failed load can never save an empty list.
+const settingsLoaded = ref(false)
 const joinSaving = ref(false)
 const joinSaved = ref(false)
 const joinError = ref<string | null>(null)
@@ -162,6 +169,8 @@ async function load() {
     bankAutoAssign.value = !!body.bank_auto_assign
     vippsPortalUrl.value = body.vipps_portal_url || ''
     applyJoinState(body)
+    municipalityCodes.value = Array.isArray(body.municipality_codes) ? body.municipality_codes : []
+    settingsLoaded.value = true
     fakturaLogoCacheBust.value = Date.now()
   } catch (e) {
     error.value = (e as Error).message
@@ -530,7 +539,21 @@ const canEdit = can('money')
             <span v-else-if="joinNeedsDocuments" data-testid="join-ask-admin">{{ t('admin.economySettings.joinAskAdmin') }}</span>
           </div>
         </div>
+        <p
+          v-if="settingsLoaded && municipalityCodes.length === 0"
+          class="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900"
+          role="status"
+          data-testid="join-local-unset"
+        >
+          {{ t('admin.economySettings.joinLocalUnset') }}
+        </p>
       </fieldset>
+
+      <MunicipalityCodesSetting
+        v-if="settingsLoaded"
+        :codes="municipalityCodes"
+        @saved="municipalityCodes = $event"
+      />
 
       <fieldset class="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-3">
         <legend class="px-1 text-xs font-semibold text-slate-700">

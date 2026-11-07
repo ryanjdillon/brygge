@@ -1363,7 +1363,18 @@
       "joinFixDocuments": "Naar juridische documenten",
       "joinPriceListFailed": "Kon de prijslijst niet laden.",
       "joinPriceCurrent": "Huidige inschrijfprijs",
-      "joinAskAdmin": "Vraag een beheerder de documenten te publiceren."
+      "joinAskAdmin": "Vraag een beheerder de documenten te publiceren.",
+      "municipalityCodesLabel": "Gemeenten die als lokaal gelden",
+      "municipalityCodesHint": "Wie een geverifieerd adres in een van deze gemeenten heeft, geldt als lokaal (voorrang bij ligplaatsen en havenaandelen). Vergeet de lijst niet bij te werken na een gemeentelijke herindeling.",
+      "municipalityCodesInput": "Gemeentenummer (vier cijfers)",
+      "municipalityCodesAdd": "Toevoegen",
+      "municipalityCodesRemove": "{code} verwijderen",
+      "municipalityCodesNone": "Geen gemeenten ingesteld.",
+      "municipalityCodesBadInput": "Een gemeentenummer heeft vier cijfers.",
+      "municipalityCodesMax": "Je kunt hoogstens {max} gemeenten instellen.",
+      "municipalityCodesUnknown": "onbekend gemeentenummer",
+      "municipalityCodesInvalid": "De lijst is niet opgeslagen: elk gemeentenummer moet vier cijfers hebben, en er mogen er hoogstens 20 zijn.",
+      "joinLocalUnset": "Lokale binding kan pas worden bepaald als er gemeenten zijn ingesteld"
     },
     "faktura": {
       "draft": {
@@ -1940,7 +1951,7 @@
     },
     "siteSettings": {
       "boardNotificationEmail": "Lidmaatschapsmeldingen naar",
-      "boardNotificationEmailHint": "Hier krijgt het bestuur bericht over nieuwe leden en terugbetaalde inschrijvingsbetalingen. Laat leeg voor de gedeelde mailbox van de club (post@), anders de secretaris of voorzitter."
+      "boardNotificationEmailHint": "Hier krijgt het bestuur bericht over nieuwe leden, terugbetaalde inschrijvingsbetalingen, inschrijvingen die gecontroleerd moeten worden, opzeggingen en ingetrokken opzeggingen, en opzeggingen die niet konden worden afgerond. Laat leeg voor de gedeelde mailbox van de club (post@), anders de secretaris of voorzitter."
     }
   },
   "projects": {

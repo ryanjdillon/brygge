@@ -2160,7 +2160,7 @@
         "keyActive": "Active"
       },
       "boardNotificationEmail": "Membership notices to",
-      "boardNotificationEmailHint": "Where the board is told of new members and refunded join payments. Leave empty to use the club's shared mailbox (post@), else the secretary or chair."
+      "boardNotificationEmailHint": "Where the board is told of new members, refunded join payments, joins that need checking, cancellations and undone cancellations, and cancellations that could not be completed. Leave empty to use the club's shared mailbox (post@), else the secretary or chair."
     },
     "harborSettings": {
       "pageTitle": "Harbor & motorhome",
@@ -2252,7 +2252,18 @@
       "joinFixDocuments": "Go to legal documents",
       "joinPriceListFailed": "Could not load the price list.",
       "joinPriceCurrent": "Current joining price",
-      "joinAskAdmin": "Ask an administrator to publish the documents."
+      "joinAskAdmin": "Ask an administrator to publish the documents.",
+      "municipalityCodesLabel": "Municipalities that count as local",
+      "municipalityCodesHint": "A person with a verified address in one of these municipalities counts as local (priority for slips and harbour shares). Remember to update the list after a municipal merger.",
+      "municipalityCodesInput": "Municipality number (four digits)",
+      "municipalityCodesAdd": "Add",
+      "municipalityCodesRemove": "Remove {code}",
+      "municipalityCodesNone": "No municipalities set.",
+      "municipalityCodesBadInput": "A municipality number has four digits.",
+      "municipalityCodesMax": "You can set at most {max} municipalities.",
+      "municipalityCodesUnknown": "unknown municipality number",
+      "municipalityCodesInvalid": "The list was not saved: each municipality number must have four digits, and there can be at most 20.",
+      "joinLocalUnset": "Local residency cannot be decided until municipalities are set"
     },
     "bankAccounts": {
       "title": "Bank accounts",

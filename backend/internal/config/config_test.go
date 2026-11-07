@@ -29,6 +29,7 @@ func TestLoadDefaults(t *testing.T) {
 		{"VippsTestMode", cfg.VippsTestMode, true},
 		{"S3BucketDocs", cfg.S3BucketDocs, "brygge"},
 		{"DendriteInternalURL", cfg.DendriteInternalURL, "http://dendrite:8008"},
+		{"KartverketMunicipalityURL", cfg.KartverketMunicipalityURL, "https://ws.geonorge.no/kommuneinfo/v1"},
 	}
 
 	for _, tt := range tests {
@@ -46,6 +47,7 @@ func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("VIPPS_TEST_MODE", "false")
 	t.Setenv("S3_BUCKET_DOCS", "custom-bucket")
 	t.Setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+	t.Setenv("KARTVERKET_MUNICIPALITY_URL", "http://kommuneinfo.example.test/v1")
 
 	cfg := Load()
 
@@ -60,6 +62,7 @@ func TestLoadFromEnv(t *testing.T) {
 		{"VippsTestMode", cfg.VippsTestMode, false},
 		{"S3BucketDocs", cfg.S3BucketDocs, "custom-bucket"},
 		{"AnthropicAPIKey", cfg.AnthropicAPIKey, "sk-ant-test"},
+		{"KartverketMunicipalityURL", cfg.KartverketMunicipalityURL, "http://kommuneinfo.example.test/v1"},
 	}
 
 	for _, tt := range tests {

@@ -1363,7 +1363,18 @@
       "joinFixDocuments": "Zu den rechtlichen Dokumenten",
       "joinPriceListFailed": "Preisliste konnte nicht geladen werden.",
       "joinPriceCurrent": "Aktueller Beitrittspreis",
-      "joinAskAdmin": "Bitte einen Administrator, die Dokumente zu veröffentlichen."
+      "joinAskAdmin": "Bitte einen Administrator, die Dokumente zu veröffentlichen.",
+      "municipalityCodesLabel": "Gemeinden, die als lokal gelten",
+      "municipalityCodesHint": "Wer eine bestätigte Adresse in einer dieser Gemeinden hat, gilt als lokal (Vorrang bei Liegeplätzen und Hafenanteilen). Denken Sie daran, die Liste nach einer Gemeindezusammenlegung zu aktualisieren.",
+      "municipalityCodesInput": "Gemeindenummer (vier Ziffern)",
+      "municipalityCodesAdd": "Hinzufügen",
+      "municipalityCodesRemove": "{code} entfernen",
+      "municipalityCodesNone": "Keine Gemeinden festgelegt.",
+      "municipalityCodesBadInput": "Eine Gemeindenummer hat vier Ziffern.",
+      "municipalityCodesMax": "Sie können höchstens {max} Gemeinden festlegen.",
+      "municipalityCodesUnknown": "unbekannte Gemeindenummer",
+      "municipalityCodesInvalid": "Die Liste wurde nicht gespeichert: Jede Gemeindenummer muss vier Ziffern haben, und es dürfen höchstens 20 sein.",
+      "joinLocalUnset": "Die lokale Zugehörigkeit kann erst bestimmt werden, wenn Gemeinden festgelegt sind"
     },
     "faktura": {
       "draft": {
@@ -1940,7 +1951,7 @@
     },
     "siteSettings": {
       "boardNotificationEmail": "Mitgliedschaftsmeldungen an",
-      "boardNotificationEmailHint": "Hierhin meldet die App dem Vorstand neue Mitglieder und erstattete Beitrittszahlungen. Leer lassen, um das gemeinsame Postfach des Vereins (post@) zu verwenden, sonst Schriftführer oder Vorsitz."
+      "boardNotificationEmailHint": "Hierhin meldet die App dem Vorstand neue Mitglieder, erstattete Beitrittszahlungen, zu prüfende Beitritte, Austritte und zurückgenommene Austritte sowie Austritte, die nicht abgeschlossen werden konnten. Leer lassen, um das gemeinsame Postfach des Vereins (post@) zu verwenden, sonst Schriftführer oder Vorsitz."
     }
   },
   "projects": {

@@ -29,13 +29,18 @@ type ClubSettingsHandler struct {
 	db     *pgxpool.Pool
 	config *config.Config
 	log    zerolog.Logger
+
+	// municipalities names the club's municipality codes for the settings
+	// page; nil answers every lookup as unavailable.
+	municipalities *municipalityNames
 }
 
 func NewClubSettingsHandler(db *pgxpool.Pool, cfg *config.Config, log zerolog.Logger) *ClubSettingsHandler {
 	return &ClubSettingsHandler{
-		db:     db,
-		config: cfg,
-		log:    log.With().Str("handler", "club_settings").Logger(),
+		db:             db,
+		config:         cfg,
+		log:            log.With().Str("handler", "club_settings").Logger(),
+		municipalities: newMunicipalityNames(newKartverketMunicipalities(cfg)),
 	}
 }
 
@@ -316,6 +321,11 @@ type clubFinancialSettings struct {
 	JoinPriceItemID string   `json:"join_price_item_id"`
 	JoinOpen        bool     `json:"join_open"`
 	JoinMissing     []string `json:"join_missing"`
+
+	// MunicipalityCodes are the kommunenummer whose verified residents
+	// count as local when they join (BRY-643, BRD-16); empty means
+	// residency cannot be decided.
+	MunicipalityCodes []string `json:"municipality_codes"`
 }
 
 // HandleGetFinancialSettings returns the club's invoice-relevant
@@ -359,7 +369,8 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		        feature_commerce, feature_accounting,
 		        (anthropic_api_key IS NOT NULL AND anthropic_api_key != ''),
 		        board_notification_email,
-		        COALESCE(join_price_item_id::text, '')
+		        COALESCE(join_price_item_id::text, ''),
+		        municipality_codes
 		   FROM clubs WHERE id = $1`,
 		claims.ClubID,
 	).Scan(&s.Name, &s.OrgNumber, &s.Address,
@@ -390,7 +401,8 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		&s.FeatureCommerce, &s.FeatureAccounting,
 		&s.HasAnthropicKey,
 		&s.BoardNotificationEmail,
-		&s.JoinPriceItemID); err != nil {
+		&s.JoinPriceItemID,
+		&s.MunicipalityCodes); err != nil {
 		h.log.Error().Err(err).Msg("load financial settings")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
@@ -400,6 +412,9 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		h.log.Error().Err(err).Msg("load join state")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
+	}
+	if s.MunicipalityCodes == nil {
+		s.MunicipalityCodes = []string{}
 	}
 	s.JoinOpen = join.open()
 	s.JoinMissing = join.missing
@@ -471,6 +486,10 @@ type updateFinancialSettingsRequest struct {
 	// JoinPriceItemID: omitted = keep; "" = close joining; otherwise an
 	// active, flat price item of the caller's club.
 	JoinPriceItemID *string `json:"join_price_item_id,omitempty"`
+
+	// MunicipalityCodes: omitted (or null) = keep; [] = clear; otherwise
+	// four-digit kommunenummer, deduplicated, at most maxMunicipalityCodes.
+	MunicipalityCodes *[]string `json:"municipality_codes,omitempty"`
 }
 
 // HandleUpdateFinancialSettings updates org_number, address, and
@@ -527,6 +546,10 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 	}
 	if msg != "" {
 		Error(w, http.StatusBadRequest, msg)
+		return
+	}
+	oldMunicipalityCodes, ok := h.checkMunicipalityCodes(ctx, w, claims.ClubID, req.MunicipalityCodes)
+	if !ok {
 		return
 	}
 	oldJoinPriceItem, ok := h.checkJoinPriceItem(ctx, w, claims.ClubID, req.JoinPriceItemID)
@@ -596,7 +619,8 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		   board_notification_email  = COALESCE($44, board_notification_email),
 		   join_price_item_id        = CASE
 		                                 WHEN $45::text IS NULL THEN join_price_item_id
-		                                 ELSE NULLIF($45::text, '')::uuid END
+		                                 ELSE NULLIF($45::text, '')::uuid END,
+		   municipality_codes        = COALESCE($46::text[], municipality_codes)
 		 WHERE id = $1`,
 		claims.ClubID, req.OrgNumber, req.Address, req.Phone, req.VHFChannel,
 		req.Latitude, req.Longitude,
@@ -622,22 +646,13 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		req.AutomaticBooking,
 		req.BoardNotificationEmail,
 		req.JoinPriceItemID,
+		req.MunicipalityCodes,
 	); err != nil {
 		h.log.Error().Err(err).Msg("update financial settings")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	// Field names only. The request carries a secret (the Anthropic key) and
-	// board members' addresses; a value in the log outlives a rotation or an
-	// erasure.
-	details := map[string]any{"fields": suppliedSettingFields(req)}
-	// The one exception to names-only: the join price item is a catalogue
-	// id, not personal data or a secret, and which item joiners are charged
-	// is what a reviewer of this row needs to see ("" = joining closed).
-	if req.JoinPriceItemID != nil {
-		details["join_price_item_id"] = map[string]string{"old": oldJoinPriceItem, "new": *req.JoinPriceItemID}
-	}
-	auditData, _ := json.Marshal(details)
+	auditData, _ := json.Marshal(settingsAuditDetails(req, oldJoinPriceItem, oldMunicipalityCodes))
 	if _, auditErr := h.db.Exec(ctx,
 		`INSERT INTO audit_log (club_id, actor_id, actor_ip, action, resource, resource_id, details)
 		 VALUES ($1, $2, '', $3, 'clubs', $5, $4)`,
@@ -646,6 +661,54 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		h.log.Error().Err(auditErr).Msg("audit financial settings")
 	}
 	JSON(w, http.StatusOK, map[string]string{"status": "updated"})
+}
+
+// settingsAuditDetails is the update_financial_settings audit payload: field
+// names only. The request carries a secret (the Anthropic key) and board
+// members' addresses; a value in the log outlives a rotation or an erasure.
+func settingsAuditDetails(req updateFinancialSettingsRequest, oldJoinPriceItem string, oldMunicipalityCodes []string) map[string]any {
+	details := map[string]any{"fields": suppliedSettingFields(req)}
+	// An exception to names-only: the join price item is a catalogue id, not
+	// personal data or a secret, and which item joiners are charged is what a
+	// reviewer of this row needs to see ("" = joining closed).
+	if req.JoinPriceItemID != nil {
+		details["join_price_item_id"] = map[string]string{"old": oldJoinPriceItem, "new": *req.JoinPriceItemID}
+	}
+	// The other exception: municipality codes are public numbers, not
+	// personal data or a secret, and which ones count as local decides who
+	// gets the local terms, so a reviewer needs the before and after.
+	if req.MunicipalityCodes != nil {
+		if oldMunicipalityCodes == nil {
+			oldMunicipalityCodes = []string{}
+		}
+		details["municipality_codes"] = map[string][]string{"old": oldMunicipalityCodes, "new": *req.MunicipalityCodes}
+	}
+	return details
+}
+
+// checkMunicipalityCodes validates a municipality_codes setting (normalising
+// it in place) and returns the club's current codes for the audit row. It
+// reports false having written the error response.
+func (h *ClubSettingsHandler) checkMunicipalityCodes(ctx context.Context, w http.ResponseWriter, clubID string, codes *[]string) ([]string, bool) {
+	if codes == nil {
+		return nil, true
+	}
+	if !normalizeMunicipalityCodes(codes) {
+		JSON(w, http.StatusBadRequest, map[string]string{
+			"error": fmt.Sprintf("municipality_codes must be at most %d four-digit municipality numbers", maxMunicipalityCodes),
+			"code":  codeInvalidMunicipalityCodes,
+		})
+		return nil, false
+	}
+	var old []string
+	if err := h.db.QueryRow(ctx,
+		`SELECT municipality_codes FROM clubs WHERE id = $1`, clubID,
+	).Scan(&old); err != nil {
+		h.log.Error().Err(err).Msg("load municipality codes")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return nil, false
+	}
+	return old, true
 }
 
 // checkJoinPriceItem validates a join_price_item_id setting (trimming it in

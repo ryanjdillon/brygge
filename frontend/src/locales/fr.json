@@ -1362,7 +1362,18 @@
       "joinFixDocuments": "Aller aux documents juridiques",
       "joinPriceListFailed": "Impossible de charger la liste des prix.",
       "joinPriceCurrent": "Prix d’adhésion actuel",
-      "joinAskAdmin": "Demandez à un administrateur de publier les documents."
+      "joinAskAdmin": "Demandez à un administrateur de publier les documents.",
+      "municipalityCodesLabel": "Communes considérées comme locales",
+      "municipalityCodesHint": "Une personne dont l’adresse vérifiée se trouve dans l’une de ces communes est considérée comme locale (priorité pour les places de port et les parts de port). Pensez à mettre la liste à jour après une fusion de communes.",
+      "municipalityCodesInput": "Numéro de commune (quatre chiffres)",
+      "municipalityCodesAdd": "Ajouter",
+      "municipalityCodesRemove": "Retirer {code}",
+      "municipalityCodesNone": "Aucune commune définie.",
+      "municipalityCodesBadInput": "Un numéro de commune a quatre chiffres.",
+      "municipalityCodesMax": "Vous pouvez définir au plus {max} communes.",
+      "municipalityCodesUnknown": "numéro de commune inconnu",
+      "municipalityCodesInvalid": "La liste n’a pas été enregistrée : chaque numéro de commune doit avoir quatre chiffres, et il peut y en avoir au plus 20.",
+      "joinLocalUnset": "L’appartenance locale ne peut pas être déterminée tant que les communes ne sont pas définies"
     },
     "faktura": {
       "draft": {
@@ -1939,7 +1950,7 @@
     },
     "siteSettings": {
       "boardNotificationEmail": "Avis d'adhésion à",
-      "boardNotificationEmailHint": "Adresse où le bureau est informé des nouveaux membres et des paiements d'adhésion remboursés. Laissez vide pour utiliser la boîte partagée du club (post@), sinon le secrétaire ou le président."
+      "boardNotificationEmailHint": "Adresse où le bureau est informé des nouveaux membres, des paiements d’adhésion remboursés, des adhésions à vérifier, des résiliations et résiliations annulées, et des résiliations qui n’ont pas pu aboutir. Laissez vide pour utiliser la boîte partagée du club (post@), sinon le secrétaire ou le président."
     }
   },
   "projects": {

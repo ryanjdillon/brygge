@@ -2039,7 +2039,7 @@
         "accounting": "Rekneskap og faktura"
       },
       "boardNotificationEmail": "Varsel om medlemskap til",
-      "boardNotificationEmailHint": "Hit får styret melding om nye medlemmer og refunderte innmeldingsbetalingar. La feltet stå tomt for å bruke den felles postkassa til klubben (post@), elles sekretær eller leiar."
+      "boardNotificationEmailHint": "Hit får styret melding om nye medlemmer, refunderte innmeldingsbetalingar, innmeldingar som må kontrollerast, utmeldingar og angra utmeldingar, og utmeldingar som ikkje kunne gjennomførast. La feltet stå tomt for å bruke den felles postkassa til klubben (post@), elles sekretær eller leiar."
     },
     "harborSettings": {
       "pageTitle": "Hamn og bubil",
@@ -2131,7 +2131,18 @@
       "joinFixDocuments": "Gå til juridiske dokument",
       "joinPriceListFailed": "Kunne ikkje laste prisliste.",
       "joinPriceCurrent": "Gjeldande innmeldingspris",
-      "joinAskAdmin": "Be ein administrator publisere dokumenta."
+      "joinAskAdmin": "Be ein administrator publisere dokumenta.",
+      "municipalityCodesLabel": "Kommunar som gjeld som lokale",
+      "municipalityCodesHint": "Ein person med stadfesta adresse i ein av desse kommunane blir rekna som lokal (prioritet på båtplass og innskot). Hugs å oppdatere ved kommunesamanslåing.",
+      "municipalityCodesInput": "Kommunenummer (fire siffer)",
+      "municipalityCodesAdd": "Legg til",
+      "municipalityCodesRemove": "Fjern {code}",
+      "municipalityCodesNone": "Ingen kommunar er sette.",
+      "municipalityCodesBadInput": "Eit kommunenummer har fire siffer.",
+      "municipalityCodesMax": "Du kan setje høgst {max} kommunar.",
+      "municipalityCodesUnknown": "ukjent kommunenummer",
+      "municipalityCodesInvalid": "Lista vart ikkje lagra: kvart kommunenummer må ha fire siffer, og det kan vere høgst 20.",
+      "joinLocalUnset": "Lokal tilhøyrsle kan ikkje avgjerast før kommunar er sette"
     },
     "bankAccounts": {
       "title": "Bankkontoar",

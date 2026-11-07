@@ -1337,7 +1337,18 @@
       "joinFixDocuments": "Przejdź do dokumentów prawnych",
       "joinPriceListFailed": "Nie udało się wczytać cennika.",
       "joinPriceCurrent": "Obecna opłata za dołączenie",
-      "joinAskAdmin": "Poproś administratora o opublikowanie dokumentów."
+      "joinAskAdmin": "Poproś administratora o opublikowanie dokumentów.",
+      "municipalityCodesLabel": "Gminy uznawane za lokalne",
+      "municipalityCodesHint": "Osoba z potwierdzonym adresem w jednej z tych gmin jest uznawana za lokalną (pierwszeństwo przy miejscach w porcie i udziałach portowych). Pamiętaj, aby zaktualizować listę po połączeniu gmin.",
+      "municipalityCodesInput": "Numer gminy (cztery cyfry)",
+      "municipalityCodesAdd": "Dodaj",
+      "municipalityCodesRemove": "Usuń {code}",
+      "municipalityCodesNone": "Nie ustawiono żadnych gmin.",
+      "municipalityCodesBadInput": "Numer gminy ma cztery cyfry.",
+      "municipalityCodesMax": "Możesz ustawić najwyżej {max} gmin.",
+      "municipalityCodesUnknown": "nieznany numer gminy",
+      "municipalityCodesInvalid": "Lista nie została zapisana: każdy numer gminy musi mieć cztery cyfry, a gmin może być najwyżej 20.",
+      "joinLocalUnset": "Nie można ustalić przynależności lokalnej, dopóki nie ustawiono gmin"
     },
     "faktura": {
       "draft": {
@@ -1911,7 +1922,7 @@
     },
     "siteSettings": {
       "boardNotificationEmail": "Powiadomienia o członkostwie do",
-      "boardNotificationEmailHint": "Tu zarząd otrzymuje informacje o nowych członkach i zwróconych opłatach wpisowych. Zostaw puste, aby użyć wspólnej skrzynki klubu (post@), a w przeciwnym razie sekretarza lub prezesa."
+      "boardNotificationEmailHint": "Tu zarząd otrzymuje informacje o nowych członkach, zwróconych opłatach wpisowych, przystąpieniach do sprawdzenia, rezygnacjach i cofniętych rezygnacjach oraz rezygnacjach, których nie udało się zakończyć. Zostaw puste, aby użyć wspólnej skrzynki klubu (post@), a w przeciwnym razie sekretarza lub prezesa."
     }
   },
   "projects": {

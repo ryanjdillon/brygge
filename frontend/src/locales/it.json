@@ -1363,7 +1363,18 @@
       "joinFixDocuments": "Vai ai documenti legali",
       "joinPriceListFailed": "Impossibile caricare il listino prezzi.",
       "joinPriceCurrent": "Quota di iscrizione attuale",
-      "joinAskAdmin": "Chiedi a un amministratore di pubblicare i documenti."
+      "joinAskAdmin": "Chiedi a un amministratore di pubblicare i documenti.",
+      "municipalityCodesLabel": "Comuni considerati locali",
+      "municipalityCodesHint": "Chi ha un indirizzo verificato in uno di questi comuni è considerato locale (priorità per posti barca e quote del porto). Ricorda di aggiornare l’elenco dopo una fusione di comuni.",
+      "municipalityCodesInput": "Numero del comune (quattro cifre)",
+      "municipalityCodesAdd": "Aggiungi",
+      "municipalityCodesRemove": "Rimuovi {code}",
+      "municipalityCodesNone": "Nessun comune impostato.",
+      "municipalityCodesBadInput": "Un numero di comune ha quattro cifre.",
+      "municipalityCodesMax": "Puoi impostare al massimo {max} comuni.",
+      "municipalityCodesUnknown": "numero di comune sconosciuto",
+      "municipalityCodesInvalid": "L’elenco non è stato salvato: ogni numero di comune deve avere quattro cifre e possono essere al massimo 20.",
+      "joinLocalUnset": "La residenza locale non può essere determinata finché non sono impostati i comuni"
     },
     "faktura": {
       "draft": {
@@ -1940,7 +1951,7 @@
     },
     "siteSettings": {
       "boardNotificationEmail": "Avvisi di adesione a",
-      "boardNotificationEmailHint": "Dove il consiglio riceve gli avvisi di nuovi soci e di quote di adesione rimborsate. Lascia vuoto per usare la casella condivisa del club (post@), altrimenti il segretario o il presidente."
+      "boardNotificationEmailHint": "Dove il consiglio riceve gli avvisi di nuovi soci, quote di adesione rimborsate, adesioni da controllare, recessi e recessi annullati, e recessi che non è stato possibile completare. Lascia vuoto per usare la casella condivisa del club (post@), altrimenti il segretario o il presidente."
     }
   },
   "projects": {

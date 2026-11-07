@@ -984,6 +984,11 @@ func newRouter(d routeDeps) *chi.Mux {
 					middleware.RequireRole("treasurer", "admin"),
 					middleware.RequireFreshTOTPDefault(),
 				).Patch("/settings/site", clubSettingsHandler.HandleUpdateFinancialSettings)
+				// Names the club's municipality codes for the settings
+				// page (BRY-643); read-only, so it takes the site
+				// settings' read gate.
+				r.With(middleware.RequireRoleOrBoardRead("treasurer", "admin")).
+					Get("/settings/municipalities/{code}", clubSettingsHandler.HandleLookupMunicipality)
 
 				// Economy-specific assets (faktura logo). Gated on the
 				// accounting feature flag.
