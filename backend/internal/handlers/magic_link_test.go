@@ -41,6 +41,29 @@ func TestHandleRequestMagicLinkMissingEmail(t *testing.T) {
 	}
 }
 
+// A link request must declare a JSON body (BRY-660): a cross-site HTML form
+// can only send form or text types. Refused before the database.
+func TestHandleRequestMagicLinkRequiresJSON(t *testing.T) {
+	h, mock := newTestMagicLinkHandler(t)
+	r := chi.NewRouter()
+	r.Post("/auth/magic-link", h.HandleRequestMagicLink)
+
+	for _, ct := range []string{"", "text/plain", "application/x-www-form-urlencoded", "multipart/form-data; boundary=x"} {
+		req := httptest.NewRequest(http.MethodPost, "/auth/magic-link", strings.NewReader(`{"email":"medlem@example.test"}`))
+		if ct != "" {
+			req.Header.Set("Content-Type", ct)
+		}
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnsupportedMediaType {
+			t.Errorf("Content-Type %q: %d, want 415", ct, rec.Code)
+		}
+	}
+	if len(mock.Calls) != 0 {
+		t.Errorf("sent %d mails for refused requests", len(mock.Calls))
+	}
+}
+
 func TestHandleRequestMagicLinkInvalidBody(t *testing.T) {
 	h, _ := newTestMagicLinkHandler(t)
 

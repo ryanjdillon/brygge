@@ -99,16 +99,45 @@ export function createUser(roles: string[], label = 'login'): TestUser {
 }
 
 /**
- * Deactivates the users and drops their login links. They are not deleted:
- * audit_log rows (auth.login_success etc.) reference them.
+ * Deactivates the users and drops their login links and join requests. They
+ * are not deleted: audit_log rows (auth.login_success etc.) reference them.
  */
 export function retireUsers(users: TestUser[]): void {
   if (users.length === 0) return
   const emails = users.map((u) => lit(u.email)).join(', ')
   psql(`
     DELETE FROM magic_links WHERE email IN (${emails});
+    DELETE FROM membership_applications WHERE email IN (${emails});
     UPDATE users SET deactivated_at = now() WHERE email IN (${emails}) AND deactivated_at IS NULL;
   `)
+}
+
+/**
+ * A synthetic address under example.test for a join request, which needs no
+ * user row. Pass it to retireUsers (with an empty id) to drop the request.
+ */
+export function joinAddress(label = 'join', localPartLength = 0): TestUser {
+  const pad = localPartLength > 0 ? `-${'x'.repeat(localPartLength)}` : ''
+  return { id: '', email: `e2e-${label}${pad}-${randomBytes(6).toString('hex')}@example.test` }
+}
+
+/**
+ * Stores an unconfirmed join request for email the way POST /join does (only
+ * the token's sha256 hex, valid 24 hours) and returns the raw token for
+ * /join/confirm?token=….
+ */
+export function insertJoinApplication(email: string, firstName = 'E2E'): string {
+  const token = randomBytes(32).toString('base64url')
+  const out = psql(`
+    INSERT INTO membership_applications (club_id, first_name, last_name, email, token_hash, consent_versions, expires_at)
+    SELECT id, ${lit(firstName)}, 'Testsøker', ${lit(email)}, ${lit(tokenHash(token))}, '{}', now() + interval '24 hours'
+    FROM clubs WHERE slug = ${lit(CLUB_SLUG)}
+    RETURNING 1;
+  `)
+  if (out !== '1') {
+    throw new Error(`insertJoinApplication: no club with slug ${CLUB_SLUG} in ${DB_NAME}`)
+  }
+  return token
 }
 
 /**
@@ -118,6 +147,7 @@ export function retireUsers(users: TestUser[]): void {
 export function sweepStaleUsers(): void {
   psql(`
     DELETE FROM magic_links WHERE email LIKE 'e2e-%@example.test' AND created_at < now() - interval '1 hour';
+    DELETE FROM membership_applications WHERE email LIKE 'e2e-%@example.test' AND created_at < now() - interval '1 hour';
     UPDATE users SET deactivated_at = now()
      WHERE email LIKE 'e2e-%@example.test' AND deactivated_at IS NULL AND created_at < now() - interval '1 hour';
   `)
@@ -156,19 +186,22 @@ export interface AuthAuditRow {
   action: string
   method: string
   reason: string
+  // 'peek' when the login page's peek refused the token (BRY-660), else ''.
+  stage: string
   ip: string
 }
 
 /** The auth.* audit rows recorded for the user, oldest first. */
 export function authAudit(userId: string): AuthAuditRow[] {
   const out = psql(`
-    SELECT action, coalesce(details->>'method', ''), coalesce(details->>'reason', ''), actor_ip
+    SELECT action, coalesce(details->>'method', ''), coalesce(details->>'reason', ''),
+           coalesce(details->>'stage', ''), actor_ip
     FROM audit_log WHERE actor_id = ${lit(userId)} AND action LIKE 'auth.%' ORDER BY created_at;
   `)
   if (out === '') return []
   return out.split('\n').map((line) => {
-    const [action, method, reason, ip] = line.split('|')
-    return { action, method, reason, ip }
+    const [action, method, reason, stage, ip] = line.split('|')
+    return { action, method, reason, stage, ip }
   })
 }
 

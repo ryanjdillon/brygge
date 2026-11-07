@@ -20,6 +20,7 @@ Tracking issue: **DIL-245**.
 | `RequireAdminTOTP` | TOTP enrolled **and** verified within the 12 h step-up window. Applied once to the whole `/admin` subtree. | `403 totp_required` / `403 totp_not_enrolled`, or `302` for top-level browser navigations |
 | `RequireFreshTOTP(window)` / `RequireFreshTOTPDefault()` | TOTP verified within a short per-action window (default 10 min, `AUTH_FRESH_TOTP_WINDOW`). For high-blast-radius mutations. | `403 totp_fresh_required` (with `window_seconds`), or `302` for browser navigations |
 | `RequireFreshTOTPIfEnrolled()` | Same fresh-window check, but only for users who already have a second factor (TOTP or passkey); users with none pass. Guards TOTP `setup`/`confirm` so an existing factor can't be replaced from a stale session. Fails closed without session info. | `403 totp_fresh_required` (with `window_seconds`), or `302` for browser navigations |
+| `crossOriginGuard` (`http.CrossOriginProtection`, BRY-660) | Wraps all of `/api/v1`, after CORS and before every rate limiter. Refuses POST/PUT/PATCH/DELETE a browser marks `Sec-Fetch-Site: cross-site` or `same-site`, or (no such header) whose `Origin` host is not the request's, unless the Origin is `FRONTEND_URL`. Requests with neither header pass. Bypassed for `POST /vipps/webhooks`, `POST /stripe/webhooks`, `POST /unsubscribe` and `/dev/query` (`crossOriginBypass` in `cmd/api/crossorigin.go`). | `403 {"error":"cross_site_request"}` (warn log: method and path only) |
 | `RequireDevToken(svc, scope)` | Developer bearer token (`Authorization: Bearer bry_dev_…`) that is live, carries `scope`, and whose minter is still an active admin of the club (checked per request in `devtoken.Authenticate`, BRY-540). Ignores cookies entirely; injects claims for the token's creator and club with **no roles**, plus the token id. Used only on `/api/v1/dev/query` (BRY-115). | `401 developer bearer token required` / `401 invalid or expired developer token` (also when the minter is deactivated or no longer admin) / `500 token verification failed` |
 
 Notes:
@@ -85,14 +86,17 @@ keep `moneyGate` (treasurer/admin + fresh step-up).
 |---|---|
 | `GET /health`, `GET /features` | none |
 | `GET /pricing`, `GET /products`, `GET /boat-models`, `GET /weather`, `GET /club`, `GET /club/logo[.svg]` | none (rate-limited) |
-| `POST /contact` | none (own 5/min per-IP limiter keyed `contact:<ip bucket>`, separate from the strict auth bucket; fails closed (503 `rate_limit_unavailable`) if Redis errors; mails the club; honeypot field `website`) |
+| `POST /contact` | none (own 5/min per-IP limiter keyed `contact:<ip bucket>`, separate from the strict auth bucket; fails closed (503 `rate_limit_unavailable`) if Redis errors; JSON-only, 415 otherwise; mails the club; honeypot field `website`) |
 | `GET /legal/{docType}` | none |
 | `GET /map/*` | none |
-| `POST /auth/magic-link`, `POST /auth/verify`, `GET /auth/verify`, `POST /auth/passkeys/login/begin`, `POST /auth/passkeys/login/finish` | none (strict rate-limit, 5/min per IP bucket (an IPv6 /64); fails closed: 503 `rate_limit_unavailable` with `Retry-After` while Redis is unreadable). `POST /auth/verify` is JSON-only (415 otherwise; with the single-origin CORS allow-list this is the login-CSRF guard) and ends any session the request already carried and is the only route that consumes a login token; the GET redirects to the SPA page `/login/verify` |
+| `POST /auth/magic-link`, `POST /auth/verify`, `GET /auth/verify`, `POST /auth/passkeys/login/begin`, `POST /auth/passkeys/login/finish` | none (strict rate-limit, 5/min per IP bucket (an IPv6 /64); fails closed: 503 `rate_limit_unavailable` with `Retry-After` while Redis is unreadable). `POST /auth/magic-link` and `POST /auth/verify` are JSON-only (415 otherwise; a layer of the cross-site guard with the single-origin CORS allow-list, behind `crossOriginGuard`). `POST /auth/verify` ends any session the request already carried and is the only route that consumes a login token; the GET redirects to the SPA page `/login/verify` |
+| `POST /auth/verify/peek` | none (own fail-closed 10/min per-IP limiter keyed `login-peek:<ip bucket>`, separate from the strict auth bucket; 503 `rate_limit_unavailable` while Redis is unreadable). JSON-only (415). Answers the full address the login link logs in as; never consumes the token or sets a cookie; a refusal is 410 with the `login_token_*` code and no address (BRY-660) |
+| `POST /vipps/webhooks`, `POST /stripe/webhooks` | none — the provider's HMAC signature is the gate; bypassed by `crossOriginGuard` |
+| `GET /unsubscribe`, `POST /unsubscribe` | none (rate-limited) — the per-member token is the capability; the POST (RFC 8058 one-click) is bypassed by `crossOriginGuard` |
 | `GET /harbor/layout` | `OptionalSessionAuth` |
 | `POST /bookings` | `OptionalSessionAuth` (guest booking) |
 | `GET /betal/{token}`, `GET /checkout/{token}*`, `GET /betal/bruker/{token}` | none — the durable token is the capability (per-invoice and per-member payables links) |
-| `POST /dev/query` | `RequireDevToken(db_query)` + per-IP and per-token (60/min) rate limits. Only mounted when `DEV_QUERY_TOKENS_ENABLED`. No session, no TOTP — the short-lived token is the credential, and the handler is bounded by the read-only, PII-masked `brygge_dev_ro` role (BRY-115) |
+| `POST /dev/query` | `RequireDevToken(db_query)` + per-IP and per-token (60/min) rate limits. Only mounted when `DEV_QUERY_TOKENS_ENABLED`. No session, no TOTP — the short-lived token is the credential, and the handler is bounded by the read-only, PII-masked `brygge_dev_ro` role (BRY-115). Bypassed by `crossOriginGuard` |
 
 ## Authenticated member surfaces (`AuthenticateSession`, no role gate)
 

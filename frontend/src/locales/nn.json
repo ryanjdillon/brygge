@@ -299,7 +299,9 @@
           "title": "Noko gjekk gale",
           "body": "Vi fekk ikkje stadfesta innmeldinga. Prøv igjen om litt."
         }
-      }
+      },
+      "accountLabel": "Stadfest innmelding for",
+      "otherUser": "Du er logga inn som {current}; denne innmeldinga gjeld {account}."
     },
     "complete": {
       "title": "Fullfør innmeldinga",
@@ -459,7 +461,26 @@
         "retry": "Prøv igjen",
         "portal": "Gå til medlemssidene"
       },
-      "retry": "Prøv igjen"
+      "retry": "Prøv igjen",
+      "peeking": "Sjekkar innloggingslenkja …",
+      "accountLabel": "Du loggar inn som",
+      "notYou": "Ikkje deg?",
+      "notYouLink": "Be om ei ny lenkje",
+      "otherUser": "Du er logga inn som {current}; lenkja loggar inn som {account}.",
+      "peekFailed": {
+        "rate_limited": {
+          "title": "For mange forsøk",
+          "body": "Vi fekk ikkje sjekka lenkja akkurat no. Vent eit minutt, og prøv igjen. Innloggingslenkja verkar framleis."
+        },
+        "unavailable": {
+          "title": "Innlogging er mellombels utilgjengeleg",
+          "body": "Vi fekk ikkje sjekka lenkja. Prøv igjen om litt. Innloggingslenkja verkar framleis til ho går ut."
+        },
+        "failed": {
+          "title": "Vi fekk ikkje sjekka lenkja",
+          "body": "Sjekk nettsambandet og prøv igjen, eller be om ei ny innloggingslenkje."
+        }
+      }
     },
     "errors": {
       "rateLimited": "For mange forsøk. Vent eit minutt og prøv igjen.",

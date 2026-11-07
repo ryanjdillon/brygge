@@ -270,7 +270,9 @@
           "title": "Une erreur s'est produite",
           "body": "Votre demande n'a pas pu être confirmée. Réessayez dans un instant."
         }
-      }
+      },
+      "accountLabel": "Confirmer l’adhésion pour",
+      "otherUser": "Vous êtes connecté en tant que {current} ; cette adhésion concerne {account}."
     },
     "complete": {
       "title": "Finaliser l'adhésion",
@@ -403,7 +405,26 @@
         "retry": "Réessayer",
         "portal": "Aller aux pages membres"
       },
-      "retry": "Réessayer"
+      "retry": "Réessayer",
+      "peeking": "Vérification du lien de connexion…",
+      "accountLabel": "Vous vous connectez en tant que",
+      "notYou": "Ce n’est pas vous ?",
+      "notYouLink": "Demander un nouveau lien",
+      "otherUser": "Vous êtes connecté en tant que {current} ; ce lien connecte en tant que {account}.",
+      "peekFailed": {
+        "rate_limited": {
+          "title": "Trop de tentatives",
+          "body": "Nous n’avons pas pu vérifier le lien pour le moment. Attendez une minute, puis réessayez. Votre lien de connexion fonctionne toujours."
+        },
+        "unavailable": {
+          "title": "Connexion temporairement indisponible",
+          "body": "Nous n’avons pas pu vérifier le lien. Réessayez dans un instant. Votre lien de connexion reste valable jusqu’à son expiration."
+        },
+        "failed": {
+          "title": "Impossible de vérifier le lien",
+          "body": "Vérifiez votre connexion et réessayez, ou demandez un nouveau lien de connexion."
+        }
+      }
     },
     "errors": {
       "rateLimited": "Trop de tentatives. Patientez une minute et réessayez.",

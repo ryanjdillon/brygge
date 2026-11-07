@@ -29,6 +29,7 @@ type magicLinkHashEnv struct {
 	addr   string
 	mailer *email.MockSender
 	router chi.Router
+	h      *MagicLinkHandler
 }
 
 func newMagicLinkHashEnv(t *testing.T) *magicLinkHashEnv {
@@ -47,7 +48,8 @@ func newMagicLinkHashEnv(t *testing.T) *magicLinkHashEnv {
 	r.Post("/auth/magic-link", h.HandleRequestMagicLink)
 	r.Get("/auth/verify", h.HandleVerifyMagicLink)
 	r.Post("/auth/verify", h.HandleConsumeMagicLink)
-	return &magicLinkHashEnv{db: db, cfg: cfg, clubID: clubID, addr: addr, mailer: mailer, router: r}
+	r.Post("/auth/verify/peek", h.HandlePeekMagicLink)
+	return &magicLinkHashEnv{db: db, cfg: cfg, clubID: clubID, addr: addr, mailer: mailer, router: r, h: h}
 }
 
 // requestLink asks for a login link the way the login form does and returns
@@ -56,8 +58,10 @@ func (e *magicLinkHashEnv) requestLink(t *testing.T) string {
 	t.Helper()
 	before := len(e.mailer.Calls)
 	body, _ := json.Marshal(magicLinkRequest{Email: e.addr})
+	req := httptest.NewRequest(http.MethodPost, "/auth/magic-link", strings.NewReader(string(body)))
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-	e.router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/auth/magic-link", strings.NewReader(string(body))))
+	e.router.ServeHTTP(rec, req)
 	assertStatus(t, rec, http.StatusOK)
 	if len(e.mailer.Calls) != before+1 {
 		t.Fatalf("sent %d mails, want 1", len(e.mailer.Calls)-before)
@@ -74,6 +78,18 @@ func (e *magicLinkHashEnv) verify(t *testing.T, token string) *httptest.Response
 	t.Helper()
 	body, _ := json.Marshal(magicLinkVerifyRequest{Token: token})
 	req := httptest.NewRequest(http.MethodPost, "/auth/verify", strings.NewReader(string(body)))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	e.router.ServeHTTP(rec, req)
+	return rec
+}
+
+// peek asks which account token logs in as, the way the login page does on
+// load: a JSON POST to /auth/verify/peek.
+func (e *magicLinkHashEnv) peek(t *testing.T, token string) *httptest.ResponseRecorder {
+	t.Helper()
+	body, _ := json.Marshal(magicLinkVerifyRequest{Token: token})
+	req := httptest.NewRequest(http.MethodPost, "/auth/verify/peek", strings.NewReader(string(body)))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	e.router.ServeHTTP(rec, req)

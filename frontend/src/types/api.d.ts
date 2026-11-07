@@ -1176,7 +1176,7 @@ export interface paths {
         put?: never;
         /**
          * Request a magic-link sign-in email
-         * @description Mails a login link. 429 over the strict per-IP budget; 503 rate_limit_unavailable (with Retry-After) when the limiter cannot read Redis, since the strict limiter fails closed.
+         * @description Mails a login link. 415 unless Content-Type is application/json; 429 over the strict per-IP budget; 503 rate_limit_unavailable (with Retry-After) when the limiter cannot read Redis, since the strict limiter fails closed.
          */
         post: operations["request-magic-link"];
         delete?: never;
@@ -1380,6 +1380,26 @@ export interface paths {
          * @description Uses the token up and sets the session cookie. 410 with code login_token_invalid, login_token_used or login_token_expired; 415 unless Content-Type is application/json; 429 over the strict per-IP budget shared with the magic-link request; 503 rate_limit_unavailable (with Retry-After) when the limiter cannot read Redis, since the strict limiter fails closed. The token is not used up by a 429 or 503, so the same request can be retried.
          */
         post: operations["consume-magic-link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/verify/peek": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Show which account a magic-link token logs in as
+         * @description Never uses the token up and writes no session. Judges the token by the same rules as POST /api/v1/auth/verify and answers 200 with the full address the link was mailed to, which the login page shows before it offers the login button. 410 with code login_token_invalid, login_token_used or login_token_expired and no account (audited as auth.login_failed with details.stage peek); 415 unless Content-Type is application/json; 429 over its own per-IP budget of 10 a minute, separate from the strict login budget; 503 rate_limit_unavailable (with Retry-After) when that limiter cannot read Redis, since it fails closed.
+         */
+        post: operations["peek-magic-link"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1641,7 +1661,7 @@ export interface paths {
         put?: never;
         /**
          * Submit contact form
-         * @description Emails the message to the club's secretary (else chairman) with Reply-To set to the submitter. 502 when delivery fails, 503 when the club has no recipient or the server has no mail transport, 429 over its own 5/min per-IP budget, 503 rate_limit_unavailable (with Retry-After) when that limiter cannot read Redis (it fails closed).
+         * @description Emails the message to the club's secretary (else chairman) with Reply-To set to the submitter. 415 unless Content-Type is application/json; 502 when delivery fails, 503 when the club has no recipient or the server has no mail transport, 429 over its own 5/min per-IP budget, 503 rate_limit_unavailable (with Retry-After) when that limiter cannot read Redis (it fails closed).
          */
         post: operations["submit-contact-form"];
         delete?: never;
@@ -4677,6 +4697,8 @@ export interface components {
              * @enum {string}
              */
             code?: "join_token_invalid" | "join_token_used" | "join_token_expired";
+            /** @description The address the application was made with, when valid; empty otherwise */
+            email: string;
             /** @description The applicant's first name, when valid */
             first_name: string;
             /** @description Whether the link can still be confirmed */
@@ -4791,6 +4813,16 @@ export interface components {
             readonly $schema?: string;
             /** @description Legal documents */
             documents: components["schemas"]["LegalDocument"][] | null;
+        };
+        MagicLinkPeekResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/MagicLinkPeekResponse.json
+             */
+            readonly $schema?: string;
+            /** @description The full address the login link was mailed to: the account it logs in as */
+            account: string;
         };
         MagicLinkVerifyRequest: {
             /**
@@ -9694,6 +9726,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MagicLinkVerifyResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "peek-magic-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MagicLinkVerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MagicLinkPeekResponse"];
                 };
             };
             /** @description Error */

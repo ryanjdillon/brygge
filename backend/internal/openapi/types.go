@@ -175,6 +175,7 @@ type JoinAddressSearchResponse struct {
 type JoinConfirmStatusResponse struct {
 	Valid     bool   `json:"valid" doc:"Whether the link can still be confirmed"`
 	FirstName string `json:"first_name" doc:"The applicant's first name, when valid"`
+	Email     string `json:"email" doc:"The address the application was made with, when valid; empty otherwise"`
 	Code      string `json:"code,omitempty" enum:"join_token_invalid,join_token_used,join_token_expired" doc:"Why the link cannot be confirmed"`
 }
 
@@ -193,6 +194,10 @@ type MagicLinkVerifyRequest struct {
 
 type MagicLinkVerifyResponse struct {
 	Status string `json:"status" enum:"logged_in" doc:"Always logged_in; the session cookie is set"`
+}
+
+type MagicLinkPeekResponse struct {
+	Account string `json:"account" doc:"The full address the login link was mailed to: the account it logs in as"`
 }
 
 type JoinBankInvoiceResponse struct {

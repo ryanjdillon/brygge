@@ -302,7 +302,9 @@
           "title": "Noe gikk galt",
           "body": "Vi fikk ikke bekreftet innmeldingen. Prøv igjen om litt."
         }
-      }
+      },
+      "accountLabel": "Bekreft innmelding for",
+      "otherUser": "Du er logget inn som {current}; denne innmeldingen gjelder {account}."
     },
     "complete": {
       "title": "Fullfør innmeldingen",
@@ -462,7 +464,26 @@
         "retry": "Prøv igjen",
         "portal": "Gå til medlemssidene"
       },
-      "retry": "Prøv igjen"
+      "retry": "Prøv igjen",
+      "peeking": "Sjekker innloggingslenken …",
+      "accountLabel": "Du logger inn som",
+      "notYou": "Ikke deg?",
+      "notYouLink": "Be om en ny lenke",
+      "otherUser": "Du er logget inn som {current}; lenken logger inn som {account}.",
+      "peekFailed": {
+        "rate_limited": {
+          "title": "For mange forsøk",
+          "body": "Vi fikk ikke sjekket lenken akkurat nå. Vent et minutt, og prøv igjen. Innloggingslenken virker fortsatt."
+        },
+        "unavailable": {
+          "title": "Innlogging er midlertidig utilgjengelig",
+          "body": "Vi fikk ikke sjekket lenken. Prøv igjen om litt. Innloggingslenken virker fortsatt til den utløper."
+        },
+        "failed": {
+          "title": "Vi fikk ikke sjekket lenken",
+          "body": "Sjekk nettforbindelsen og prøv igjen, eller be om en ny innloggingslenke."
+        }
+      }
     },
     "errors": {
       "rateLimited": "For mange forsøk. Vent et minutt og prøv igjen.",

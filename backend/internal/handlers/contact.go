@@ -102,7 +102,13 @@ func pickContactRecipient(secretary, chairman string) string {
 	return ""
 }
 
+// HandleContactForm mails a public contact-form submission to the club. The
+// body must be declared application/json (415 otherwise, requireJSON), so a
+// cross-site HTML form cannot send mail through a visitor's browser (BRY-660).
 func (h *ContactHandler) HandleContactForm(w http.ResponseWriter, r *http.Request) {
+	if !requireJSON(w, r) {
+		return
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, contactMaxBody)
 	var req contactRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

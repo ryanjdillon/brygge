@@ -506,7 +506,7 @@ func (h *PasskeyHandler) auditLoginFailed(ctx context.Context, r *http.Request, 
 	if h.config != nil {
 		slug = h.config.ClubSlug
 	}
-	auditLoginFailed(ctx, h.audit, h.loginFailDedupe, r, userID, clubID, slug, loginMethodPasskey, reason)
+	auditLoginFailed(ctx, h.audit, h.loginFailDedupe, r, userID, clubID, slug, loginMethodPasskey, reason, "")
 }
 
 type passkeyAdminResetResponse struct {

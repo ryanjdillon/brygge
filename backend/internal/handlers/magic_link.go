@@ -89,9 +89,14 @@ type magicLinkResponse struct {
 func (h *MagicLinkHandler) SetLoginFailDedupe(rdb *redis.Client) { h.loginFailDedupe = rdb }
 
 // HandleRequestMagicLink sends a login link to the user's email.
-// Always returns 200 regardless of whether the email exists.
+// Always returns 200 regardless of whether the email exists. The body must be
+// declared application/json (415 otherwise, requireJSON), so a cross-site
+// HTML form cannot make a visitor's browser request links (BRY-660).
 func (h *MagicLinkHandler) HandleRequestMagicLink(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	if !requireJSON(w, r) {
+		return
+	}
 
 	var req magicLinkRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -180,12 +185,17 @@ const (
 // it consumes the token, creates the session and sets its cookie. Only a POST
 // consumes a login token, so opening the link (a GET) changes nothing.
 //
-// Login CSRF: requireJSON (exact media type application/json, else 415) keeps
-// another site from logging a visitor in as someone else, but only together
-// with the single-origin CORS allow-list in newRouter (cfg.FrontendURL). A
-// cross-site HTML form cannot send application/json, and a cross-origin fetch
-// that does needs a preflight, which that allow-list fails. Widening
-// AllowedOrigins breaks this guard. POST /join/confirm relies on the same pair.
+// Login CSRF is guarded in layers (docs/developer/reference/invariants.md).
+// newRouter wraps /api/v1 in http.CrossOriginProtection, which refuses a
+// cross-site or same-site browser POST with 403 cross_site_request before
+// this handler or its rate limiter runs. Behind it, requireJSON (exact media
+// type application/json, else 415) and the CORS allow-list still hold on
+// their own: a cross-site HTML form cannot send application/json, and a
+// cross-origin fetch that does needs a preflight that only cfg.FrontendURL
+// passes. The session cookie is SameSite=Lax on top. Neither layer stops an
+// attacker from mailing their own link to a victim, so the verify page first
+// shows the account the link logs in as (HandlePeekMagicLink) and offers the
+// button only then. POST /join/confirm relies on the same layers.
 //
 // A session the request already carries is deleted once the new one exists,
 // so logging in as someone else does not leave the previous login live.
@@ -222,7 +232,7 @@ func (h *MagicLinkHandler) HandleConsumeMagicLink(w http.ResponseWriter, r *http
 	).Scan(&linkEmail, &clubID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		code, rowEmail, rowClubID := h.refusal(ctx, token)
-		h.auditLoginFailed(ctx, r, rowEmail, rowClubID, code)
+		h.auditLoginFailed(ctx, r, rowEmail, rowClubID, code, "")
 		loginTokenRefused(w, code)
 		return
 	}
@@ -232,16 +242,11 @@ func (h *MagicLinkHandler) HandleConsumeMagicLink(w http.ResponseWriter, r *http
 		return
 	}
 
-	var userID string
-	err = h.db.QueryRow(ctx,
-		`SELECT id FROM users WHERE email = $1 AND club_id = $2
-		   AND kind = 'person' AND deactivated_at IS NULL`,
-		linkEmail, clubID,
-	).Scan(&userID)
+	userID, err := h.linkUser(ctx, linkEmail, clubID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		// The user was deactivated (or never was a person) after the link
 		// was sent: the link is spent and logs no one in.
-		h.auditLoginFailed(ctx, r, linkEmail, clubID, codeLoginTokenInvalid)
+		h.auditLoginFailed(ctx, r, linkEmail, clubID, codeLoginTokenInvalid, "")
 		loginTokenRefused(w, codeLoginTokenInvalid)
 		return
 	}
@@ -283,6 +288,91 @@ func (h *MagicLinkHandler) HandleConsumeMagicLink(w http.ResponseWriter, r *http
 	JSON(w, http.StatusOK, magicLinkVerifyResponse{Status: "logged_in"})
 }
 
+type magicLinkPeekResponse struct {
+	Account string `json:"account"`
+}
+
+// HandlePeekMagicLink tells the verify page which account its token logs in
+// as, so the page can show it before it offers the login button (BRY-660).
+// Without that, a visitor sent someone else's link would be logged into that
+// account with one click (login CSRF). The token is judged by exactly the
+// rules HandleConsumeMagicLink applies (unused, unexpired, an active person
+// user), and nothing is written to it: only the POST to /auth/verify
+// consumes a token.
+//
+// The answer is the full address the link was mailed to, not a masked one:
+// a mask can be matched by a lookalike address an attacker registers, the
+// full address is unique in the club, and the holder of the token already
+// has it (the link came to that inbox). A refusal is the same 410 as verify's,
+// with no account, and writes auth.login_failed with details.stage "peek"
+// (at most one an hour per user or IP bucket and reason, auditLoginFailed); a
+// successful peek writes no audit row. Answers are never cached (no-store).
+func (h *MagicLinkHandler) HandlePeekMagicLink(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	// The answer names a member's address: no cache may keep it.
+	w.Header().Set("Cache-Control", "no-store")
+	if !requireJSON(w, r) {
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
+	var req magicLinkVerifyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	token := strings.TrimSpace(req.Token)
+	if token == "" {
+		loginTokenRefused(w, codeLoginTokenInvalid)
+		return
+	}
+
+	// The same match the consume's UPDATE makes, read-only.
+	var linkEmail, clubID string
+	err := h.db.QueryRow(ctx,
+		`SELECT email, club_id FROM magic_links
+		 WHERE token_hash = $1 AND used = false AND expires_at > NOW()`,
+		magicLinkTokenHash(token),
+	).Scan(&linkEmail, &clubID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		code, rowEmail, rowClubID := h.refusal(ctx, token)
+		h.auditLoginFailed(ctx, r, rowEmail, rowClubID, code, loginStagePeek)
+		loginTokenRefused(w, code)
+		return
+	}
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to look up magic link for peek")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if _, err := h.linkUser(ctx, linkEmail, clubID); errors.Is(err, pgx.ErrNoRows) {
+		// Verify would refuse this link too (and spend it); peek leaves it.
+		h.auditLoginFailed(ctx, r, linkEmail, clubID, codeLoginTokenInvalid, loginStagePeek)
+		loginTokenRefused(w, codeLoginTokenInvalid)
+		return
+	} else if err != nil {
+		h.log.Error().Err(err).Msg("failed to look up user for magic link peek")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	JSON(w, http.StatusOK, magicLinkPeekResponse{Account: linkEmail})
+}
+
+// linkUser returns the active person user a login link logs in as: the one
+// with the link's exact address in the link's club. pgx.ErrNoRows when there
+// is none (deactivated since the link was sent, or never a person). Verify
+// and peek both use it, so they agree on which links log someone in.
+func (h *MagicLinkHandler) linkUser(ctx context.Context, linkEmail, clubID string) (string, error) {
+	var userID string
+	err := h.db.QueryRow(ctx,
+		`SELECT id FROM users WHERE email = $1 AND club_id = $2
+		   AND kind = 'person' AND deactivated_at IS NULL`,
+		linkEmail, clubID,
+	).Scan(&userID)
+	return userID, err
+}
+
 // refusal says why a token could not be consumed, so the page can tell the
 // member whether to ask for a new link because theirs expired or was already
 // used. Only the holder of the token can learn this. It also returns the
@@ -310,8 +400,9 @@ func (h *MagicLinkHandler) refusal(ctx context.Context, token string) (code, lin
 // row names an address, not a user, so the user is looked up by it, active
 // or not: a deactivated member's refused link is still theirs. The address
 // itself never goes in the row. With no link row (an unknown token) there is
-// no one to name.
-func (h *MagicLinkHandler) auditLoginFailed(ctx context.Context, r *http.Request, linkEmail, clubID, code string) {
+// no one to name. stage is "" for the login itself and loginStagePeek for the
+// verify page's peek.
+func (h *MagicLinkHandler) auditLoginFailed(ctx context.Context, r *http.Request, linkEmail, clubID, code, stage string) {
 	if h.audit == nil {
 		return
 	}
@@ -325,7 +416,7 @@ func (h *MagicLinkHandler) auditLoginFailed(ctx context.Context, r *http.Request
 			h.log.Warn().Err(err).Msg("login audit: resolve the link's user")
 		}
 	}
-	auditLoginFailed(ctx, h.audit, h.loginFailDedupe, r, userID, clubID, h.config.ClubSlug, loginMethodMagicLink, loginFailReason(code))
+	auditLoginFailed(ctx, h.audit, h.loginFailDedupe, r, userID, clubID, h.config.ClubSlug, loginMethodMagicLink, loginFailReason(code), stage)
 }
 
 func loginTokenRefused(w http.ResponseWriter, code string) {

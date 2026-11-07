@@ -270,7 +270,9 @@
           "title": "Qualcosa è andato storto",
           "body": "Non è stato possibile confermare la domanda. Riprova tra poco."
         }
-      }
+      },
+      "accountLabel": "Conferma l’iscrizione per",
+      "otherUser": "Hai già effettuato l’accesso come {current}; questa iscrizione è per {account}."
     },
     "complete": {
       "title": "Completa l’iscrizione",
@@ -403,7 +405,26 @@
         "retry": "Riprova",
         "portal": "Vai alle pagine dei soci"
       },
-      "retry": "Riprova"
+      "retry": "Riprova",
+      "peeking": "Verifica del link di accesso…",
+      "accountLabel": "Stai accedendo come",
+      "notYou": "Non sei tu?",
+      "notYouLink": "Richiedi un nuovo link",
+      "otherUser": "Hai già effettuato l’accesso come {current}; questo link accede come {account}.",
+      "peekFailed": {
+        "rate_limited": {
+          "title": "Troppi tentativi",
+          "body": "Non è stato possibile verificare il link in questo momento. Attendi un minuto e riprova. Il link di accesso funziona ancora."
+        },
+        "unavailable": {
+          "title": "Accesso temporaneamente non disponibile",
+          "body": "Non è stato possibile verificare il link. Riprova tra poco. Il link di accesso resta valido fino alla scadenza."
+        },
+        "failed": {
+          "title": "Impossibile verificare il link",
+          "body": "Controlla la connessione e riprova, oppure richiedi un nuovo link di accesso."
+        }
+      }
     },
     "errors": {
       "rateLimited": "Troppi tentativi. Attendi un minuto e riprova.",

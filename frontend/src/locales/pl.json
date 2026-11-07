@@ -270,7 +270,9 @@
           "title": "Coś poszło nie tak",
           "body": "Nie udało się potwierdzić zgłoszenia. Spróbuj ponownie za chwilę."
         }
-      }
+      },
+      "accountLabel": "Potwierdź zgłoszenie dla",
+      "otherUser": "Jesteś zalogowany jako {current}; to zgłoszenie dotyczy {account}."
     },
     "complete": {
       "title": "Dokończ przystąpienie",
@@ -403,7 +405,26 @@
         "retry": "Spróbuj ponownie",
         "portal": "Przejdź do stron członkowskich"
       },
-      "retry": "Spróbuj ponownie"
+      "retry": "Spróbuj ponownie",
+      "peeking": "Sprawdzanie linku logowania…",
+      "accountLabel": "Logujesz się jako",
+      "notYou": "To nie Ty?",
+      "notYouLink": "Poproś o nowy link",
+      "otherUser": "Jesteś zalogowany jako {current}; ten link loguje jako {account}.",
+      "peekFailed": {
+        "rate_limited": {
+          "title": "Zbyt wiele prób",
+          "body": "Nie udało się teraz sprawdzić linku. Odczekaj minutę i spróbuj ponownie. Twój link logowania nadal działa."
+        },
+        "unavailable": {
+          "title": "Logowanie chwilowo niedostępne",
+          "body": "Nie udało się sprawdzić linku. Spróbuj ponownie za chwilę. Twój link logowania działa do czasu wygaśnięcia."
+        },
+        "failed": {
+          "title": "Nie udało się sprawdzić linku",
+          "body": "Sprawdź połączenie i spróbuj ponownie albo poproś o nowy link logowania."
+        }
+      }
     },
     "errors": {
       "rateLimited": "Zbyt wiele prób. Odczekaj minutę i spróbuj ponownie.",

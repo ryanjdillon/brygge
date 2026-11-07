@@ -14,7 +14,10 @@ type Config struct {
 // NewAPI creates a huma API instance wrapping the given chi router.
 func NewAPI(router chi.Router, cfg Config) huma.API {
 	humaConfig := huma.DefaultConfig("Brygge API", "1.0.0")
-	humaConfig.Info.Description = "Marina and club management platform API"
+	humaConfig.Info.Description = "Marina and club management platform API. " +
+		"Every POST, PUT, PATCH and DELETE under /api/v1 that a browser marks as cross-site or same-site " +
+		"(Sec-Fetch-Site, or a foreign Origin) is refused with 403 {\"error\":\"cross_site_request\"} " +
+		"before any rate limit, except the provider webhooks, POST /api/v1/unsubscribe and /api/v1/dev/query."
 
 	humaConfig.Components.SecuritySchemes = map[string]*huma.SecurityScheme{
 		"sessionCookie": {

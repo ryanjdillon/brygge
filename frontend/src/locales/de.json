@@ -270,7 +270,9 @@
           "title": "Etwas ist schiefgelaufen",
           "body": "Ihr Antrag konnte nicht bestätigt werden. Versuchen Sie es gleich noch einmal."
         }
-      }
+      },
+      "accountLabel": "Antrag bestätigen für",
+      "otherUser": "Sie sind als {current} angemeldet; dieser Antrag gilt für {account}."
     },
     "complete": {
       "title": "Beitritt abschließen",
@@ -403,7 +405,26 @@
         "retry": "Erneut versuchen",
         "portal": "Zu den Mitgliederseiten"
       },
-      "retry": "Erneut versuchen"
+      "retry": "Erneut versuchen",
+      "peeking": "Anmeldelink wird geprüft …",
+      "accountLabel": "Sie melden sich an als",
+      "notYou": "Nicht Sie?",
+      "notYouLink": "Neuen Link anfordern",
+      "otherUser": "Sie sind als {current} angemeldet; dieser Link meldet Sie als {account} an.",
+      "peekFailed": {
+        "rate_limited": {
+          "title": "Zu viele Versuche",
+          "body": "Wir konnten den Link gerade nicht prüfen. Warten Sie eine Minute und versuchen Sie es erneut. Ihr Anmeldelink ist weiterhin gültig."
+        },
+        "unavailable": {
+          "title": "Anmeldung vorübergehend nicht verfügbar",
+          "body": "Wir konnten den Link nicht prüfen. Versuchen Sie es gleich noch einmal. Ihr Anmeldelink bleibt bis zum Ablauf gültig."
+        },
+        "failed": {
+          "title": "Link konnte nicht geprüft werden",
+          "body": "Prüfen Sie Ihre Verbindung und versuchen Sie es erneut, oder fordern Sie einen neuen Anmeldelink an."
+        }
+      }
     },
     "errors": {
       "rateLimited": "Zu viele Versuche. Warten Sie eine Minute und versuchen Sie es erneut.",

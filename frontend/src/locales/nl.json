@@ -270,7 +270,9 @@
           "title": "Er ging iets mis",
           "body": "Je aanmelding kon niet worden bevestigd. Probeer het zo opnieuw."
         }
-      }
+      },
+      "accountLabel": "Aanmelding bevestigen voor",
+      "otherUser": "Je bent ingelogd als {current}; deze aanmelding is voor {account}."
     },
     "complete": {
       "title": "Aanmelding afronden",
@@ -403,7 +405,26 @@
         "retry": "Opnieuw proberen",
         "portal": "Naar de ledenpagina's"
       },
-      "retry": "Opnieuw proberen"
+      "retry": "Opnieuw proberen",
+      "peeking": "Inloglink controleren…",
+      "accountLabel": "Je logt in als",
+      "notYou": "Niet jij?",
+      "notYouLink": "Vraag een nieuwe link aan",
+      "otherUser": "Je bent ingelogd als {current}; deze link logt in als {account}.",
+      "peekFailed": {
+        "rate_limited": {
+          "title": "Te veel pogingen",
+          "body": "We konden de link nu niet controleren. Wacht een minuut en probeer het opnieuw. Je inloglink werkt nog."
+        },
+        "unavailable": {
+          "title": "Inloggen is tijdelijk niet beschikbaar",
+          "body": "We konden de link niet controleren. Probeer het zo opnieuw. Je inloglink werkt nog tot hij verloopt."
+        },
+        "failed": {
+          "title": "We konden de link niet controleren",
+          "body": "Controleer je verbinding en probeer het opnieuw, of vraag een nieuwe inloglink aan."
+        }
+      }
     },
     "errors": {
       "rateLimited": "Te veel pogingen. Wacht een minuut en probeer het opnieuw.",

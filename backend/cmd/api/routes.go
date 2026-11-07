@@ -169,10 +169,15 @@ func newRouter(d routeDeps) *chi.Mux {
 	r.Use(chimw.Recoverer)
 	r.Use(middleware.Metrics)
 	r.Use(securityHeaders)
-	// One allowed origin. The JSON-only CSRF guard on the public
-	// POSTs (handlers.requireJSON: /auth/verify, /join, /join/confirm) relies
-	// on a cross-origin JSON POST failing preflight here; adding origins
-	// breaks it.
+	// One allowed origin. The JSON-only guard on the public POSTs
+	// (handlers.requireJSON: /auth/magic-link, /auth/verify, /auth/verify/peek,
+	// /contact, /join, /join/confirm) relies on a cross-origin JSON POST
+	// failing preflight here. It is the second layer: crossOriginGuard on
+	// /api/v1 refuses cross-site POSTs first, whatever their content type
+	// (docs/developer/reference/invariants.md). Against another site this
+	// layer still holds without the guard, so keep this list to
+	// cfg.FrontendURL; against a same-site sibling (webmail, matrix) on a
+	// cookie route, only the guard holds.
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{cfg.FrontendURL},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
@@ -192,6 +197,11 @@ func newRouter(d routeDeps) *chi.Mux {
 	authedRL := middleware.RateLimitByUser(rdb, log, 120, time.Minute)
 
 	r.Route("/api/v1", func(r chi.Router) {
+		// First under /api/v1: after the CORS handler, so preflights are
+		// answered as before, and ahead of every rate limiter, so a refused
+		// cross-site request costs no one's budget (BRY-660).
+		r.Use(crossOriginGuard(cfg, log))
+
 		r.Method(http.MethodGet, "/health", healthHandler)
 		r.Get("/features", featuresHandler.HandleGetFeatures)
 
@@ -225,6 +235,15 @@ func newRouter(d routeDeps) *chi.Mux {
 				r.Get("/verify", magicLinkHandler.HandleVerifyMagicLink)
 				r.Post("/verify", magicLinkHandler.HandleConsumeMagicLink)
 			})
+
+			// The verify page asks which account its link logs in as before
+			// it offers the button (BRY-660). It consumes nothing, and has
+			// its own fail-closed per-IP budget so that opening a link does
+			// not spend the strict login budget the button needs next.
+			loginPeekRL := middleware.NewRateLimiter(rdb, log, 10, time.Minute, func(r *http.Request) string {
+				return "login-peek:" + middleware.IPBucket(r.RemoteAddr)
+			}).FailClosed()
+			r.With(loginPeekRL.Handler).Post("/verify/peek", magicLinkHandler.HandlePeekMagicLink)
 
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.AuthenticateSession(sessionService))

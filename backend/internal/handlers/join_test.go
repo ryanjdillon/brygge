@@ -269,6 +269,13 @@ func TestJoinHappyPath(t *testing.T) {
 		if !st.Valid || st.FirstName != "Kari" {
 			t.Fatalf("confirm status = %+v, want valid for Kari", st)
 		}
+		if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+			t.Fatalf("confirm status Cache-Control = %q, want no-store", got)
+		}
+		// The page names the address the join is for (BRY-660).
+		if st.Email != addr {
+			t.Fatalf("confirm status email = %q, want %q", st.Email, addr)
+		}
 	}
 	if n := e.count(t, `SELECT count(*) FROM membership_applications WHERE club_id = $1 AND consumed_at IS NOT NULL`, e.clubID); n != 0 {
 		t.Fatal("GET consumed the application")
@@ -612,6 +619,9 @@ func TestJoinTokenExpiryAndUnknown(t *testing.T) {
 	st := decodeJSON[joinConfirmStatusResponse](t, e.do(t, http.MethodGet, "/join/confirm/"+token, nil))
 	if st.Valid || st.Code != codeJoinTokenExpired {
 		t.Errorf("status of an expired link = %+v", st)
+	}
+	if st.Email != "" {
+		t.Errorf("an expired link's status names the address %q", st.Email)
 	}
 	rec := e.do(t, http.MethodPost, "/join/confirm", map[string]string{"token": token})
 	assertStatus(t, rec, http.StatusGone)

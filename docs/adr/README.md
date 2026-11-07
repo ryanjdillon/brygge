@@ -9,7 +9,7 @@ Read the area's file before proposing a design in that area, and don't re-open a
 | Accounting | [accounting.md](accounting.md) | Bookkeeping standard, credit notes, refunds and disputes in the ledger, imported history, exemptions, reference years, automatic booking |
 | Payments | [payments.md](payments.md) | Online payment providers, Stripe card payments, refund button, provider fees |
 | Board workflows | [board-workflows.md](board-workflows.md) | Board task inbox, responsibility allocation, automation of manual steps, notifications, board visibility in the member directory, self-service membership (join, rejoin, residency, cancel) |
-| Platform | [platform.md](platform.md) | Cross-cutting product rules: multi-club configuration, mobile support |
+| Platform | [platform.md](platform.md) | Cross-cutting product rules: multi-club configuration, mobile support, login-link account display, cross-site request guard |
 | Mail | [mail.md](mail.md) | DMARC policy, third-party senders on the club domain, mail alert sensitivity, app mail via Amazon SES |
 
 ## Format

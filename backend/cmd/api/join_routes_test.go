@@ -80,7 +80,8 @@ func TestLoginVerifyRateLimit(t *testing.T) {
 	}
 }
 
-// The strict login limiter and the contact form's limiter fail closed: with
+// The strict login limiter, the login peek's and the contact form's limiters
+// fail closed: with
 // Redis unreachable each answers 503 rate_limit_unavailable before the
 // handler (BRY-662). Health, features and the standard-limited public reads
 // fail open and never answer 503 for a Redis outage.
@@ -90,6 +91,7 @@ func TestStrictRateLimitRoutesFailClosed(t *testing.T) {
 	for _, rt := range []struct{ method, path string }{
 		{http.MethodPost, "/api/v1/auth/magic-link"},
 		{http.MethodPost, "/api/v1/auth/verify"},
+		{http.MethodPost, "/api/v1/auth/verify/peek"},
 		{http.MethodGet, "/api/v1/auth/verify?token=x"},
 		{http.MethodPost, "/api/v1/auth/passkeys/login/begin"},
 		{http.MethodPost, "/api/v1/auth/passkeys/login/finish"},

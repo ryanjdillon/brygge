@@ -435,10 +435,14 @@ var joinAccepted = map[string]string{"status": "received"}
 // cross-site HTML form can only send form or text types, and CORS does not
 // stop such a "simple" POST from reaching the handler. A cross-origin fetch
 // that does send application/json needs a preflight, which the single-origin
-// CORS allow-list in newRouter (cfg.FrontendURL) fails. Together, and only
-// together, they keep another site from submitting or confirming a join, or
-// consuming a login link (HandleConsumeMagicLink), in a visitor's browser:
-// widening AllowedOrigins breaks this guard.
+// CORS allow-list in newRouter (cfg.FrontendURL) fails. This pair is the
+// second layer against another site submitting or confirming a join, asking
+// for or consuming a login link, or sending the contact form in a visitor's
+// browser. The first is http.CrossOriginProtection, which newRouter wraps
+// around /api/v1 and which refuses such a POST with 403 cross_site_request
+// whatever its content type (docs/developer/reference/invariants.md). Each
+// layer holds without the other, so keep requireJSON on these routes and the
+// CORS allow-list to cfg.FrontendURL.
 func requireJSON(w http.ResponseWriter, r *http.Request) bool {
 	mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || mt != "application/json" {
@@ -898,14 +902,23 @@ func loadJoinApplication(ctx context.Context, q pgxQuerier, clubID, token string
 type joinConfirmStatusResponse struct {
 	Valid     bool   `json:"valid"`
 	FirstName string `json:"first_name"`
-	Code      string `json:"code,omitempty"`
+	// Email is the address the application was made with, shown on the
+	// confirm page so a visitor sent someone else's link sees whose join
+	// they would confirm (BRY-660). Empty unless valid.
+	Email string `json:"email"`
+	Code  string `json:"code,omitempty"`
 }
 
 // HandleJoinConfirmStatus tells the confirm page whether its token can still
 // be confirmed. It only reads: the link a scanner prefetches lands here (via
-// the SPA) or on the page, and neither uses the token up.
+// the SPA) or on the page, and neither uses the token up. A valid link's
+// answer names the applicant's address, which the holder of the token was
+// mailed at.
 func (h *JoinHandler) HandleJoinConfirmStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	// A valid link's answer names the applicant's address: no cache may keep
+	// it (a GET, so a shared cache otherwise could).
+	w.Header().Set("Cache-Control", "no-store")
 	clubID, err := joinClubID(ctx, h.db, h.config.ClubSlug)
 	if err != nil {
 		h.log.Error().Err(err).Msg("join confirm status: resolve club failed")
@@ -922,7 +935,7 @@ func (h *JoinHandler) HandleJoinConfirmStatus(w http.ResponseWriter, r *http.Req
 		JSON(w, http.StatusOK, joinConfirmStatusResponse{Valid: false, Code: code})
 		return
 	}
-	JSON(w, http.StatusOK, joinConfirmStatusResponse{Valid: true, FirstName: app.firstName})
+	JSON(w, http.StatusOK, joinConfirmStatusResponse{Valid: true, FirstName: app.firstName, Email: app.email})
 }
 
 type joinConfirmRequest struct {

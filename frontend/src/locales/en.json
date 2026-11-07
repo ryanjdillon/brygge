@@ -302,7 +302,9 @@
           "title": "Something went wrong",
           "body": "We couldn't confirm your application. Try again shortly."
         }
-      }
+      },
+      "accountLabel": "Confirm the application for",
+      "otherUser": "You are logged in as {current}; this application is for {account}."
     },
     "complete": {
       "title": "Finish joining",
@@ -466,7 +468,26 @@
         "retry": "Try again",
         "portal": "Go to the member pages"
       },
-      "retry": "Try again"
+      "retry": "Try again",
+      "peeking": "Checking your login link…",
+      "accountLabel": "You are logging in as",
+      "notYou": "Not you?",
+      "notYouLink": "Request a new link",
+      "otherUser": "You are logged in as {current}; this link logs in as {account}.",
+      "peekFailed": {
+        "rate_limited": {
+          "title": "Too many attempts",
+          "body": "We could not check the link just now. Wait a minute, then try again. Your login link still works."
+        },
+        "unavailable": {
+          "title": "Login is temporarily unavailable",
+          "body": "We could not check the link. Try again shortly. Your login link still works until it expires."
+        },
+        "failed": {
+          "title": "We could not check the link",
+          "body": "Check your connection and try again, or request a new login link."
+        }
+      }
     },
     "errors": {
       "rateLimited": "Too many attempts. Wait a minute and try again.",

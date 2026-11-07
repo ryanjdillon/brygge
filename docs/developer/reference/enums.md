@@ -540,14 +540,14 @@ The public join routes (`handlers/join.go`) answer refusals as `{error, code}`.
 |---|---|---|---|
 | `terms_not_accepted` | 400 | `POST /join` | `accept_terms` was not true. |
 | `legal_document_stale` | 409 | `POST /join` | `consent_versions` was sent and a required document's version in it is not the club's current one (or is missing). The body carries the current `versions`; nothing is stored. Same code as `POST /members/me/consent`. |
-| `unsupported_media_type` | 415 | `POST /join`, `POST /join/confirm` | The body is not declared `application/json`. |
+| `unsupported_media_type` | 415 | `POST /join`, `POST /join/confirm` (and `POST /auth/magic-link`, `POST /auth/verify`, `POST /auth/verify/peek`, `POST /contact`, BRY-660) | The body is not declared `application/json`. |
 | `join_closed` | 409 | `POST /join`, `POST /join/confirm` | Joining is not open (see the reasons below). A confirm refused this way leaves the token usable until it expires. |
 | `join_token_invalid` | 410 | `POST /join/confirm` | No application of this club has the token (never issued, another club's, or purged). |
 | `join_token_used` | 410 | `POST /join/confirm` | The application was already confirmed. |
 | `join_token_expired` | 410 | `POST /join/confirm` | The 24 hours are up. |
 | `rejoin_blocked` | 409 | `POST /join/confirm` | The board marked the address "can't rejoin" (`users.rejoin_blocked`, BRD-15) after the request; nothing is changed and the token is spent. |
 | `already_member` | 409 | `POST /join/confirm` | The address became an active user with another role after the request; nothing is created and the token is spent. |
-| `rate_limit_unavailable` | 503 | `POST /join`, `POST /contact`, and the strict login routes: `POST /auth/magic-link`, `GET`/`POST /auth/verify`, `POST /auth/passkeys/login/begin`, `POST /auth/passkeys/login/finish` | The per-IP limiter could not read Redis; the route fails closed (with `Retry-After: 60`) and the handler is not reached (BRY-662). |
+| `rate_limit_unavailable` | 503 | `POST /join`, `POST /contact`, and the strict login routes: `POST /auth/magic-link`, `GET`/`POST /auth/verify`, `POST /auth/passkeys/login/begin`, `POST /auth/passkeys/login/finish`; and `POST /auth/verify/peek` (its own `login-peek:` limiter, BRY-660) | The per-IP limiter could not read Redis; the route fails closed (with `Retry-After: 60`) and the handler is not reached (BRY-662). |
 | `address_query_invalid` | 400 | `GET /join/address-search` | `q` is not 3 to 100 characters after trimming and collapsing spaces; the register is not called. |
 | `not_applicant` | 409 | `POST /join/bank-invoice` | The signed-in user holds no `applicant` role (or is deactivated); nothing is issued. |
 | `no_pending_join` | 409 | `POST /join/bank-invoice` | The applicant has no owed join faktura and no pending join order to bill (it was paid, or the join expired). |
@@ -570,6 +570,24 @@ The public checkout answers 409 `order_locked` to `POST /checkout/{token}/lines`
 `GET /join/confirm/{token}` answers 200 `{valid: false, code}` with the three `join_token_*` codes instead of refusing.
 
 `GET /join/status` lists why joining is closed in `missing`: `club` (no clubs row for `CLUB_SLUG`), `price_item_unset` (`clubs.join_price_item_id` is NULL), `price_item_other_club`, `price_item_inactive`, `price_item_not_flat` (`pricing_kind` is not `flat`), and the type of every required legal document (`privacy`, `statutes`, `harbour_rules`, `terms_of_sale`) the club has not published. Empty when open. The `membership.join_requested` audit `outcome` values are listed in [audit-actions.md](audit-actions.md#membership-join).
+
+### Cross-site request refusal (no column, BRY-660)
+
+`crossOriginGuard` (`cmd/api/crossorigin.go`, Go's `http.CrossOriginProtection`) answers before any route or rate limiter under `/api/v1`. Its body has `error` only, no `code`.
+
+| `error` | Status | Route | Meaning |
+|---|---|---|---|
+| `cross_site_request` | 403 | Every POST, PUT, PATCH and DELETE under `/api/v1` except `POST /vipps/webhooks`, `POST /stripe/webhooks`, `POST /unsubscribe` and `/dev/query` | The browser marked the request `Sec-Fetch-Site: cross-site` or `same-site`, or (without that header) sent an `Origin` whose host is not the request's, and the Origin is not `FRONTEND_URL`. The handler is not reached and no rate-limit budget is spent. |
+
+### Login link codes (no column, BRY-658, BRY-660)
+
+`POST /auth/verify` and `POST /auth/verify/peek` refuse a token as `{error, code}` with 410; the peek's refusal carries no `account`.
+
+| `code` | Meaning |
+|---|---|
+| `login_token_invalid` | No link has the token, or the link's address is no active person user of its club (deactivated since the link was sent). |
+| `login_token_used` | The link has logged in once already. |
+| `login_token_expired` | The 15 minutes are up. |
 
 ### Applicant and membership-end codes (no column, BRY-628, BRY-633)
 

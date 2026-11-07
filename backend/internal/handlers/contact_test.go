@@ -76,6 +76,26 @@ func errorCode(t *testing.T, rec *httptest.ResponseRecorder) string {
 	return resp.Error
 }
 
+// The contact form must declare a JSON body (BRY-660), so a cross-site HTML
+// form cannot send mail through a visitor's browser.
+func TestHandleContactFormRequiresJSON(t *testing.T) {
+	f := newContactFixture(t, fakeClubRow{secretary: testSecretary})
+	for _, ct := range []string{"", "text/plain", "application/x-www-form-urlencoded"} {
+		req := httptest.NewRequest(http.MethodPost, "/contact", strings.NewReader(validContactBody))
+		if ct != "" {
+			req.Header.Set("Content-Type", ct)
+		}
+		rec := httptest.NewRecorder()
+		f.h.HandleContactForm(rec, req)
+		if rec.Code != http.StatusUnsupportedMediaType {
+			t.Errorf("Content-Type %q: %d, want 415", ct, rec.Code)
+		}
+	}
+	if n := len(f.mailer.Calls); n != 0 {
+		t.Errorf("sent %d mails for refused requests", n)
+	}
+}
+
 func TestHandleContactFormDelivers(t *testing.T) {
 	f := newContactFixture(t, fakeClubRow{secretary: testSecretary, chairman: testChairman})
 

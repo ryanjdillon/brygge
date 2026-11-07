@@ -39,6 +39,19 @@ const KNOWN: readonly string[] = [
 
 const state = ref<'loading' | 'ready' | 'confirming' | 'problem'>('loading')
 const firstName = ref('')
+// The address the application was made with: shown so a visitor sent
+// someone else's link sees whose join the button confirms (BRY-660).
+const applicantEmail = ref('')
+
+// Confirming logs the applicant in, replacing any session this browser has:
+// warn a visitor signed in as someone else, as the login link page does.
+const signedInAs = computed(() => (auth.isAuthenticated ? (auth.user?.email ?? '') : ''))
+const otherUser = computed(
+  () =>
+    !!signedInAs.value &&
+    !!applicantEmail.value &&
+    signedInAs.value.toLowerCase() !== applicantEmail.value.toLowerCase(),
+)
 const problem = ref<Problem>('failed')
 
 function asProblem(code: string | undefined): Problem {
@@ -77,7 +90,14 @@ async function load() {
       state.value = 'problem'
       return
     }
+    // The button is never offered without the address it confirms for.
+    if (!res.email) {
+      problem.value = 'failed'
+      state.value = 'problem'
+      return
+    }
     firstName.value = res.first_name
+    applicantEmail.value = res.email
     state.value = 'ready'
   } catch {
     problem.value = 'failed'
@@ -134,6 +154,23 @@ onMounted(load)
         {{ t('join.confirm.title', { name: firstName }) }}
       </h1>
       <p class="mt-2 text-slate-600">{{ t('join.confirm.body') }}</p>
+      <div class="mt-4 rounded-md bg-slate-50 px-4 py-3">
+        <p class="text-sm text-slate-600">{{ t('join.confirm.accountLabel') }}</p>
+        <p class="mt-1 break-all text-base font-semibold text-slate-900" data-testid="confirm-account">
+          {{ applicantEmail }}
+        </p>
+      </div>
+      <div
+        v-if="otherUser"
+        class="mt-4 flex gap-2 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+        role="alert"
+        data-testid="confirm-other-user"
+      >
+        <AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+        <p class="min-w-0 break-words">
+          {{ t('join.confirm.otherUser', { current: signedInAs, account: applicantEmail }) }}
+        </p>
+      </div>
       <button
         type="button"
         :disabled="state === 'confirming'"

@@ -67,7 +67,7 @@ func registerAuthOps(api huma.API) {
 		Path:        "/api/v1/auth/magic-link",
 		Tags:        []string{"Auth"},
 		Summary:     "Request a magic-link sign-in email",
-		Description: "Mails a login link. 429 over the strict per-IP budget; 503 rate_limit_unavailable (with Retry-After) when the limiter cannot read Redis, since the strict limiter fails closed.",
+		Description: "Mails a login link. 415 unless Content-Type is application/json; 429 over the strict per-IP budget; 503 rate_limit_unavailable (with Retry-After) when the limiter cannot read Redis, since the strict limiter fails closed.",
 	}, stub[struct {
 		Body struct {
 			Email string `json:"email" format:"email" doc:"Email address to send the link to"`
@@ -93,6 +93,15 @@ func registerAuthOps(api huma.API) {
 		Summary:     "Log in with a magic-link token",
 		Description: "Uses the token up and sets the session cookie. 410 with code login_token_invalid, login_token_used or login_token_expired; 415 unless Content-Type is application/json; 429 over the strict per-IP budget shared with the magic-link request; 503 rate_limit_unavailable (with Retry-After) when the limiter cannot read Redis, since the strict limiter fails closed. The token is not used up by a 429 or 503, so the same request can be retried.",
 	}, stub[struct{ Body MagicLinkVerifyRequest }, struct{ Body MagicLinkVerifyResponse }]())
+
+	huma.Register(api, huma.Operation{
+		OperationID: "peek-magic-link",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/auth/verify/peek",
+		Tags:        []string{"Auth"},
+		Summary:     "Show which account a magic-link token logs in as",
+		Description: "Never uses the token up and writes no session. Judges the token by the same rules as POST /api/v1/auth/verify and answers 200 with the full address the link was mailed to, which the login page shows before it offers the login button. 410 with code login_token_invalid, login_token_used or login_token_expired and no account (audited as auth.login_failed with details.stage peek); 415 unless Content-Type is application/json; 429 over its own per-IP budget of 10 a minute, separate from the strict login budget; 503 rate_limit_unavailable (with Retry-After) when that limiter cannot read Redis, since it fails closed.",
+	}, stub[struct{ Body MagicLinkVerifyRequest }, struct{ Body MagicLinkPeekResponse }]())
 
 	huma.Register(api, huma.Operation{
 		OperationID: "session-logout",
@@ -294,7 +303,7 @@ func registerPublicContentOps(api huma.API) {
 		Path:        "/api/v1/contact",
 		Tags:        []string{"Contact"},
 		Summary:     "Submit contact form",
-		Description: "Emails the message to the club's secretary (else chairman) with Reply-To set to the submitter. 502 when delivery fails, 503 when the club has no recipient or the server has no mail transport, 429 over its own 5/min per-IP budget, 503 rate_limit_unavailable (with Retry-After) when that limiter cannot read Redis (it fails closed).",
+		Description: "Emails the message to the club's secretary (else chairman) with Reply-To set to the submitter. 415 unless Content-Type is application/json; 502 when delivery fails, 503 when the club has no recipient or the server has no mail transport, 429 over its own 5/min per-IP budget, 503 rate_limit_unavailable (with Retry-After) when that limiter cannot read Redis (it fails closed).",
 	}, stub[struct{ Body ContactRequest }, struct{ Body StatusResponse }]())
 
 	huma.Register(api, huma.Operation{
