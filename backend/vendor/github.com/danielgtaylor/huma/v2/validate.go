@@ -1,6 +1,7 @@
 package huma
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -74,6 +75,10 @@ func mapTo[A, B any](s []A, f func(A) B) []B {
 type PathBuffer struct {
 	buf []byte
 	off int
+
+	// offs records the offset before each push so that a pop restores it
+	// exactly, even when a pushed key itself contains `.` or `[`.
+	offs []int
 }
 
 // Push an entry onto the path, adding a `.` separator as needed.
@@ -81,6 +86,7 @@ type PathBuffer struct {
 //	pb.Push("foo") // foo
 //	pb.Push("bar") // foo.bar
 func (b *PathBuffer) Push(s string) {
+	b.offs = append(b.offs, b.off)
 	if len(b.buf) > 0 {
 		b.buf = append(b.buf, '.')
 	}
@@ -93,6 +99,7 @@ func (b *PathBuffer) Push(s string) {
 //	pb.Push("foo")  // foo
 //	pb.PushIndex(1) // foo[1]
 func (b *PathBuffer) PushIndex(i int) {
+	b.offs = append(b.offs, b.off)
 	b.buf = append(b.buf, '[')
 	b.buf = strconv.AppendInt(b.buf, int64(i), 10)
 	b.buf = append(b.buf, ']')
@@ -107,6 +114,15 @@ func (b *PathBuffer) PushIndex(i int) {
 //	pb.Pop()        // foo[1]
 //	pb.Pop()        // foo
 func (b *PathBuffer) Pop() {
+	if n := len(b.offs); n > 0 {
+		b.off = b.offs[n-1]
+		b.offs = b.offs[:n-1]
+		b.buf = b.buf[:b.off]
+		return
+	}
+
+	// No recorded push to undo, e.g. the buffer was created with an existing
+	// prefix, so fall back to finding the last separator.
 	for b.off > 0 {
 		b.off--
 		if b.buf[b.off] == '.' || b.buf[b.off] == '[' {
@@ -159,6 +175,7 @@ func (b *PathBuffer) String() string {
 func (b *PathBuffer) Reset() {
 	b.buf = b.buf[:0]
 	b.off = 0
+	b.offs = b.offs[:0]
 }
 
 // NewPathBuffer creates a new path buffer given an existing byte slice.
@@ -238,8 +255,16 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 			res.Add(path, str, validation.MsgExpectedRFC3339Time)
 		}
 	case "email", "idn-email":
-		if _, err := mail.ParseAddress(str); err != nil {
-			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC5322Email, err))
+		// mail.ParseAddress accepts full mailbox forms ("Name <addr>"). OpenAPI
+		// format "email" is documented as an addr-spec; require a bare address
+		// with no display name so validation matches the RFC-oriented error text.
+		addr, err := mail.ParseAddress(str)
+		if err != nil || addr.Name != "" || addr.Address == "" || strings.TrimSpace(str) != addr.Address {
+			msg := validation.MsgExpectedRFC5322EmailBare
+			if err != nil {
+				msg = ErrorFormatter(validation.MsgExpectedRFC5322Email, err)
+			}
+			res.Add(path, str, msg)
 		}
 	case "idn-hostname", "hostname":
 		if len(str) >= 256 || !rxHostname.MatchString(str) {
@@ -267,11 +292,20 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 	// 	if _, err := idnaProfile.ToASCII(str); err != nil {
 	// 		res.Add(path, str, validation.MsgExpectedRFC5890Hostname)
 	// 	}
-	case "uri", "uri-reference", "iri", "iri-reference":
+	case "uri", "iri":
+		// format "uri"/"iri" require an absolute URI (non-empty scheme). Bare
+		// url.Parse accepts empty strings, path-only values, and other relative
+		// references that are only valid for uri-reference / iri-reference.
+		u, err := url.Parse(str)
+		if err != nil {
+			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC3986URI, err))
+		} else if str == "" || u.Scheme == "" {
+			res.Add(path, str, validation.MsgExpectedRFC3986AbsoluteURI)
+		}
+	case "uri-reference", "iri-reference":
 		if _, err := url.Parse(str); err != nil {
 			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC3986URI, err))
 		}
-		// TODO: check if it's actually a reference?
 	case "uri-template":
 		u, err := url.Parse(str)
 		if err != nil {
@@ -349,6 +383,7 @@ func validateDiscriminator(r Registry, s *Schema, path *PathBuffer, mode Validat
 	if !found {
 		path.Push(s.Discriminator.PropertyName)
 		res.Add(path, v, validation.MsgExpectedPropertyNameInObject)
+		path.Pop()
 		return
 	}
 
@@ -358,19 +393,69 @@ func validateDiscriminator(r Registry, s *Schema, path *PathBuffer, mode Validat
 		return
 	}
 
+	// A non-string value can't select a mapping, so treat it like an unknown
+	// one rather than letting it pass unvalidated.
 	key, ok := kk.(string)
-	if !ok {
-		path.Push(s.Discriminator.PropertyName)
-		return
-	}
-
 	ref, found := s.Discriminator.Mapping[key]
-	if !found {
+	if !ok || !found {
 		validateOneOf(r, s, path, mode, v, res)
 		return
 	}
 
-	Validate(r, r.SchemaFromRef(ref), path, mode, v, res)
+	resolved := r.SchemaFromRef(ref)
+	if resolved == nil {
+		res.Addf(path, v, validation.MsgExpectedResolvableSchemaRef, ref)
+		return
+	}
+	Validate(r, resolved, path, mode, v, res)
+}
+
+// toFloat64 normalizes any supported numeric Go type to a float64. The second
+// return value is false when v is not a numeric type. This lets numeric
+// validation treat values uniformly regardless of whether they came from a
+// JSON body (float64), a query/path parameter (int64), or a custom schema.
+func toFloat64(v any) (float64, bool) {
+	switch v := v.(type) {
+	case float64:
+		return v, true
+	case float32:
+		return float64(v), true
+	case int:
+		return float64(v), true
+	case int8:
+		return float64(v), true
+	case int16:
+		return float64(v), true
+	case int32:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	case uint:
+		return float64(v), true
+	case uint8:
+		return float64(v), true
+	case uint16:
+		return float64(v), true
+	case uint32:
+		return float64(v), true
+	case uint64:
+		return float64(v), true
+	case json.Number:
+		f, err := v.Float64()
+		return f, err == nil
+	default:
+		value := reflect.ValueOf(v)
+		switch value.Kind() {
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			return float64(value.Int()), true
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			return float64(value.Uint()), true
+		case reflect.Float32, reflect.Float64:
+			return value.Float(), true
+		default:
+			return 0, false
+		}
+	}
 }
 
 // Validate an input value against a schema, collecting errors in the validation
@@ -391,8 +476,18 @@ func validateDiscriminator(r Registry, s *Schema, path *PathBuffer, mode Validat
 //	}
 func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any, res *ValidateResult) {
 	// Get the actual schema if this is a reference.
+	if s == nil {
+		res.Addf(path, v, validation.MsgExpectedResolvableSchemaRef, "")
+		return
+	}
+
 	for s.Ref != "" {
-		s = r.SchemaFromRef(s.Ref)
+		ref := s.Ref
+		s = r.SchemaFromRef(ref)
+		if s == nil {
+			res.Addf(path, v, validation.MsgExpectedResolvableSchemaRef, ref)
+			return
+		}
 	}
 
 	if s.OneOf != nil {
@@ -426,40 +521,19 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 	}
 
 	switch s.Type {
+	case TypeNull:
+		if v != nil {
+			res.Add(path, v, validation.MsgExpectedNull)
+			return
+		}
 	case TypeBoolean:
 		if _, ok := v.(bool); !ok {
 			res.Add(path, v, validation.MsgExpectedBoolean)
 			return
 		}
 	case TypeNumber, TypeInteger:
-		var num float64
-
-		switch v := v.(type) {
-		case float64:
-			num = v
-		case float32:
-			num = float64(v)
-		case int:
-			num = float64(v)
-		case int8:
-			num = float64(v)
-		case int16:
-			num = float64(v)
-		case int32:
-			num = float64(v)
-		case int64:
-			num = float64(v)
-		case uint:
-			num = float64(v)
-		case uint8:
-			num = float64(v)
-		case uint16:
-			num = float64(v)
-		case uint32:
-			num = float64(v)
-		case uint64:
-			num = float64(v)
-		default:
+		num, ok := toFloat64(v)
+		if !ok {
 			if s.Type == TypeInteger {
 				res.Add(path, v, validation.MsgExpectedInteger)
 			} else {
@@ -565,8 +639,25 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 		case []float64:
 			handleArray(r, s, path, mode, res, arr)
 		default:
-			res.Add(path, v, validation.MsgExpectedArray)
-			return
+			value := reflect.ValueOf(v)
+			if value.Kind() != reflect.Slice {
+				res.Add(path, v, validation.MsgExpectedArray)
+				return
+			}
+			switch value.Type().Elem().Kind() {
+			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+				reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+				reflect.Float32, reflect.Float64:
+			default:
+				res.Add(path, v, validation.MsgExpectedArray)
+				return
+			}
+
+			items := make([]any, value.Len())
+			for i := range items {
+				items[i] = value.Index(i).Interface()
+			}
+			handleArray(r, s, path, mode, res, items)
 		}
 	case TypeObject:
 		switch vv := v.(type) {
@@ -582,8 +673,29 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 
 	if len(s.Enum) > 0 {
 		found := slices.Contains(s.Enum, v)
+		if !found && (s.Type == TypeInteger || s.Type == TypeNumber) {
+			// Numeric enums may be stored with a different Go type than the
+			// parsed value (e.g. float64 from JSON bodies vs int64 from query
+			// or path params), so a strict type comparison is not enough.
+			// Compare numerically instead. Note this uses float64 like the rest
+			// of the numeric validation above, so integer values beyond 2^53
+			// are subject to the same precision limits.
+			if num, ok := toFloat64(v); ok {
+				found = slices.ContainsFunc(s.Enum, func(e any) bool {
+					ev, ok := toFloat64(e)
+					return ok && ev == num
+				})
+			}
+		}
 		if !found {
 			res.Add(path, v, s.msgEnum)
+		}
+	}
+
+	if s.Const != nil {
+		// Deep equality check for const validation
+		if !reflect.DeepEqual(s.Const, v) {
+			res.Add(path, v, s.msgConst)
 		}
 	}
 }
@@ -601,12 +713,48 @@ func handleArray[T any](r Registry, s *Schema, path *PathBuffer, mode ValidateMo
 	}
 
 	if s.UniqueItems {
+		// Hashable items are tracked in a map for O(1) lookups. Non-hashable
+		// items (e.g. map[string]interface{} from malformed JSON like [{}])
+		// can't be used as map keys and would panic with "hash of unhashable
+		// type" (issue #1042), so they are recorded separately and compared
+		// with reflect.DeepEqual. This keeps the common all-hashable case
+		// linear while still detecting duplicates among unhashable items.
 		seen := make(map[any]struct{}, len(arr))
+		var unhashable []any
+
+		// contains reports whether item was already seen, recording it if not.
+		contains := func(item any) (dup bool) {
+			hashable := true
+			func() {
+				defer func() {
+					if recover() != nil {
+						hashable = false
+					}
+				}()
+				if _, ok := seen[item]; ok {
+					dup = true
+				} else {
+					seen[item] = struct{}{}
+				}
+			}()
+			if hashable {
+				return dup
+			}
+
+			// Slow path for unhashable items only.
+			for _, u := range unhashable {
+				if reflect.DeepEqual(u, item) {
+					return true
+				}
+			}
+			unhashable = append(unhashable, item)
+			return false
+		}
+
 		for _, item := range arr {
-			if _, ok := seen[item]; ok {
+			if contains(item) {
 				res.Add(path, arr, validation.MsgExpectedArrayItemsUnique)
 			}
-			seen[item] = struct{}{}
 		}
 	}
 
@@ -639,7 +787,17 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 		readOnly := v.ReadOnly
 		writeOnly := v.WriteOnly
 		for v.Ref != "" {
-			v = r.SchemaFromRef(v.Ref)
+			ref := v.Ref
+			v = r.SchemaFromRef(ref)
+			if v == nil {
+				path.Push(k)
+				res.Addf(path, m[k], validation.MsgExpectedResolvableSchemaRef, ref)
+				path.Pop()
+				break
+			}
+		}
+		if v == nil {
+			continue
 		}
 
 		// We should be permissive by default to enable easy round-trips for the
@@ -756,7 +914,17 @@ func handleMapAny(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, m 
 		readOnly := v.ReadOnly
 		writeOnly := v.WriteOnly
 		for v.Ref != "" {
-			v = r.SchemaFromRef(v.Ref)
+			ref := v.Ref
+			v = r.SchemaFromRef(ref)
+			if v == nil {
+				path.Push(k)
+				res.Addf(path, m[k], validation.MsgExpectedResolvableSchemaRef, ref)
+				path.Pop()
+				break
+			}
+		}
+		if v == nil {
+			continue
 		}
 
 		// We should be permissive by default to enable easy round-trips for the
