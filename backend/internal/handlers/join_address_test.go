@@ -390,10 +390,11 @@ func TestAddressLookupIsExact(t *testing.T) {
 	}
 }
 
-// The vectors live in testdata so frontend/src/lib/__tests__/phone.test.ts
-// checks its mirror of the rules against the same table.
+// The vectors live with the frontend test (the frontend build only sees
+// frontend/), so frontend/src/lib/__tests__/phone.test.ts checks its mirror
+// of the rules against the same table.
 func TestNormalizePhone(t *testing.T) {
-	raw, err := os.ReadFile("testdata/phone_vectors.json")
+	raw, err := os.ReadFile("../../../frontend/src/lib/__tests__/phone_vectors.json")
 	if err != nil {
 		t.Fatalf("read vectors: %v", err)
 	}

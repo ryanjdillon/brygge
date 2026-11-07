@@ -5,7 +5,7 @@
 // eight digits without a country code are Norwegian (+47), a +47 number has
 // exactly eight digits after the code, and any other country code takes 8 to
 // 15 digits in all. Both sides test against the same vectors,
-// backend/internal/handlers/testdata/phone_vectors.json.
+// frontend/src/lib/__tests__/phone_vectors.json.
 
 function isNorwegianNational(d: string): boolean {
   return /^[2-9]\d{7}$/.test(d)
