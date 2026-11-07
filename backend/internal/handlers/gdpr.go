@@ -128,6 +128,181 @@ func NewGDPRHandler(db *pgxpool.Pool, cfg *config.Config, log zerolog.Logger) *G
 	}
 }
 
+// exportSection is one named part of a member's data export. query selects
+// the section's rows for the member $1 in club $2; Postgres renders them as
+// JSON, so UUIDs, numerics, dates and enums come out as plain JSON values.
+// Every column is the member's own data: ids and names of other people (the
+// admin who granted a role or confirmed a boat, a guest on a booking, the
+// board address a notice about the member went to) are left out on purpose.
+type exportSection struct {
+	key string
+	// single sections are one object (null when there is no row) rather
+	// than a list.
+	single bool
+	query  string
+}
+
+// slipLabelSQL is the slip's label as the board writes it ("A12"), for alias
+// s of slips: the section is prefixed unless the number already carries it.
+const slipLabelSQL = `CASE WHEN s.number LIKE COALESCE(s.section, '') || '%' THEN s.number
+	ELSE COALESCE(s.section, '') || s.number END`
+
+// dataExportSections is the member data export (GDPR Art. 15 and 20). The
+// response is a JSON object, so its keys carry no order; within a list
+// section, rows follow the query's ORDER BY (json_agg over a sorted subquery
+// keeps that order in practice, though SQL does not promise it). A test runs
+// every query against the migrated schema, so a renamed column fails CI
+// instead of answering 500 to the member.
+var dataExportSections = []exportSection{
+	{key: "profile", single: true, query: `
+		SELECT first_name, last_name, email, phone, address_line, postal_code, city,
+		       is_local, address_verified, address_kommunenummer, address_verified_at,
+		       preferred_language, hide_in_directory,
+		       member_since, membership_cancelled_at, membership_ends_on, membership_cancel_reason,
+		       created_at
+		  FROM users WHERE id = $1 AND club_id = $2`},
+	{key: "roles", query: `
+		SELECT role, granted_at FROM user_roles
+		 WHERE user_id = $1 AND club_id = $2 ORDER BY granted_at, role`},
+	{key: "harbor_share", single: true, query: `
+		SELECT harbor_share_owner AS owner, harbor_share_paid_on AS paid_on
+		  FROM users WHERE id = $1 AND club_id = $2`},
+	{key: "boats", query: `
+		SELECT id, name, type, manufacturer, model, length_m, beam_m, draft_m, weight_kg,
+		       registration_number, mmsi, call_sign, measurements_confirmed, created_at
+		  FROM boats WHERE user_id = $1 AND club_id = $2 ORDER BY created_at, id`},
+	{key: "slip_assignments", query: `
+		SELECT sa.id, ` + slipLabelSQL + ` AS slip_label, sa.boat_id, sa.assignment_type,
+		       sa.assigned_at, sa.released_at, sa.harbor_membership_amount, sa.harbor_membership_paid_at
+		  FROM slip_assignments sa JOIN slips s ON s.id = sa.slip_id
+		 WHERE sa.user_id = $1 AND sa.club_id = $2 ORDER BY sa.assigned_at, sa.id`},
+	{key: "waiting_list", query: `
+		SELECT id, boat_id, position, is_local, status, offer_deadline, created_at
+		  FROM waiting_list_entries WHERE user_id = $1 AND club_id = $2 ORDER BY created_at, id`},
+	// The recipient_* columns are left out: they name the organisation or
+	// contact person a faktura was addressed to, who may not be the member.
+	{key: "fakturas", query: `
+		SELECT i.id, i.invoice_number, i.kid_number, i.issue_date, i.due_date, i.total_amount,
+		       i.status, i.category, i.purpose, i.sent_at, i.member_name, i.member_email,
+		       i.credits_invoice_id, i.payment_id, i.online_paid_at, i.created_at,
+		       (SELECT COALESCE(json_agg(l ORDER BY l.description, l.id), '[]'::json)
+		          FROM (SELECT il.id, il.description, il.sub_description, il.quantity, il.unit_price,
+		                       il.line_total, il.category, il.boat_id
+		                  FROM invoice_lines il WHERE il.invoice_id = i.id) l) AS lines
+		  FROM invoices i WHERE i.user_id = $1 AND i.club_id = $2
+		 ORDER BY i.issue_date, i.invoice_number, i.id`},
+	// A payment or order can settle several members' fakturas. The member
+	// sees the whole row only when it is theirs alone (they are its payer and
+	// it settles nobody else's faktura); otherwise they see their own
+	// allocation (the sum of their fakturas it settles) and allocation_only,
+	// without the description, the provider reference or the order lines,
+	// which describe other people's money.
+	{key: "payments", query: `
+		SELECT p.id, p.type, p.currency, p.status, p.due_date, p.paid_at, p.created_at,
+		       NOT f.whole AS allocation_only,
+		       CASE WHEN f.whole THEN p.amount ELSE a.own_amount END AS amount,
+		       CASE WHEN f.whole THEN p.description END AS description,
+		       CASE WHEN f.whole THEN p.vipps_reference END AS vipps_reference
+		  FROM payments p
+		 CROSS JOIN LATERAL (
+		       SELECT EXISTS (SELECT 1 FROM invoices oi
+		                       WHERE oi.payment_id = p.id AND oi.user_id IS DISTINCT FROM $1) AS shared,
+		              (SELECT COALESCE(sum(mi.total_amount), 0) FROM invoices mi
+		                WHERE mi.payment_id = p.id AND mi.user_id = $1) AS own_amount) a
+		 CROSS JOIN LATERAL (SELECT p.user_id IS NOT DISTINCT FROM $1 AND NOT a.shared AS whole) f
+		 WHERE p.club_id = $2
+		   AND (p.user_id = $1
+		        OR p.id IN (SELECT payment_id FROM invoices WHERE user_id = $1 AND club_id = $2))
+		 ORDER BY p.created_at, p.id`},
+	// An order is the member's when they placed it or when it pays one of
+	// their fakturas. guest_* and the pay token are always left out: the
+	// first may name whoever paid, the second is a live capability.
+	{key: "orders", query: `
+		SELECT o.id, o.status, o.purpose, o.provider, o.currency, o.paid_at, o.created_at,
+		       NOT f.whole AS allocation_only,
+		       CASE WHEN f.whole THEN o.total_amount ELSE a.own_amount END AS total_amount,
+		       CASE WHEN f.whole THEN o.vipps_reference END AS vipps_reference,
+		       CASE WHEN f.whole THEN
+		           (SELECT COALESCE(json_agg(l ORDER BY l.created_at, l.name), '[]'::json)
+		              FROM (SELECT ol.name, ol.quantity, ol.unit_price, ol.total_price, ol.created_at
+		                      FROM order_lines ol WHERE ol.order_id = o.id) l)
+		       ELSE '[]'::json END AS lines,
+		       (SELECT COALESCE(json_agg(os.invoice_id ORDER BY os.invoice_id), '[]'::json)
+		          FROM order_sources os JOIN invoices i ON i.id = os.invoice_id
+		         WHERE os.order_id = o.id AND i.user_id = $1) AS faktura_ids
+		  FROM orders o
+		 CROSS JOIN LATERAL (
+		       SELECT EXISTS (SELECT 1 FROM order_sources os JOIN invoices oi ON oi.id = os.invoice_id
+		                       WHERE os.order_id = o.id AND oi.user_id IS DISTINCT FROM $1) AS shared,
+		              (SELECT COALESCE(sum(mi.total_amount), 0)
+		                 FROM order_sources os JOIN invoices mi ON mi.id = os.invoice_id
+		                WHERE os.order_id = o.id AND mi.user_id = $1) AS own_amount) a
+		 CROSS JOIN LATERAL (SELECT o.user_id IS NOT DISTINCT FROM $1 AND NOT a.shared AS whole) f
+		 WHERE o.club_id = $2
+		   AND (o.user_id = $1
+		        OR EXISTS (SELECT 1 FROM order_sources os JOIN invoices i ON i.id = os.invoice_id
+		                    WHERE os.order_id = o.id AND i.user_id = $1 AND i.club_id = $2))
+		 ORDER BY o.created_at, o.id`},
+	{key: "consents", query: `
+		SELECT id, consent_type, version, granted_at, revoked_at
+		  FROM user_consents WHERE user_id = $1 AND club_id = $2 ORDER BY granted_at, id`},
+	{key: "notification_preferences", query: `
+		SELECT category, enabled FROM notification_preferences
+		 WHERE user_id = $1 AND club_id = $2 ORDER BY category`},
+	{key: "communication_preferences", query: `
+		SELECT category, email_enabled, updated_at FROM communication_preferences
+		 WHERE user_id = $1 AND club_id = $2 ORDER BY category`},
+	// The endpoint's host names the push service; the rest of the URL and
+	// the keys are a capability to push to the device, so they stay out.
+	{key: "push_subscriptions", query: `
+		SELECT substring(endpoint FROM '^[A-Za-z][A-Za-z0-9+.-]*://([^/:?#]+)') AS endpoint_host,
+		       user_agent, created_at
+		  FROM push_subscriptions WHERE user_id = $1 AND club_id = $2 ORDER BY created_at, id`},
+	{key: "bookings", query: `
+		SELECT b.id, r.name AS resource_name, b.start_date, b.end_date, b.status, b.notes,
+		       b.boat_length_m, b.boat_beam_m, b.boat_draft_m, b.payment_id, b.created_at
+		  FROM bookings b LEFT JOIN resources r ON r.id = b.resource_id
+		 WHERE b.user_id = $1 AND b.club_id = $2 ORDER BY b.start_date, b.id`},
+	// The mail log names the member on notices sent to the board about them,
+	// so the recipient is shown only when it is the member's own address.
+	// error and outcome_detail are left out: provider text can quote other
+	// addresses.
+	{key: "email_sends", query: `
+		SELECT es.kind, es.status, es.created_at,
+		       CASE WHEN lower(es.recipient) = lower(u.email) THEN es.recipient END AS recipient
+		  FROM email_sends es JOIN users u ON u.id = $1 AND u.club_id = $2
+		 WHERE es.club_id = $2 AND (es.user_id = u.id OR lower(es.recipient) = lower(u.email))
+		 ORDER BY es.created_at, es.id`},
+}
+
+// sql wraps the section's query so it returns the section as one JSON value.
+func (s exportSection) sql() string {
+	if s.single {
+		return `SELECT row_to_json(x) FROM (` + s.query + `) x`
+	}
+	return `SELECT COALESCE(json_agg(x), '[]'::json) FROM (` + s.query + `) x`
+}
+
+// collectDataExport reads every section for userID in clubID.
+func collectDataExport(ctx context.Context, q dbQuerier, userID, clubID string) (map[string]any, error) {
+	export := make(map[string]any, len(dataExportSections)+1)
+	for _, s := range dataExportSections {
+		var raw []byte
+		err := q.QueryRow(ctx, s.sql(), userID, clubID).Scan(&raw)
+		if s.single && errors.Is(err, pgx.ErrNoRows) {
+			raw = []byte("null")
+		} else if err != nil {
+			return nil, fmt.Errorf("export section %s: %w", s.key, err)
+		}
+		export[s.key] = json.RawMessage(raw)
+	}
+	return export, nil
+}
+
+// HandleDataExport answers GET /members/me/data-export with the caller's own
+// data (dataExportSections), as one JSON document the portal downloads.
+// The sections are read in one read-only snapshot, so a faktura and its
+// payment cannot disagree because one was written between two reads.
 func (h *GDPRHandler) HandleDataExport(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -136,111 +311,28 @@ func (h *GDPRHandler) HandleDataExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	export := map[string]any{
-		"exported_at": time.Now().UTC().Format(time.RFC3339),
-	}
-
-	var name, email *string
-	var phone *string
-	err := h.db.QueryRow(ctx,
-		`SELECT name, email, phone FROM users WHERE id = $1`,
-		claims.UserID,
-	).Scan(&name, &email, &phone)
+	tx, err := h.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
-		h.log.Error().Err(err).Msg("failed to query user profile")
+		h.log.Error().Err(err).Msg("failed to begin data export")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	export["profile"] = map[string]any{"name": name, "email": email, "phone": phone}
+	defer tx.Rollback(ctx) //nolint:errcheck // read-only; nothing to commit
 
-	boats, err := h.collectRows(ctx,
-		`SELECT id, name, make, model, year, length_ft, registration_number FROM boats WHERE owner_id = $1`,
-		claims.UserID,
-	)
+	export, err := collectDataExport(ctx, tx, claims.UserID, claims.ClubID)
 	if err != nil {
-		h.log.Error().Err(err).Msg("failed to query boats")
+		h.log.Error().Err(err).Msg("failed to collect data export")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	export["boats"] = boats
+	now := time.Now().UTC()
+	export["exported_at"] = now.Format(time.RFC3339)
 
-	bookings, err := h.collectRows(ctx,
-		`SELECT id, resource_id, start_time, end_time, status, created_at FROM bookings WHERE user_id = $1`,
-		claims.UserID,
-	)
-	if err != nil {
-		h.log.Error().Err(err).Msg("failed to query bookings")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-	export["bookings"] = bookings
-
-	waitingList, err := h.collectRows(ctx,
-		`SELECT id, status, position, created_at FROM waiting_list_entries WHERE user_id = $1`,
-		claims.UserID,
-	)
-	if err != nil {
-		h.log.Error().Err(err).Msg("failed to query waiting list")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-	export["waiting_list"] = waitingList
-
-	payments, err := h.collectRows(ctx,
-		`SELECT id, amount, currency, status, description, created_at FROM payments WHERE user_id = $1`,
-		claims.UserID,
-	)
-	if err != nil {
-		h.log.Error().Err(err).Msg("failed to query payments")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-	export["payments"] = payments
-
-	consents, err := h.collectRows(ctx,
-		`SELECT id, consent_type, version, granted_at, revoked_at FROM user_consents WHERE user_id = $1`,
-		claims.UserID,
-	)
-	if err != nil {
-		h.log.Error().Err(err).Msg("failed to query consents")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-	export["consents"] = consents
-
-	w.Header().Set("Content-Disposition", "attachment; filename=data-export.json")
+	// The document is the member's personal data: no cache may keep it.
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Disposition",
+		`attachment; filename="data-export-`+now.Format(time.DateOnly)+`.json"`)
 	JSON(w, http.StatusOK, export)
-}
-
-func (h *GDPRHandler) collectRows(ctx context.Context, query string, args ...any) ([]map[string]any, error) {
-	rows, err := h.db.Query(ctx, query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	descs := rows.FieldDescriptions()
-	var result []map[string]any
-
-	for rows.Next() {
-		values, err := rows.Values()
-		if err != nil {
-			return nil, err
-		}
-		row := make(map[string]any, len(descs))
-		for i, desc := range descs {
-			row[string(desc.Name)] = values[i]
-		}
-		result = append(result, row)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	if result == nil {
-		result = []map[string]any{}
-	}
-	return result, nil
 }
 
 func (h *GDPRHandler) HandleRequestDeletion(w http.ResponseWriter, r *http.Request) {
@@ -550,6 +642,16 @@ func (h *GDPRHandler) MountAdminRoutes(r chi.Router, roleGate, freshGate func(ht
 	})
 }
 
+// deletionRequestListSQL lists a club's pending deletion requests ($1) with
+// the requesting member's name and address. A test runs it against the
+// migrated schema alongside the data export.
+const deletionRequestListSQL = `SELECT dr.id, dr.user_id, COALESCE(u.full_name, ''), u.email,
+	       dr.requested_at, dr.grace_end, dr.status
+	  FROM deletion_requests dr
+	  JOIN users u ON u.id = dr.user_id
+	 WHERE dr.club_id = $1 AND dr.status = 'pending'
+	 ORDER BY dr.requested_at ASC`
+
 func (h *GDPRHandler) HandleListDeletionRequests(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -558,14 +660,7 @@ func (h *GDPRHandler) HandleListDeletionRequests(w http.ResponseWriter, r *http.
 		return
 	}
 
-	rows, err := h.db.Query(ctx,
-		`SELECT dr.id, dr.user_id, u.name, u.email, dr.requested_at, dr.grace_end, dr.status
-		 FROM deletion_requests dr
-		 JOIN users u ON u.id = dr.user_id
-		 WHERE dr.club_id = $1 AND dr.status = 'pending'
-		 ORDER BY dr.requested_at ASC`,
-		claims.ClubID,
-	)
+	rows, err := h.db.Query(ctx, deletionRequestListSQL, claims.ClubID)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to query deletion requests")
 		Error(w, http.StatusInternalServerError, "internal error")
