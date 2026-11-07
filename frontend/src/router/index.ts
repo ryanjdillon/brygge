@@ -71,8 +71,26 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/FaqView.vue'),
   },
   {
+    // Self-service join (BRY-632). Public: the page itself tells a signed-in
+    // member they already are one and sends an applicant on to finish.
     path: '/join',
     component: () => import('@/views/JoinView.vue'),
+  },
+  {
+    path: '/bli-medlem',
+    component: () => import('@/views/JoinView.vue'),
+  },
+  {
+    // The confirmation email links here (joinConfirmURL). Public: the visitor
+    // has no session until the page's POST confirms.
+    path: '/bli-medlem/stadfest',
+    component: () => import('@/views/JoinConfirmView.vue'),
+  },
+  {
+    // A published legal document, readable before signing in; the join
+    // form links each document it asks consent to.
+    path: '/vilkar/:docType',
+    component: () => import('@/views/LegalDocumentView.vue'),
   },
   {
     path: '/merchandise',

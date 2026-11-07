@@ -213,6 +213,9 @@ func TestJoinHappyPath(t *testing.T) {
 	if !status.Open || status.Price == nil || status.Price.Amount != 650 || len(status.Missing) != 0 {
 		t.Fatalf("status = %+v, want open with price 650", status)
 	}
+	if status.Year != time.Now().Year() {
+		t.Errorf("status year = %d, want the server's %d", status.Year, time.Now().Year())
+	}
 
 	rec = e.do(t, http.MethodPost, "/join", joinBody("Kari.Join@Example.com"))
 	assertStatus(t, rec, http.StatusAccepted)

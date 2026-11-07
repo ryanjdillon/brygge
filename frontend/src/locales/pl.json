@@ -161,21 +161,132 @@
     "motorhomeParking": "Parking dla kamperów"
   },
   "join": {
-    "title": "Dołącz do klubu",
-    "subtitle": "Zapisz się na listę oczekujących na miejsce w porcie",
-    "fullName": "Imię i nazwisko",
-    "email": "E-mail",
-    "phone": "Telefon",
-    "boatDetails": "Dane łodzi",
-    "boatName": "Nazwa łodzi",
-    "boatType": "Typ łodzi",
-    "boatLength": "Długość (m)",
-    "boatBeam": "Szerokość (m)",
-    "boatDraft": "Zanurzenie (m)",
-    "queuePosition": "Twoja pozycja w kolejce",
-    "queueMessage": "Jesteś numerem {position} na liście oczekujących",
-    "submitting": "Wysyłanie...",
-    "submitted": "Rejestracja zakończona!"
+    "title": "Zostań członkiem",
+    "intro": "Wypełnij formularz, a wyślemy Ci e-mail z linkiem do potwierdzenia. Po opłaceniu składki członkowskiej zostajesz członkiem.",
+    "loadFailed": "Nie udało się wczytać strony.",
+    "retry": "Spróbuj ponownie",
+    "alreadyMember": {
+      "title": "Jesteś już członkiem",
+      "body": "Jesteś zalogowany na konto klubu, więc nie musisz się zapisywać.",
+      "portal": "Przejdź do Mojej strony"
+    },
+    "applicant": {
+      "title": "Twoje przystąpienie jest w toku",
+      "body": "Potwierdziłeś zgłoszenie. Pozostało tylko opłacić składkę członkowską.",
+      "continue": "Dokończ przystąpienie"
+    },
+    "closed": {
+      "title": "Zapisy nie są jeszcze otwarte",
+      "body": "Klub obecnie nie przyjmuje zgłoszeń online. Skontaktuj się z nami, a pomożemy.",
+      "contact": "Skontaktuj się z nami"
+    },
+    "sent": {
+      "title": "Sprawdź swoją skrzynkę e-mail",
+      "body": "Wysłaliśmy wiadomość na podany adres. Otwórz zawarty w niej link, aby potwierdzić zgłoszenie. Link jest ważny 24 godziny.",
+      "spam": "Jeśli wiadomość nie dotrze w ciągu kilku minut, sprawdź folder spam."
+    },
+    "form": {
+      "price": "Składka członkowska {year}: {amount}",
+      "firstName": "Imię",
+      "lastName": "Nazwisko",
+      "email": "E-mail",
+      "phone": "Telefon",
+      "addressLine": "Ulica i numer",
+      "postalCode": "Kod pocztowy",
+      "city": "Miejscowość",
+      "optional": "Opcjonalnie",
+      "isLocal": "Czy mieszkasz w gminie, w której działa klub?",
+      "readDocuments": "Przeczytaj dokumenty",
+      "opensNewTab": "(otwiera się w nowej karcie)",
+      "acceptTerms": "Akceptuję statut i regulamin portu, politykę prywatności oraz warunki sprzedaży.",
+      "newsletter": "Tak, proszę przesyłać mi newsletter klubu.",
+      "termsChanged": "Warunki zostały zaktualizowane po otwarciu strony. Przeczytaj je ponownie i zaznacz pole jeszcze raz.",
+      "required": "Pole wymagane",
+      "invalidEmail": "Podaj prawidłowy adres e-mail",
+      "chooseOne": "Wybierz tak lub nie",
+      "acceptRequired": "Aby zostać członkiem, musisz zaakceptować warunki",
+      "submit": "Wyślij zgłoszenie",
+      "submitting": "Wysyłanie …",
+      "rateLimited": "Zbyt wiele prób. Odczekaj minutę i spróbuj ponownie.",
+      "badRequest": "Coś w formularzu jest nie tak. Sprawdź pola i spróbuj ponownie.",
+      "failed": "Nie udało się wysłać zgłoszenia. Spróbuj ponownie za chwilę.",
+      "checkFields": "Sprawdź zaznaczone pola."
+    },
+    "legal": {
+      "statutes": "Statut",
+      "harbour_rules": "Regulamin portu",
+      "privacy": "Polityka prywatności",
+      "terms_of_sale": "Warunki sprzedaży",
+      "version": "Wersja {version}, opublikowana {date}",
+      "notPublished": "Ten dokument nie został jeszcze opublikowany.",
+      "notFound": "Nie znaleziono dokumentu"
+    },
+    "confirm": {
+      "title": "Cześć {name}, potwierdź zgłoszenie",
+      "body": "Naciśnij przycisk, aby potwierdzić. Następnie przejdziesz od razu do opłacenia składki.",
+      "button": "Potwierdź zgłoszenie",
+      "registerAgain": "Zgłoś się ponownie",
+      "login": "Zaloguj się",
+      "contact": "Skontaktuj się z zarządem",
+      "problems": {
+        "join_token_invalid": {
+          "title": "Ten link nie działa",
+          "body": "Nie rozpoznajemy tego linku. Skopiuj cały link z wiadomości e-mail lub zgłoś się ponownie."
+        },
+        "join_token_used": {
+          "title": "Ten link został już użyty",
+          "body": "Twoje zgłoszenie jest już potwierdzone. Zaloguj się, aby kontynuować."
+        },
+        "join_token_expired": {
+          "title": "Ten link wygasł",
+          "body": "Link jest ważny 24 godziny. Zgłoś się ponownie, a otrzymasz nowy."
+        },
+        "join_closed": {
+          "title": "Zapisy są zamknięte",
+          "body": "Klub obecnie nie przyjmuje zgłoszeń. Skontaktuj się z nami."
+        },
+        "already_member": {
+          "title": "Masz już konto",
+          "body": "Ten adres e-mail należy już do konta w klubie. Zaloguj się nim."
+        },
+        "rejoin_blocked": {
+          "title": "Skontaktuj się z zarządem",
+          "body": "Twojego zgłoszenia nie można dokończyć online. Zarząd Ci pomoże."
+        },
+        "failed": {
+          "title": "Coś poszło nie tak",
+          "body": "Nie udało się potwierdzić zgłoszenia. Spróbuj ponownie za chwilę."
+        }
+      }
+    },
+    "complete": {
+      "title": "Dokończ przystąpienie",
+      "awaitingBody": "Potwierdziłeś zgłoszenie. Opłać składkę członkowską, a od razu zostaniesz członkiem.",
+      "payNow": "Zapłać teraz",
+      "payByBank": "Zapłać przelewem bankowym",
+      "payByBankHelp": "Przy przelewie otrzymasz fakturę z numerem KID. Członkostwo zaczyna się po zaksięgowaniu płatności, co może potrwać kilka dni.",
+      "paymentInProgress": "Trwa płatność online. Najpierw ją dokończ lub anuluj, a potem spróbuj ponownie.",
+      "bankFailed": "Nie udało się utworzyć faktury. Spróbuj ponownie za chwilę.",
+      "waitingForPayment": "Oczekiwanie na płatność",
+      "bankBody": "Zapłać, używając tych danych w bankowości internetowej. Podaj numer KID, aby płatność została przypisana do Ciebie.",
+      "kid": "KID",
+      "account": "Numer konta",
+      "amount": "Kwota",
+      "dueDate": "Termin płatności",
+      "copy": "Kopiuj: {field}",
+      "copyShort": "Kopiuj",
+      "copied": "Skopiowano",
+      "emailed": "Fakturę wysłaliśmy Ci także e-mailem.",
+      "bankNote": "Zostaniesz członkiem po zaksięgowaniu płatności. Może to potrwać kilka dni.",
+      "payOnlineInstead": "Zapłać zamiast tego online",
+      "noneBody": "Nie znajdujemy zgłoszenia oczekującego na płatność. Właśnie zapłaciłeś? Odśwież stronę za minutę. W przeciwnym razie skontaktuj się z zarządem.",
+      "contact": "Skontaktuj się z zarządem",
+      "welcomeTitle": "Witamy wśród członków!",
+      "welcomeBody": "Płatność została zaksięgowana i jesteś teraz członkiem.",
+      "toPortal": "Przejdź do portalu członka",
+      "invoices": "Twoje faktury",
+      "profile": "Twój profil"
+    }
   },
   "harbor": {
     "title": "Port gościnny",
@@ -2264,10 +2375,6 @@
   },
   "applicant": {
     "complete": {
-      "title": "Twoje członkostwo nie jest jeszcze zakończone",
-      "body": "Potwierdziłeś wniosek, ale członkostwo zaczyna się po opłaceniu składki. Do tego czasu możesz przeglądać swoje faktury i profil.",
-      "invoices": "Zobacz swoje faktury",
-      "profile": "Twój profil",
       "navLabel": "Dokończ członkostwo"
     }
   }

@@ -242,6 +242,16 @@ func registerJoinOps(api huma.API) {
 		Description: "Issues (and books) the signed-in applicant's KID faktura for their pending join order and emails it; the order becomes that faktura's pay order, so it is the one thing left to pay. Calling it again returns the same faktura (200; 201 when issued now) without emailing it again. 409 with code not_applicant, no_pending_join or payment_in_progress (an online payment of the order is reserved, captured or started within the provider's session lifetime).",
 		Security:    BearerSecurity,
 	}, stub[struct{}, struct{ Body JoinBankInvoiceResponse }]())
+
+	huma.Register(api, huma.Operation{
+		OperationID: "get-join-me",
+		Method:      http.MethodGet,
+		Path:        "/api/v1/join/me",
+		Tags:        []string{"Join"},
+		Summary:     "Where the signed-in user's join stands",
+		Description: "Read-only. member when the user holds the member role and not the applicant role; bank_invoice with the owed join faktura (KID, account, amount, due date) and its pay link; awaiting_payment with the pending join order's pay link; none otherwise. Reachable by an applicant-only session.",
+		Security:    BearerSecurity,
+	}, stub[struct{}, struct{ Body JoinMeResponse }]())
 }
 
 func registerPublicContentOps(api huma.API) {

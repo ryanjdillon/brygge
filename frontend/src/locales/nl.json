@@ -162,20 +162,131 @@
   },
   "join": {
     "title": "Lid worden",
-    "subtitle": "Schrijf u in voor de wachtlijst voor een havenligplaats",
-    "fullName": "Volledige naam",
-    "email": "E-mail",
-    "phone": "Telefoon",
-    "boatDetails": "Bootgegevens",
-    "boatName": "Bootnaam",
-    "boatType": "Boottype",
-    "boatLength": "Lengte (m)",
-    "boatBeam": "Breedte (m)",
-    "boatDraft": "Diepgang (m)",
-    "queuePosition": "Uw wachtlijstpositie",
-    "queueMessage": "U bent nummer {position} op de wachtlijst",
-    "submitting": "Verzenden...",
-    "submitted": "Inschrijving voltooid!"
+    "intro": "Vul het formulier in, dan sturen we je per e-mail een link om te bevestigen. Zodra de contributie betaald is, ben je lid.",
+    "loadFailed": "De pagina kon niet worden geladen.",
+    "retry": "Opnieuw proberen",
+    "alreadyMember": {
+      "title": "Je bent al lid",
+      "body": "Je bent ingelogd met een clubaccount, dus je hoeft je niet aan te melden.",
+      "portal": "Naar Mijn pagina"
+    },
+    "applicant": {
+      "title": "Je aanmelding is onderweg",
+      "body": "Je hebt je aanmelding bevestigd. Je hoeft alleen nog de contributie te betalen.",
+      "continue": "Aanmelding afronden"
+    },
+    "closed": {
+      "title": "Aanmelden is nog niet open",
+      "body": "De club neemt op dit moment geen online aanmeldingen aan. Neem contact met ons op, dan helpen we je.",
+      "contact": "Contact opnemen"
+    },
+    "sent": {
+      "title": "Controleer je e-mail",
+      "body": "We hebben een e-mail gestuurd naar het opgegeven adres. Open de link daarin om je aanmelding te bevestigen. De link is 24 uur geldig.",
+      "spam": "Zie je de e-mail na een paar minuten niet, kijk dan in je spammap."
+    },
+    "form": {
+      "price": "Contributie {year}: {amount}",
+      "firstName": "Voornaam",
+      "lastName": "Achternaam",
+      "email": "E-mail",
+      "phone": "Telefoon",
+      "addressLine": "Straat en huisnummer",
+      "postalCode": "Postcode",
+      "city": "Woonplaats",
+      "optional": "Optioneel",
+      "isLocal": "Woon je in de gemeente waar de club gevestigd is?",
+      "readDocuments": "Lees de documenten",
+      "opensNewTab": "(opent in een nieuw tabblad)",
+      "acceptTerms": "Ik ga akkoord met de statuten en het havenreglement, de privacyverklaring en de verkoopvoorwaarden.",
+      "newsletter": "Ja graag, stuur me de nieuwsbrief van de club.",
+      "termsChanged": "De voorwaarden zijn bijgewerkt nadat je de pagina opende. Lees ze opnieuw en vink het vakje opnieuw aan.",
+      "required": "Verplicht",
+      "invalidEmail": "Vul een geldig e-mailadres in",
+      "chooseOne": "Kies ja of nee",
+      "acceptRequired": "Je moet de voorwaarden accepteren om lid te worden",
+      "submit": "Aanmelding versturen",
+      "submitting": "Versturen …",
+      "rateLimited": "Te veel pogingen. Wacht een minuut en probeer het opnieuw.",
+      "badRequest": "Er klopt iets niet in het formulier. Controleer de velden en probeer het opnieuw.",
+      "failed": "Je aanmelding kon niet worden verstuurd. Probeer het zo opnieuw.",
+      "checkFields": "Controleer de gemarkeerde velden."
+    },
+    "legal": {
+      "statutes": "Statuten",
+      "harbour_rules": "Havenreglement",
+      "privacy": "Privacyverklaring",
+      "terms_of_sale": "Verkoopvoorwaarden",
+      "version": "Versie {version}, gepubliceerd op {date}",
+      "notPublished": "Dit document is nog niet gepubliceerd.",
+      "notFound": "Document niet gevonden"
+    },
+    "confirm": {
+      "title": "Hoi {name}, bevestig je aanmelding",
+      "body": "Druk op de knop om te bevestigen. Daarna ga je direct naar de betaling van de contributie.",
+      "button": "Aanmelding bevestigen",
+      "registerAgain": "Opnieuw aanmelden",
+      "login": "Inloggen",
+      "contact": "Contact met het bestuur",
+      "problems": {
+        "join_token_invalid": {
+          "title": "Deze link werkt niet",
+          "body": "We herkennen deze link niet. Kopieer de volledige link uit de e-mail of meld je opnieuw aan."
+        },
+        "join_token_used": {
+          "title": "Deze link is al gebruikt",
+          "body": "Je aanmelding is al bevestigd. Log in om verder te gaan."
+        },
+        "join_token_expired": {
+          "title": "Deze link is verlopen",
+          "body": "De link is 24 uur geldig. Meld je opnieuw aan, dan krijg je een nieuwe."
+        },
+        "join_closed": {
+          "title": "Aanmelden is gesloten",
+          "body": "De club neemt op dit moment geen aanmeldingen aan. Neem contact met ons op."
+        },
+        "already_member": {
+          "title": "Je hebt al een account",
+          "body": "Dit e-mailadres hoort al bij een clubaccount. Log daarmee in."
+        },
+        "rejoin_blocked": {
+          "title": "Neem contact op met het bestuur",
+          "body": "Je aanmelding kan niet online worden afgerond. Het bestuur helpt je verder."
+        },
+        "failed": {
+          "title": "Er ging iets mis",
+          "body": "Je aanmelding kon niet worden bevestigd. Probeer het zo opnieuw."
+        }
+      }
+    },
+    "complete": {
+      "title": "Aanmelding afronden",
+      "awaitingBody": "Je hebt je aanmelding bevestigd. Betaal de contributie en je bent meteen lid.",
+      "payNow": "Nu betalen",
+      "payByBank": "Betalen per bankoverschrijving",
+      "payByBankHelp": "Bij een bankoverschrijving krijg je een factuur met KID. Het lidmaatschap begint zodra de betaling is verwerkt; dat kan een paar dagen duren.",
+      "paymentInProgress": "Er loopt een online betaling. Rond die eerst af of annuleer hem, en probeer het dan opnieuw.",
+      "bankFailed": "De factuur kon niet worden aangemaakt. Probeer het zo opnieuw.",
+      "waitingForPayment": "Wacht op betaling",
+      "bankBody": "Betaal met deze gegevens in je internetbankieren. Gebruik het KID-nummer zodat de betaling aan jou wordt gekoppeld.",
+      "kid": "KID",
+      "account": "Rekeningnummer",
+      "amount": "Bedrag",
+      "dueDate": "Vervaldatum",
+      "copy": "{field} kopiëren",
+      "copyShort": "Kopiëren",
+      "copied": "Gekopieerd",
+      "emailed": "We hebben je de factuur ook per e-mail gestuurd.",
+      "bankNote": "Je wordt lid zodra de betaling is verwerkt. Dat kan een paar dagen duren.",
+      "payOnlineInstead": "Liever online betalen",
+      "noneBody": "We vinden geen aanmelding die op betaling wacht. Net betaald? Vernieuw de pagina over een minuut. Neem anders contact op met het bestuur.",
+      "contact": "Contact met het bestuur",
+      "welcomeTitle": "Welkom als lid!",
+      "welcomeBody": "Je betaling is verwerkt en je bent nu lid.",
+      "toPortal": "Naar het ledenportaal",
+      "invoices": "Je facturen",
+      "profile": "Je profiel"
+    }
   },
   "harbor": {
     "title": "Gasthaven",
@@ -2293,10 +2404,6 @@
   },
   "applicant": {
     "complete": {
-      "title": "Je lidmaatschap is nog niet rond",
-      "body": "Je hebt je aanvraag bevestigd, maar het lidmaatschap begint zodra de contributie is betaald. Tot die tijd kun je je facturen en je profiel bekijken.",
-      "invoices": "Bekijk je facturen",
-      "profile": "Je profiel",
       "navLabel": "Lidmaatschap afronden"
     }
   }

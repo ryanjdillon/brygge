@@ -161,21 +161,132 @@
     "motorhomeParking": "Parcheggio camper"
   },
   "join": {
-    "title": "Iscriviti al circolo",
-    "subtitle": "Registrati nella lista d'attesa per un posto barca",
-    "fullName": "Nome completo",
-    "email": "Email",
-    "phone": "Telefono",
-    "boatDetails": "Dettagli dell'imbarcazione",
-    "boatName": "Nome dell'imbarcazione",
-    "boatType": "Tipo di imbarcazione",
-    "boatLength": "Lunghezza (m)",
-    "boatBeam": "Larghezza (m)",
-    "boatDraft": "Pescaggio (m)",
-    "queuePosition": "La tua posizione in lista",
-    "queueMessage": "Sei il numero {position} nella lista d'attesa",
-    "submitting": "Invio in corso...",
-    "submitted": "Registrazione completata!"
+    "title": "Diventa socio",
+    "intro": "Compila il modulo e ti invieremo via e-mail un link per confermare. Una volta pagata la quota associativa, sei socio.",
+    "loadFailed": "Non è stato possibile caricare la pagina.",
+    "retry": "Riprova",
+    "alreadyMember": {
+      "title": "Sei già socio",
+      "body": "Hai effettuato l’accesso con un account del club, quindi non devi iscriverti.",
+      "portal": "Vai a La mia pagina"
+    },
+    "applicant": {
+      "title": "La tua iscrizione è in corso",
+      "body": "Hai confermato la domanda. Resta solo da pagare la quota associativa.",
+      "continue": "Completa l’iscrizione"
+    },
+    "closed": {
+      "title": "Le iscrizioni non sono ancora aperte",
+      "body": "Il club al momento non accetta domande online. Contattaci e ti aiuteremo.",
+      "contact": "Contattaci"
+    },
+    "sent": {
+      "title": "Controlla la tua e-mail",
+      "body": "Abbiamo inviato un’e-mail all’indirizzo inserito. Apri il link per confermare la domanda. Il link è valido 24 ore.",
+      "spam": "Se non arriva entro qualche minuto, controlla la cartella spam."
+    },
+    "form": {
+      "price": "Quota associativa {year}: {amount}",
+      "firstName": "Nome",
+      "lastName": "Cognome",
+      "email": "E-mail",
+      "phone": "Telefono",
+      "addressLine": "Indirizzo",
+      "postalCode": "CAP",
+      "city": "Città",
+      "optional": "Facoltativo",
+      "isLocal": "Abiti nel comune in cui ha sede il club?",
+      "readDocuments": "Leggi i documenti",
+      "opensNewTab": "(si apre in una nuova scheda)",
+      "acceptTerms": "Accetto lo statuto e il regolamento del porto, l’informativa sulla privacy e le condizioni di vendita.",
+      "newsletter": "Sì, inviatemi la newsletter del club.",
+      "termsChanged": "Le condizioni sono state aggiornate dopo l’apertura della pagina. Rileggile e spunta di nuovo la casella.",
+      "required": "Obbligatorio",
+      "invalidEmail": "Inserisci un indirizzo e-mail valido",
+      "chooseOne": "Scegli sì o no",
+      "acceptRequired": "Devi accettare le condizioni per diventare socio",
+      "submit": "Invia domanda",
+      "submitting": "Invio …",
+      "rateLimited": "Troppi tentativi. Attendi un minuto e riprova.",
+      "badRequest": "Qualcosa nel modulo non è corretto. Controlla i campi e riprova.",
+      "failed": "Non è stato possibile inviare la domanda. Riprova tra poco.",
+      "checkFields": "Controlla i campi evidenziati."
+    },
+    "legal": {
+      "statutes": "Statuto",
+      "harbour_rules": "Regolamento del porto",
+      "privacy": "Informativa sulla privacy",
+      "terms_of_sale": "Condizioni di vendita",
+      "version": "Versione {version}, pubblicata il {date}",
+      "notPublished": "Questo documento non è ancora pubblicato.",
+      "notFound": "Documento non trovato"
+    },
+    "confirm": {
+      "title": "Ciao {name}, conferma la tua domanda",
+      "body": "Premi il pulsante per confermare. Passerai subito al pagamento della quota associativa.",
+      "button": "Conferma domanda",
+      "registerAgain": "Ripresenta la domanda",
+      "login": "Accedi",
+      "contact": "Contatta il direttivo",
+      "problems": {
+        "join_token_invalid": {
+          "title": "Questo link non funziona",
+          "body": "Non riconosciamo questo link. Copia il link completo dall’e-mail oppure ripresenta la domanda."
+        },
+        "join_token_used": {
+          "title": "Questo link è già stato usato",
+          "body": "La tua domanda è già confermata. Accedi per continuare."
+        },
+        "join_token_expired": {
+          "title": "Questo link è scaduto",
+          "body": "Il link è valido 24 ore. Ripresenta la domanda per riceverne uno nuovo."
+        },
+        "join_closed": {
+          "title": "Le iscrizioni sono chiuse",
+          "body": "Il club al momento non accetta domande. Contattaci."
+        },
+        "already_member": {
+          "title": "Hai già un account",
+          "body": "Questo indirizzo e-mail appartiene già a un account del club. Accedi con quello."
+        },
+        "rejoin_blocked": {
+          "title": "Contatta il direttivo",
+          "body": "La tua domanda non può essere completata online. Il direttivo ti aiuterà."
+        },
+        "failed": {
+          "title": "Qualcosa è andato storto",
+          "body": "Non è stato possibile confermare la domanda. Riprova tra poco."
+        }
+      }
+    },
+    "complete": {
+      "title": "Completa l’iscrizione",
+      "awaitingBody": "Hai confermato la domanda. Paga la quota associativa e sarai subito socio.",
+      "payNow": "Paga ora",
+      "payByBank": "Paga con bonifico bancario",
+      "payByBankHelp": "Con il bonifico ricevi una fattura con KID. L’iscrizione inizia quando il pagamento è registrato, il che può richiedere alcuni giorni.",
+      "paymentInProgress": "È in corso un pagamento online. Completalo o annullalo prima, poi riprova.",
+      "bankFailed": "Non è stato possibile creare la fattura. Riprova tra poco.",
+      "waitingForPayment": "In attesa di pagamento",
+      "bankBody": "Paga con questi dati dalla tua banca online. Usa il numero KID così il pagamento viene associato a te.",
+      "kid": "KID",
+      "account": "Numero di conto",
+      "amount": "Importo",
+      "dueDate": "Scadenza",
+      "copy": "Copia {field}",
+      "copyShort": "Copia",
+      "copied": "Copiato",
+      "emailed": "Ti abbiamo inviato la fattura anche via e-mail.",
+      "bankNote": "Diventi socio quando il pagamento è registrato. Può richiedere alcuni giorni.",
+      "payOnlineInstead": "Paga invece online",
+      "noneBody": "Non troviamo nessuna domanda in attesa di pagamento. Hai appena pagato? Aggiorna la pagina tra un minuto. Altrimenti contatta il direttivo.",
+      "contact": "Contatta il direttivo",
+      "welcomeTitle": "Benvenuto tra i soci!",
+      "welcomeBody": "Il pagamento è registrato e ora sei socio.",
+      "toPortal": "Vai al portale soci",
+      "invoices": "Le tue fatture",
+      "profile": "Il tuo profilo"
+    }
   },
   "harbor": {
     "title": "Porto ospiti",
@@ -2293,10 +2404,6 @@
   },
   "applicant": {
     "complete": {
-      "title": "La tua iscrizione non è ancora completa",
-      "body": "Hai confermato la domanda, ma l'iscrizione inizia quando la quota è pagata. Fino ad allora puoi vedere le tue fatture e il tuo profilo.",
-      "invoices": "Vedi le tue fatture",
-      "profile": "Il tuo profilo",
       "navLabel": "Completa l'iscrizione"
     }
   }

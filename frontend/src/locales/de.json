@@ -161,21 +161,132 @@
     "motorhomeParking": "Wohnmobilstellplatz"
   },
   "join": {
-    "title": "Dem Verein beitreten",
-    "subtitle": "Melden Sie sich für die Warteliste für Hafenliegeplätze an",
-    "fullName": "Vollständiger Name",
-    "email": "E-Mail",
-    "phone": "Telefon",
-    "boatDetails": "Bootsangaben",
-    "boatName": "Bootsname",
-    "boatType": "Bootstyp",
-    "boatLength": "Länge (m)",
-    "boatBeam": "Breite (m)",
-    "boatDraft": "Tiefgang (m)",
-    "queuePosition": "Ihre Wartelistenposition",
-    "queueMessage": "Sie sind Nummer {position} auf der Warteliste",
-    "submitting": "Wird gesendet...",
-    "submitted": "Anmeldung abgeschlossen!"
+    "title": "Mitglied werden",
+    "intro": "Füllen Sie das Formular aus, dann senden wir Ihnen per E-Mail einen Link zur Bestätigung. Sobald der Mitgliedsbeitrag bezahlt ist, sind Sie Mitglied.",
+    "loadFailed": "Die Seite konnte nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "alreadyMember": {
+      "title": "Sie sind bereits Mitglied",
+      "body": "Sie sind mit einem Vereinskonto angemeldet und müssen nicht beitreten.",
+      "portal": "Zu Meine Seite"
+    },
+    "applicant": {
+      "title": "Ihr Beitritt läuft",
+      "body": "Sie haben Ihren Antrag bestätigt. Es fehlt nur noch die Zahlung des Mitgliedsbeitrags.",
+      "continue": "Beitritt abschließen"
+    },
+    "closed": {
+      "title": "Der Beitritt ist noch nicht geöffnet",
+      "body": "Der Verein nimmt derzeit keine Online-Anträge an. Nehmen Sie Kontakt mit uns auf, wir helfen Ihnen gern.",
+      "contact": "Kontakt aufnehmen"
+    },
+    "sent": {
+      "title": "Prüfen Sie Ihr Postfach",
+      "body": "Wir haben eine E-Mail an die angegebene Adresse gesendet. Öffnen Sie den Link darin, um Ihren Antrag zu bestätigen. Der Link ist 24 Stunden gültig.",
+      "spam": "Wenn die E-Mail nach einigen Minuten nicht da ist, sehen Sie im Spam-Ordner nach."
+    },
+    "form": {
+      "price": "Mitgliedsbeitrag {year}: {amount}",
+      "firstName": "Vorname",
+      "lastName": "Nachname",
+      "email": "E-Mail",
+      "phone": "Telefon",
+      "addressLine": "Straße und Hausnummer",
+      "postalCode": "Postleitzahl",
+      "city": "Ort",
+      "optional": "Optional",
+      "isLocal": "Wohnen Sie in der Gemeinde, in der der Verein seinen Sitz hat?",
+      "readDocuments": "Dokumente lesen",
+      "opensNewTab": "(öffnet in neuem Tab)",
+      "acceptTerms": "Ich akzeptiere die Satzung und die Hafenordnung, die Datenschutzerklärung und die Verkaufsbedingungen.",
+      "newsletter": "Ja, bitte senden Sie mir den Newsletter des Vereins.",
+      "termsChanged": "Die Bedingungen wurden aktualisiert, nachdem Sie die Seite geöffnet haben. Bitte lesen Sie sie erneut und setzen Sie das Häkchen noch einmal.",
+      "required": "Pflichtfeld",
+      "invalidEmail": "Geben Sie eine gültige E-Mail-Adresse ein",
+      "chooseOne": "Wählen Sie Ja oder Nein",
+      "acceptRequired": "Sie müssen die Bedingungen akzeptieren, um Mitglied zu werden",
+      "submit": "Antrag senden",
+      "submitting": "Wird gesendet …",
+      "rateLimited": "Zu viele Versuche. Warten Sie eine Minute und versuchen Sie es erneut.",
+      "badRequest": "Im Formular stimmt etwas nicht. Prüfen Sie die Felder und versuchen Sie es erneut.",
+      "failed": "Der Antrag konnte nicht gesendet werden. Versuchen Sie es gleich noch einmal.",
+      "checkFields": "Bitte prüfen Sie die markierten Felder."
+    },
+    "legal": {
+      "statutes": "Satzung",
+      "harbour_rules": "Hafenordnung",
+      "privacy": "Datenschutzerklärung",
+      "terms_of_sale": "Verkaufsbedingungen",
+      "version": "Version {version}, veröffentlicht am {date}",
+      "notPublished": "Dieses Dokument ist noch nicht veröffentlicht.",
+      "notFound": "Dokument nicht gefunden"
+    },
+    "confirm": {
+      "title": "Hallo {name}, bestätigen Sie Ihren Antrag",
+      "body": "Drücken Sie die Schaltfläche zur Bestätigung. Danach geht es direkt zur Zahlung des Mitgliedsbeitrags.",
+      "button": "Antrag bestätigen",
+      "registerAgain": "Erneut beantragen",
+      "login": "Anmelden",
+      "contact": "Vorstand kontaktieren",
+      "problems": {
+        "join_token_invalid": {
+          "title": "Dieser Link funktioniert nicht",
+          "body": "Wir erkennen diesen Link nicht. Kopieren Sie den vollständigen Link aus der E-Mail oder beantragen Sie erneut."
+        },
+        "join_token_used": {
+          "title": "Dieser Link wurde bereits verwendet",
+          "body": "Ihr Antrag ist bereits bestätigt. Melden Sie sich an, um fortzufahren."
+        },
+        "join_token_expired": {
+          "title": "Dieser Link ist abgelaufen",
+          "body": "Der Link ist 24 Stunden gültig. Beantragen Sie erneut, dann erhalten Sie einen neuen."
+        },
+        "join_closed": {
+          "title": "Der Beitritt ist geschlossen",
+          "body": "Der Verein nimmt derzeit keine Anträge an. Bitte nehmen Sie Kontakt auf."
+        },
+        "already_member": {
+          "title": "Sie haben bereits ein Konto",
+          "body": "Diese E-Mail-Adresse gehört bereits zu einem Vereinskonto. Melden Sie sich damit an."
+        },
+        "rejoin_blocked": {
+          "title": "Bitte wenden Sie sich an den Vorstand",
+          "body": "Ihr Antrag kann nicht online abgeschlossen werden. Der Vorstand hilft Ihnen weiter."
+        },
+        "failed": {
+          "title": "Etwas ist schiefgelaufen",
+          "body": "Ihr Antrag konnte nicht bestätigt werden. Versuchen Sie es gleich noch einmal."
+        }
+      }
+    },
+    "complete": {
+      "title": "Beitritt abschließen",
+      "awaitingBody": "Sie haben Ihren Antrag bestätigt. Bezahlen Sie den Mitgliedsbeitrag, dann sind Sie sofort Mitglied.",
+      "payNow": "Jetzt bezahlen",
+      "payByBank": "Per Banküberweisung bezahlen",
+      "payByBankHelp": "Bei Banküberweisung erhalten Sie eine Rechnung mit KID. Die Mitgliedschaft beginnt, sobald die Zahlung verbucht ist, was einige Tage dauern kann.",
+      "paymentInProgress": "Eine Online-Zahlung läuft gerade. Schließen Sie sie ab oder brechen Sie sie ab und versuchen Sie es dann erneut.",
+      "bankFailed": "Die Rechnung konnte nicht erstellt werden. Versuchen Sie es gleich noch einmal.",
+      "waitingForPayment": "Warten auf Zahlung",
+      "bankBody": "Bezahlen Sie mit diesen Angaben in Ihrem Online-Banking. Verwenden Sie die KID-Nummer, damit die Zahlung Ihnen zugeordnet wird.",
+      "kid": "KID",
+      "account": "Kontonummer",
+      "amount": "Betrag",
+      "dueDate": "Fälligkeitsdatum",
+      "copy": "{field} kopieren",
+      "copyShort": "Kopieren",
+      "copied": "Kopiert",
+      "emailed": "Wir haben Ihnen die Rechnung auch per E-Mail gesendet.",
+      "bankNote": "Sie werden Mitglied, sobald die Zahlung verbucht ist. Das kann einige Tage dauern.",
+      "payOnlineInstead": "Stattdessen online bezahlen",
+      "noneBody": "Wir finden keinen Antrag, der auf Zahlung wartet. Gerade bezahlt? Laden Sie die Seite in einer Minute neu. Andernfalls wenden Sie sich an den Vorstand.",
+      "contact": "Vorstand kontaktieren",
+      "welcomeTitle": "Willkommen als Mitglied!",
+      "welcomeBody": "Ihre Zahlung ist verbucht und Sie sind jetzt Mitglied.",
+      "toPortal": "Zum Mitgliederportal",
+      "invoices": "Ihre Rechnungen",
+      "profile": "Ihr Profil"
+    }
   },
   "harbor": {
     "title": "Gasthafen",
@@ -2293,10 +2404,6 @@
   },
   "applicant": {
     "complete": {
-      "title": "Ihre Mitgliedschaft ist noch nicht abgeschlossen",
-      "body": "Sie haben Ihren Antrag bestätigt, aber die Mitgliedschaft beginnt erst, wenn der Beitrag bezahlt ist. Bis dahin können Sie Ihre Rechnungen und Ihr Profil sehen.",
-      "invoices": "Ihre Rechnungen",
-      "profile": "Ihr Profil",
       "navLabel": "Mitgliedschaft abschließen"
     }
   }

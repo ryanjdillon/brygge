@@ -25,12 +25,13 @@ type ApplicantRoute struct {
 // ApplicantRoutes is everything behind AuthenticateSession that a session
 // holding only the applicant role may reach: the session itself, the
 // applicant's own profile, email preferences and fakturas, consents, the
-// GDPR export and deletion request, and "Betal med bank", which bills the
-// pending join as a KID faktura. Paying needs no entry: the pay and checkout pages are
-// public routes addressed by token, outside AuthenticateSession. Every other
-// session route answers 403 ErrMembershipNotCompleted, so a route added
-// later stays closed to applicants until it is listed here; the route-table
-// test in cmd/api walks the real router to hold that.
+// GDPR export and deletion request, "Betal med bank", which bills the
+// pending join as a KID faktura, and the join's own state (/join/me).
+// Paying needs no entry: the pay and checkout pages are public routes
+// addressed by token, outside AuthenticateSession. Every other session route
+// answers 403 ErrMembershipNotCompleted, so a route added later stays closed
+// to applicants until it is listed here; the route-table test in cmd/api
+// walks the real router to hold that.
 var ApplicantRoutes = []ApplicantRoute{
 	{"*", "/api/v1/auth/*"},
 	{http.MethodGet, "/api/v1/members/me"},
@@ -47,6 +48,7 @@ var ApplicantRoutes = []ApplicantRoute{
 	{http.MethodPost, "/api/v1/members/me/delete-request"},
 	{http.MethodDelete, "/api/v1/members/me/delete-request"},
 	{http.MethodPost, "/api/v1/join/bank-invoice"},
+	{http.MethodGet, "/api/v1/join/me"},
 }
 
 // applicantMux matches a request against ApplicantRoutes with chi's own

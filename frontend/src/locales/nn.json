@@ -202,22 +202,131 @@
   },
   "join": {
     "title": "Bli medlem",
-    "subtitle": "Meld deg på ventelista for hamneplass",
-    "fullName": "Fullt namn",
-    "email": "E-post",
-    "phone": "Telefon",
-    "boatDetails": "Båtdetaljar",
-    "boatName": "Båtnamn",
-    "boatType": "Båttype",
-    "boatLength": "Lengd (m)",
-    "boatBeam": "Breidd (m)",
-    "boatDraft": "Djupgåande (m)",
-    "payComingSoon": "Betaling kjem snart",
-    "submit": "Bli med",
-    "queuePosition": "Plassen din i køen",
-    "queueMessage": "Du er nummer {position} på ventelista",
-    "submitting": "Sender...",
-    "submitted": "Registrering fullført!"
+    "intro": "Fyll ut skjemaet, så sender vi deg ein e-post med ei lenke for å stadfeste innmeldinga. Når kontingenten er betalt, er du medlem.",
+    "loadFailed": "Vi fekk ikkje lasta sida.",
+    "retry": "Prøv igjen",
+    "alreadyMember": {
+      "title": "Du er allereie medlem",
+      "body": "Du er logga inn med ein konto i klubben, så du treng ikkje melde deg inn.",
+      "portal": "Gå til Mi side"
+    },
+    "applicant": {
+      "title": "Innmeldinga di er i gang",
+      "body": "Du har stadfesta innmeldinga. Det som står att, er å betale kontingenten.",
+      "continue": "Fullfør innmeldinga"
+    },
+    "closed": {
+      "title": "Innmelding er ikkje opna enno",
+      "body": "Klubben tek ikkje imot innmeldingar på nettet akkurat no. Ta kontakt med oss, så hjelper vi deg.",
+      "contact": "Kontakt oss"
+    },
+    "sent": {
+      "title": "Sjekk e-posten din",
+      "body": "Vi har sendt ein e-post til adressa du skreiv inn. Opne lenka i e-posten for å stadfeste innmeldinga. Lenka verkar i 24 timar.",
+      "spam": "Finn du ikkje e-posten etter nokre minutt, sjå i søppelposten."
+    },
+    "form": {
+      "price": "Medlemskontingent {year}: {amount}",
+      "firstName": "Førenamn",
+      "lastName": "Etternamn",
+      "email": "E-post",
+      "phone": "Telefon",
+      "addressLine": "Gateadresse",
+      "postalCode": "Postnummer",
+      "city": "Poststad",
+      "optional": "Valfritt",
+      "isLocal": "Bur du i kommunen der klubben held til?",
+      "readDocuments": "Les dokumenta",
+      "opensNewTab": "(opnar i ny fane)",
+      "acceptTerms": "Eg godtek vedtektene og hamnereglementet, personvernerklæringa og salsvilkåra.",
+      "newsletter": "Ja takk, send meg nyheitsbrev frå klubben.",
+      "termsChanged": "Vilkåra er oppdaterte sidan du opna sida. Les dei gjerne på nytt og kryss av igjen.",
+      "required": "Må fyllast ut",
+      "invalidEmail": "Skriv inn ei gyldig e-postadresse",
+      "chooseOne": "Vel ja eller nei",
+      "acceptRequired": "Du må godta vilkåra for å bli medlem",
+      "submit": "Send innmelding",
+      "submitting": "Sender …",
+      "rateLimited": "For mange forsøk. Vent eit minutt og prøv igjen.",
+      "badRequest": "Noko i skjemaet er ikkje rett. Sjå over felta og prøv igjen.",
+      "failed": "Innmeldinga kunne ikkje sendast. Prøv igjen om litt.",
+      "checkFields": "Sjekk felta som er merka."
+    },
+    "legal": {
+      "statutes": "Vedtekter",
+      "harbour_rules": "Hamnereglement",
+      "privacy": "Personvernerklæring",
+      "terms_of_sale": "Salsvilkår",
+      "version": "Versjon {version}, publisert {date}",
+      "notPublished": "Dette dokumentet er ikkje publisert enno.",
+      "notFound": "Fann ikkje dokumentet"
+    },
+    "confirm": {
+      "title": "Hei {name}, stadfest innmeldinga",
+      "body": "Trykk på knappen for å stadfeste. Så kjem du rett til betalinga av kontingenten.",
+      "button": "Stadfest innmeldinga",
+      "registerAgain": "Meld deg inn på nytt",
+      "login": "Logg inn",
+      "contact": "Kontakt styret",
+      "problems": {
+        "join_token_invalid": {
+          "title": "Lenka verkar ikkje",
+          "body": "Vi kjenner ikkje att denne lenka. Kopier heile lenka frå e-posten, eller meld deg inn på nytt."
+        },
+        "join_token_used": {
+          "title": "Lenka er alt brukt",
+          "body": "Innmeldinga er alt stadfesta. Logg inn for å halde fram."
+        },
+        "join_token_expired": {
+          "title": "Lenka har gått ut",
+          "body": "Lenka verkar i 24 timar. Meld deg inn på nytt, så får du ei ny lenke."
+        },
+        "join_closed": {
+          "title": "Innmelding er stengd",
+          "body": "Klubben tek ikkje imot innmeldingar akkurat no. Ta kontakt med oss."
+        },
+        "already_member": {
+          "title": "Du har alt ein konto",
+          "body": "E-postadressa høyrer alt til ein konto i klubben. Logg inn med henne."
+        },
+        "rejoin_blocked": {
+          "title": "Ta kontakt med styret",
+          "body": "Innmeldinga di kan ikkje fullførast på nettet. Ta kontakt med styret, så hjelper dei deg."
+        },
+        "failed": {
+          "title": "Noko gjekk gale",
+          "body": "Vi fekk ikkje stadfesta innmeldinga. Prøv igjen om litt."
+        }
+      }
+    },
+    "complete": {
+      "title": "Fullfør innmeldinga",
+      "awaitingBody": "Du har stadfesta innmeldinga. Betal kontingenten, så er du medlem med ein gong.",
+      "payNow": "Betal no",
+      "payByBank": "Betal med bankoverføring",
+      "payByBankHelp": "Med bankoverføring får du ein faktura med KID. Medlemskapet startar når betalinga er registrert, og det kan ta nokre dagar.",
+      "paymentInProgress": "Ei nettbetaling er i gang. Fullfør eller avbryt ho først, og prøv så igjen.",
+      "bankFailed": "Vi fekk ikkje laga fakturaen. Prøv igjen om litt.",
+      "waitingForPayment": "Ventar på betaling",
+      "bankBody": "Betal med desse opplysningane i nettbanken. Bruk KID-nummeret, så blir betalinga kopla til deg.",
+      "kid": "KID",
+      "account": "Kontonummer",
+      "amount": "Beløp",
+      "dueDate": "Forfallsdato",
+      "copy": "Kopier {field}",
+      "copyShort": "Kopier",
+      "copied": "Kopiert",
+      "emailed": "Vi har òg sendt fakturaen til deg på e-post.",
+      "bankNote": "Du blir medlem når betalinga er registrert. Det kan ta nokre dagar.",
+      "payOnlineInstead": "Betal på nett i staden",
+      "noneBody": "Finn ingen innmelding som ventar på betaling. Har du nettopp betalt? Oppdater sida om eit minutt. Elles kan du kontakte styret.",
+      "contact": "Kontakt styret",
+      "welcomeTitle": "Velkomen som medlem!",
+      "welcomeBody": "Betalinga er registrert, og du er no medlem.",
+      "toPortal": "Gå til medlemsportalen",
+      "invoices": "Fakturaene dine",
+      "profile": "Profilen din"
+    }
   },
   "harbor": {
     "title": "Gjestehamn",
@@ -3333,10 +3442,6 @@
   },
   "applicant": {
     "complete": {
-      "title": "Innmeldinga er ikkje fullført enno",
-      "body": "Du har stadfesta søknaden, men medlemskapet startar når kontingenten er betalt. Til då kan du sjå fakturaene og profilen din.",
-      "invoices": "Sjå fakturaene dine",
-      "profile": "Profilen din",
       "navLabel": "Fullfør innmeldinga"
     }
   }

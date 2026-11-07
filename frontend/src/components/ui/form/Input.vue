@@ -20,6 +20,10 @@ const props = withDefaults(
     textAlign?: 'left' | 'center' | 'right'
     inputClass?: string
     ariaLabel?: string
+    autocapitalize?: string
+    // A string, not a boolean prop: Vue casts an absent boolean prop to
+    // false, which would turn spellcheck off on every input.
+    spellcheck?: 'true' | 'false'
   }>(),
   { type: 'text', textAlign: 'left' },
 )
@@ -37,6 +41,10 @@ const alignClass = computed(() => ({
   center: 'text-center',
   right: 'text-right',
 }[props.textAlign]))
+
+// The error text is announced with the field: with an id, it gets its own and
+// the input points at it.
+const errorId = computed(() => (props.id ? `${props.id}-error` : undefined))
 
 const cls = computed(() => [
   'block w-full rounded-md border bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-1 disabled:cursor-not-allowed disabled:bg-gray-50',
@@ -70,6 +78,9 @@ const cls = computed(() => [
         :inputmode="inputmode"
         :aria-label="ariaLabel"
         :aria-invalid="!!error"
+        :aria-describedby="error ? errorId : undefined"
+        :autocapitalize="autocapitalize"
+        :spellcheck="spellcheck"
         :class="[cls, { 'pl-7': !!$slots.prefix, 'pr-7': !!$slots.suffix }]"
         @input="$emit('update:modelValue', ($event.target as HTMLInputElement).value)"
         @blur="$emit('blur', $event)"
@@ -81,6 +92,6 @@ const cls = computed(() => [
         <slot name="suffix" />
       </span>
     </div>
-    <p v-if="error" class="mt-1 text-xs text-red-600">{{ error }}</p>
+    <p v-if="error" :id="errorId" class="mt-1 text-xs text-red-600">{{ error }}</p>
   </div>
 </template>

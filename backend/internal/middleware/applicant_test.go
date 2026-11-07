@@ -21,6 +21,8 @@ func TestApplicantMayReach(t *testing.T) {
 		{http.MethodPost, "/api/v1/members/me/delete-request", true},
 		{http.MethodPost, "/api/v1/auth/session/logout", true},
 		{http.MethodPost, "/api/v1/auth/passkeys/step-up/begin", true},
+		{http.MethodGet, "/api/v1/join/me", true},
+		{http.MethodPost, "/api/v1/join/me", false},
 		// The method matters: a listed path is not open to every method.
 		{http.MethodDelete, "/api/v1/members/me", false},
 		{http.MethodGet, "/api/v1/members/directory", false},

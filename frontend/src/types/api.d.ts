@@ -1961,6 +1961,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/join/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Where the signed-in user's join stands
+         * @description Read-only. member when the user holds the member role and not the applicant role; bank_invoice with the owed join faktura (KID, account, amount, due date) and its pay link; awaiting_payment with the pending join order's pay link; none otherwise. Reachable by an applicant-only session.
+         */
+        get: operations["get-join-me"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/join/status": {
         parameters: {
             query?: never;
@@ -4593,6 +4613,23 @@ export interface components {
             /** @description Whether the link can still be confirmed */
             valid: boolean;
         };
+        JoinMeResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/JoinMeResponse.json
+             */
+            readonly $schema?: string;
+            /** @description The owed join faktura (bank_invoice); emailed is always false */
+            bank_invoice?: components["schemas"]["JoinBankInvoiceResponse"];
+            /** @description The pay page of what is left to pay (awaiting_payment, bank_invoice) */
+            checkout_url?: string;
+            /**
+             * @description Where the signed-in user's join stands
+             * @enum {string}
+             */
+            state: "awaiting_payment" | "bank_invoice" | "member" | "none";
+        };
         JoinPrice: {
             /**
              * Format: double
@@ -4647,6 +4684,11 @@ export interface components {
             open: boolean;
             /** @description The price of joining; null unless open */
             price: components["schemas"]["JoinPrice"];
+            /**
+             * Format: int64
+             * @description The server's current year, for labelling the dues
+             */
+            year: number;
         };
         LegalDocument: {
             /**
@@ -10781,6 +10823,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JoinConfirmStatusResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-join-me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JoinMeResponse"];
                 };
             };
             /** @description Error */

@@ -204,23 +204,132 @@
     "motorhomeParking": "Motorhome parking"
   },
   "join": {
-    "title": "Join the club",
-    "subtitle": "Sign up for the harbour slip waiting list",
-    "fullName": "Full name",
-    "email": "Email",
-    "phone": "Phone",
-    "boatDetails": "Boat details",
-    "boatName": "Boat name",
-    "boatType": "Boat type",
-    "boatLength": "Length (m)",
-    "boatBeam": "Beam (m)",
-    "boatDraft": "Draft (m)",
-    "payComingSoon": "Payment coming soon",
-    "submit": "Join",
-    "queuePosition": "Your queue position",
-    "queueMessage": "You are number {position} on the waiting list",
-    "submitting": "Submitting...",
-    "submitted": "Registration complete!"
+    "title": "Become a member",
+    "intro": "Fill in the form and we'll email you a link to confirm. Once the membership fee is paid, you're a member.",
+    "loadFailed": "We couldn't load the page.",
+    "retry": "Try again",
+    "alreadyMember": {
+      "title": "You're already a member",
+      "body": "You're signed in with a club account, so there's no need to join.",
+      "portal": "Go to My page"
+    },
+    "applicant": {
+      "title": "Your membership is under way",
+      "body": "You've confirmed your application. All that's left is paying the membership fee.",
+      "continue": "Finish joining"
+    },
+    "closed": {
+      "title": "Joining is not open yet",
+      "body": "The club isn't taking online applications right now. Get in touch and we'll help.",
+      "contact": "Contact us"
+    },
+    "sent": {
+      "title": "Check your email",
+      "body": "We've sent an email to the address you entered. Open the link in it to confirm your application. The link works for 24 hours.",
+      "spam": "If it hasn't arrived after a few minutes, check your spam folder."
+    },
+    "form": {
+      "price": "Membership fee {year}: {amount}",
+      "firstName": "First name",
+      "lastName": "Last name",
+      "email": "Email",
+      "phone": "Phone",
+      "addressLine": "Street address",
+      "postalCode": "Postcode",
+      "city": "Town",
+      "optional": "Optional",
+      "isLocal": "Do you live in the municipality where the club is based?",
+      "readDocuments": "Read the documents",
+      "opensNewTab": "(opens in a new tab)",
+      "acceptTerms": "I accept the statutes and harbour rules, the privacy policy and the terms of sale.",
+      "newsletter": "Yes please, send me the club newsletter.",
+      "termsChanged": "The terms were updated after you opened this page. Please read them again and tick the box again.",
+      "required": "Required",
+      "invalidEmail": "Enter a valid email address",
+      "chooseOne": "Choose yes or no",
+      "acceptRequired": "You must accept the terms to become a member",
+      "submit": "Send application",
+      "submitting": "Sending …",
+      "rateLimited": "Too many attempts. Wait a minute and try again.",
+      "badRequest": "Something in the form is not right. Check the fields and try again.",
+      "failed": "Your application couldn't be sent. Try again shortly.",
+      "checkFields": "Check the highlighted fields."
+    },
+    "legal": {
+      "statutes": "Statutes",
+      "harbour_rules": "Harbour rules",
+      "privacy": "Privacy policy",
+      "terms_of_sale": "Terms of sale",
+      "version": "Version {version}, published {date}",
+      "notPublished": "This document has not been published yet.",
+      "notFound": "Document not found"
+    },
+    "confirm": {
+      "title": "Hi {name}, confirm your application",
+      "body": "Press the button to confirm. You then go straight to paying the membership fee.",
+      "button": "Confirm application",
+      "registerAgain": "Apply again",
+      "login": "Log in",
+      "contact": "Contact the board",
+      "problems": {
+        "join_token_invalid": {
+          "title": "This link doesn't work",
+          "body": "We don't recognise this link. Copy the whole link from the email, or apply again."
+        },
+        "join_token_used": {
+          "title": "This link has been used",
+          "body": "Your application is already confirmed. Log in to continue."
+        },
+        "join_token_expired": {
+          "title": "This link has expired",
+          "body": "The link works for 24 hours. Apply again and you'll get a new one."
+        },
+        "join_closed": {
+          "title": "Joining is closed",
+          "body": "The club isn't taking applications right now. Please get in touch."
+        },
+        "already_member": {
+          "title": "You already have an account",
+          "body": "This email address already belongs to a club account. Log in with it."
+        },
+        "rejoin_blocked": {
+          "title": "Please contact the board",
+          "body": "Your application can't be completed online. Contact the board and they'll help you."
+        },
+        "failed": {
+          "title": "Something went wrong",
+          "body": "We couldn't confirm your application. Try again shortly."
+        }
+      }
+    },
+    "complete": {
+      "title": "Finish joining",
+      "awaitingBody": "You've confirmed your application. Pay the membership fee and you're a member straight away.",
+      "payNow": "Pay now",
+      "payByBank": "Pay by bank transfer",
+      "payByBankHelp": "By bank transfer you get an invoice with a KID. Membership starts once the payment is registered, which can take a few days.",
+      "paymentInProgress": "An online payment is in progress. Complete or cancel it first, then try again.",
+      "bankFailed": "We couldn't create the invoice. Try again shortly.",
+      "waitingForPayment": "Waiting for payment",
+      "bankBody": "Pay with these details in your online bank. Use the KID number so the payment is matched to you.",
+      "kid": "KID",
+      "account": "Account number",
+      "amount": "Amount",
+      "dueDate": "Due date",
+      "copy": "Copy {field}",
+      "copyShort": "Copy",
+      "copied": "Copied",
+      "emailed": "We've also emailed you the invoice.",
+      "bankNote": "You become a member once the payment is registered. That can take a few days.",
+      "payOnlineInstead": "Pay online instead",
+      "noneBody": "We can't find an application waiting for payment. Just paid? Refresh the page in a minute. Otherwise, contact the board.",
+      "contact": "Contact the board",
+      "welcomeTitle": "Welcome as a member!",
+      "welcomeBody": "Your payment is registered and you are now a member.",
+      "toPortal": "Go to the member portal",
+      "invoices": "Your invoices",
+      "profile": "Your profile"
+    }
   },
   "harbor": {
     "title": "Guest Harbor",
@@ -3454,10 +3563,6 @@
   },
   "applicant": {
     "complete": {
-      "title": "Your membership is not complete yet",
-      "body": "You have confirmed your application, but your membership starts once the dues are paid. Until then you can see your invoices and your profile.",
-      "invoices": "See your invoices",
-      "profile": "Your profile",
       "navLabel": "Complete membership"
     }
   }

@@ -139,6 +139,7 @@ type JoinStatusResponse struct {
 	Open    bool       `json:"open" doc:"Whether the join form may be used"`
 	Price   *JoinPrice `json:"price" doc:"The price of joining; null unless open"`
 	Missing []string   `json:"missing" doc:"What keeps joining closed: club, price_item_unset, price_item_inactive, price_item_not_flat, price_item_other_club, or a legal document type not yet published (privacy, statutes, harbour_rules, terms_of_sale). Empty when open"`
+	Year    int        `json:"year" doc:"The server's current year, for labelling the dues"`
 }
 
 type JoinRequest struct {
@@ -181,6 +182,12 @@ type JoinBankInvoiceResponse struct {
 	Currency      string  `json:"currency" doc:"Always NOK"`
 	DueDate       string  `json:"due_date" format:"date" doc:"The due date (YYYY-MM-DD)"`
 	Emailed       bool    `json:"emailed" doc:"Whether this call emailed the faktura; a repeat call never does"`
+}
+
+type JoinMeResponse struct {
+	State       string                   `json:"state" enum:"awaiting_payment,bank_invoice,member,none" doc:"Where the signed-in user's join stands"`
+	CheckoutURL string                   `json:"checkout_url,omitempty" doc:"The pay page of what is left to pay (awaiting_payment, bank_invoice)"`
+	BankInvoice *JoinBankInvoiceResponse `json:"bank_invoice,omitempty" doc:"The owed join faktura (bank_invoice); emailed is always false"`
 }
 
 // --- Auth ---

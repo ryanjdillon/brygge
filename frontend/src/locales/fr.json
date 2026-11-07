@@ -161,21 +161,132 @@
     "motorhomeParking": "Stationnement camping-car"
   },
   "join": {
-    "title": "Rejoindre le club",
-    "subtitle": "Inscrivez-vous sur la liste d'attente pour un poste d'amarrage",
-    "fullName": "Nom complet",
-    "email": "E-mail",
-    "phone": "Téléphone",
-    "boatDetails": "Détails du bateau",
-    "boatName": "Nom du bateau",
-    "boatType": "Type de bateau",
-    "boatLength": "Longueur (m)",
-    "boatBeam": "Largeur (m)",
-    "boatDraft": "Tirant d'eau (m)",
-    "queuePosition": "Votre position dans la file",
-    "queueMessage": "Vous êtes le numéro {position} sur la liste d'attente",
-    "submitting": "Envoi en cours...",
-    "submitted": "Inscription terminée !"
+    "title": "Devenir membre",
+    "intro": "Remplissez le formulaire et nous vous enverrons par e-mail un lien de confirmation. Une fois la cotisation payée, vous êtes membre.",
+    "loadFailed": "La page n'a pas pu être chargée.",
+    "retry": "Réessayer",
+    "alreadyMember": {
+      "title": "Vous êtes déjà membre",
+      "body": "Vous êtes connecté avec un compte du club, inutile d'adhérer.",
+      "portal": "Aller à Mon espace"
+    },
+    "applicant": {
+      "title": "Votre adhésion est en cours",
+      "body": "Vous avez confirmé votre demande. Il ne reste plus qu’à payer la cotisation.",
+      "continue": "Finaliser l'adhésion"
+    },
+    "closed": {
+      "title": "Les adhésions ne sont pas encore ouvertes",
+      "body": "Le club n'accepte pas de demandes en ligne pour le moment. Contactez-nous, nous vous aiderons.",
+      "contact": "Nous contacter"
+    },
+    "sent": {
+      "title": "Consultez vos e-mails",
+      "body": "Nous avons envoyé un e-mail à l'adresse saisie. Ouvrez le lien qu'il contient pour confirmer votre demande. Le lien est valable 24 heures.",
+      "spam": "Si vous ne le recevez pas d'ici quelques minutes, vérifiez vos courriers indésirables."
+    },
+    "form": {
+      "price": "Cotisation {year} : {amount}",
+      "firstName": "Prénom",
+      "lastName": "Nom",
+      "email": "E-mail",
+      "phone": "Téléphone",
+      "addressLine": "Adresse",
+      "postalCode": "Code postal",
+      "city": "Ville",
+      "optional": "Facultatif",
+      "isLocal": "Habitez-vous dans la commune où se trouve le club ?",
+      "readDocuments": "Lire les documents",
+      "opensNewTab": "(ouvre un nouvel onglet)",
+      "acceptTerms": "J'accepte les statuts et le règlement du port, la politique de confidentialité et les conditions de vente.",
+      "newsletter": "Oui, envoyez-moi la lettre d'information du club.",
+      "termsChanged": "Les conditions ont été mises à jour depuis l'ouverture de la page. Relisez-les et cochez à nouveau la case.",
+      "required": "Obligatoire",
+      "invalidEmail": "Saisissez une adresse e-mail valide",
+      "chooseOne": "Choisissez oui ou non",
+      "acceptRequired": "Vous devez accepter les conditions pour devenir membre",
+      "submit": "Envoyer la demande",
+      "submitting": "Envoi …",
+      "rateLimited": "Trop de tentatives. Attendez une minute et réessayez.",
+      "badRequest": "Quelque chose ne va pas dans le formulaire. Vérifiez les champs et réessayez.",
+      "failed": "La demande n'a pas pu être envoyée. Réessayez dans un instant.",
+      "checkFields": "Vérifiez les champs signalés."
+    },
+    "legal": {
+      "statutes": "Statuts",
+      "harbour_rules": "Règlement du port",
+      "privacy": "Politique de confidentialité",
+      "terms_of_sale": "Conditions de vente",
+      "version": "Version {version}, publiée le {date}",
+      "notPublished": "Ce document n'est pas encore publié.",
+      "notFound": "Document introuvable"
+    },
+    "confirm": {
+      "title": "Bonjour {name}, confirmez votre demande",
+      "body": "Appuyez sur le bouton pour confirmer. Vous passerez ensuite directement au paiement de la cotisation.",
+      "button": "Confirmer la demande",
+      "registerAgain": "Refaire une demande",
+      "login": "Se connecter",
+      "contact": "Contacter le bureau",
+      "problems": {
+        "join_token_invalid": {
+          "title": "Ce lien ne fonctionne pas",
+          "body": "Nous ne reconnaissons pas ce lien. Copiez le lien complet depuis l'e-mail ou refaites une demande."
+        },
+        "join_token_used": {
+          "title": "Ce lien a déjà été utilisé",
+          "body": "Votre demande est déjà confirmée. Connectez-vous pour continuer."
+        },
+        "join_token_expired": {
+          "title": "Ce lien a expiré",
+          "body": "Le lien est valable 24 heures. Refaites une demande pour en recevoir un nouveau."
+        },
+        "join_closed": {
+          "title": "Les adhésions sont fermées",
+          "body": "Le club n'accepte pas de demandes pour le moment. Contactez-nous."
+        },
+        "already_member": {
+          "title": "Vous avez déjà un compte",
+          "body": "Cette adresse e-mail appartient déjà à un compte du club. Connectez-vous avec elle."
+        },
+        "rejoin_blocked": {
+          "title": "Contactez le bureau",
+          "body": "Votre demande ne peut pas être finalisée en ligne. Le bureau vous aidera."
+        },
+        "failed": {
+          "title": "Une erreur s'est produite",
+          "body": "Votre demande n'a pas pu être confirmée. Réessayez dans un instant."
+        }
+      }
+    },
+    "complete": {
+      "title": "Finaliser l'adhésion",
+      "awaitingBody": "Vous avez confirmé votre demande. Payez la cotisation et vous serez membre immédiatement.",
+      "payNow": "Payer maintenant",
+      "payByBank": "Payer par virement bancaire",
+      "payByBankHelp": "Par virement, vous recevez une facture avec un KID. L'adhésion commence une fois le paiement enregistré, ce qui peut prendre quelques jours.",
+      "paymentInProgress": "Un paiement en ligne est en cours. Finalisez-le ou annulez-le d'abord, puis réessayez.",
+      "bankFailed": "La facture n'a pas pu être créée. Réessayez dans un instant.",
+      "waitingForPayment": "En attente de paiement",
+      "bankBody": "Payez avec ces informations dans votre banque en ligne. Utilisez le numéro KID pour que le paiement vous soit attribué.",
+      "kid": "KID",
+      "account": "Numéro de compte",
+      "amount": "Montant",
+      "dueDate": "Date d'échéance",
+      "copy": "Copier {field}",
+      "copyShort": "Copier",
+      "copied": "Copié",
+      "emailed": "Nous vous avons aussi envoyé la facture par e-mail.",
+      "bankNote": "Vous devenez membre une fois le paiement enregistré. Cela peut prendre quelques jours.",
+      "payOnlineInstead": "Payer plutôt en ligne",
+      "noneBody": "Nous ne trouvons aucune demande en attente de paiement. Vous venez de payer ? Actualisez la page dans une minute. Sinon, contactez le bureau.",
+      "contact": "Contacter le bureau",
+      "welcomeTitle": "Bienvenue parmi les membres !",
+      "welcomeBody": "Votre paiement est enregistré et vous êtes désormais membre.",
+      "toPortal": "Aller à l'espace membre",
+      "invoices": "Vos factures",
+      "profile": "Votre profil"
+    }
   },
   "harbor": {
     "title": "Port visiteurs",
@@ -2292,10 +2403,6 @@
   },
   "applicant": {
     "complete": {
-      "title": "Votre adhésion n'est pas encore finalisée",
-      "body": "Vous avez confirmé votre demande, mais l'adhésion commence une fois la cotisation payée. D'ici là, vous pouvez consulter vos factures et votre profil.",
-      "invoices": "Voir vos factures",
-      "profile": "Votre profil",
       "navLabel": "Finaliser l'adhésion"
     }
   }

@@ -8,6 +8,7 @@ Cross-audience navigation: see [`../index.md`](../index.md).
 |----------|-------------|
 | [faktura.md](faktura.md) | Treasurer's guide to the invoicing module (price catalogue, send, reconcile, card refunds and disputes) |
 | [migrating-from-previous-system.md](migrating-from-previous-system.md) | Treasurer + operator guide to moving from a previous accounting system: exports, faktura import, open items, opening balance, the reference year |
+| [join.md](join.md) | The self-service **Bli medlem** flow: when the form is open, what a joiner sees from the form to payment (card/Vipps or bank KID), and what each confirmation-link error means |
 | [members.md](members.md) | Board's guide to the Members page signals: the email rejected badge and what to do about it |
 | [membership.md](membership.md) | Member's guide to cancelling online (**Meld deg ut**) and undoing it, and the board's follow-up: the notices, the **Utmeld** badge, dues runs and the 1 January deactivation |
 | [payments-overview.md](payments-overview.md) | The Payments page: reading it, and setting up its filter groups (names, icons, order, prices) |

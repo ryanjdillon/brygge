@@ -16,6 +16,9 @@ function createTestRouter(): Router {
     routes: [
       { path: '/', component: page },
       { path: '/join', component: page },
+      { path: '/bli-medlem', component: page },
+      { path: '/bli-medlem/stadfest', component: page },
+      { path: '/vilkar/:docType', component: page },
       { path: '/login', component: page },
       { path: '/betal/:token', component: page },
       {
@@ -143,5 +146,48 @@ describe('the completion page', () => {
     expect(resolved.matched[0].path).toBe('/portal')
     expect(resolved.meta.requiresAuth).toBe(true)
     expect(resolved.meta.applicantOnly).toBe(true)
+  })
+})
+
+describe('the public join routes', () => {
+  const JOIN_PATHS = ['/join', '/bli-medlem', '/bli-medlem/stadfest?token=abc', '/vilkar/statutes']
+
+  beforeEach(() => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('', { status: 401 }))
+    setActivePinia(createPinia())
+  })
+
+  it.each(JOIN_PATHS)('%s needs no session in the app router', (path) => {
+    const resolved = appRouter.resolve(path)
+    expect(resolved.matched.length).toBeGreaterThan(0)
+    expect(resolved.meta.requiresAuth).toBeFalsy()
+  })
+
+  it.each(JOIN_PATHS)('a signed-out visitor reaches %s', async (path) => {
+    const router = createTestRouter()
+    await router.push(path)
+    await router.isReady()
+    expect(router.currentRoute.value.fullPath).toBe(path)
+  })
+
+  it.each(JOIN_PATHS)('an applicant reaches %s', async (path) => {
+    const router = createTestRouter()
+    await signIn(['applicant'])
+    await router.push(path)
+    await router.isReady()
+    expect(router.currentRoute.value.fullPath).toBe(path)
+  })
+
+  it('lets a member open /join, where the page says they already are one', async () => {
+    const router = createTestRouter()
+    await signIn(['member'])
+    await router.push('/join')
+    await router.isReady()
+    expect(router.currentRoute.value.path).toBe('/join')
+  })
+
+  it('keeps the completion page apart from the public join pages', () => {
+    expect(appRouter.resolve('/bli-medlem').matched[0].path).toBe('/bli-medlem')
+    expect(appRouter.resolve(APPLICANT_COMPLETE_PATH).matched[0].path).toBe('/portal')
   })
 })

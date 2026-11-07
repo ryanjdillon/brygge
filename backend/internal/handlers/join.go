@@ -302,6 +302,9 @@ type joinStatusResponse struct {
 	Open    bool       `json:"open"`
 	Price   *joinPrice `json:"price"`
 	Missing []string   `json:"missing"`
+	// Year is the server's current year, so the form labels the dues with
+	// the year they are billed for rather than the visitor's clock.
+	Year int `json:"year"`
 }
 
 // HandleJoinStatus answers whether the join form may be used, with the price
@@ -320,7 +323,7 @@ func (h *JoinHandler) HandleJoinStatus(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	resp := joinStatusResponse{Open: st.open(), Missing: st.missing}
+	resp := joinStatusResponse{Open: st.open(), Missing: st.missing, Year: time.Now().In(time.Local).Year()}
 	if resp.Missing == nil {
 		resp.Missing = []string{}
 	}
