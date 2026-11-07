@@ -142,14 +142,14 @@ The harbour share columns of migration 000133 (BRY-77, BRD-14), `users.harbor_sh
 `mva_compensation_reports`, `order_lines`, `order_sources`, `payment_attempts`,
 `price_exemptions`, `price_items`, `product_variants`, `products`,
 `payment_disputes`, `payment_filter_groups`, `payment_filter_group_items`, `refund_documents`, `slip_assignments`, `stripe_payouts`, `stripe_sync_state`,
-`vipps_imports`, `waiting_list_entries`.
+`legal_documents` (000141), `vipps_imports`, `waiting_list_entries`.
 
 `payment_attempts` (000115) holds only ids, the provider name, the opaque
 provider reference, status, amount and currency, plus (000118) Stripe's card
 brand and wallet codes — never card digits or country. `stripe_payouts` (000117)
 holds Stripe ids, amounts, status, currency and the payout's statement
 descriptor, which is the club's own text; `stripe_sync_state` only a club id
-and timestamps; `refund_documents` (000119) only ids, amounts and a kind code; `payment_disputes` (000120) only ids, an amount and Stripe's status and reason codes; `payment_filter_groups` (000123) the club's own chip labels and codes (`slug`, `name`, `label_key`, `icon`, `builtin`, each in `rawTextColumns`; a name is typed by the board for a chip) and `payment_filter_group_items` only two ids. `stripe_balance_transactions.fee_details` (in its masked view)
+and timestamps; `refund_documents` (000119) only ids, amounts and a kind code; `payment_disputes` (000120) only ids, an amount and Stripe's status and reason codes; `payment_filter_groups` (000123) the club's own chip labels and codes (`slug`, `name`, `label_key`, `icon`, `builtin`, each in `rawTextColumns`; a name is typed by the board for a chip) and `payment_filter_group_items` only two ids. `legal_documents` (000141) holds the club's privacy policy, statutes and terms as published text, with a type, version and dates; it has no author or actor column (`doc_type`, `version`, `content` are in `rawTextColumns`). `stripe_balance_transactions.fee_details` (in its masked view)
 holds Stripe's fee types, amounts and Stripe-written descriptions.
 
 **Rule: a table is allowlisted raw only if none of its free-text columns can

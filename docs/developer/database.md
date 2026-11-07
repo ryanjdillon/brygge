@@ -604,6 +604,7 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   (`end_refused:<user>:<ends_on>`) is queued once. The kinds need no CHECK
   change: 000138's `membership_*` branch admits them. Index only; **the
   down** drops it.
+- **Developer role reads `legal_documents`.** 000141 grants `SELECT` on `legal_documents` to `brygge_dev_ro` (when the role exists). The table is published policy text with no author column. Down revokes. See [security/dev-query.md](security/dev-query.md).
 - **Join address verification.** 000140 (BRY-639, BRD-16) adds
   `address_verified BOOLEAN`, `address_kommunenummer TEXT` and
   `address_verified_at TIMESTAMPTZ` to `users` (all nullable: NULL is "never

@@ -73,6 +73,8 @@ var rawTextColumns = map[string]bool{
 	// typed by the board for a chip and holds no member data
 	"payment_filter_groups.slug": true, "payment_filter_groups.name": true, "payment_filter_groups.label_key": true,
 	"payment_filter_groups.icon": true, "payment_filter_groups.builtin": true,
+	// privacy policy, statutes and terms: published text, no author column
+	"legal_documents.doc_type": true, "legal_documents.version": true, "legal_documents.content": true,
 }
 
 // TestDevMaskedViews migrates a throwaway database, applies the dev_masked
@@ -243,6 +245,9 @@ func TestDevMaskedViews(t *testing.T) {
 		}
 		if _, err := rolePool.Exec(ctx, "SELECT 1 FROM public.accounts"); err != nil {
 			t.Errorf("role could not read allowlisted public.accounts: %v", err)
+		}
+		if _, err := rolePool.Exec(ctx, "SELECT 1 FROM public.legal_documents"); err != nil {
+			t.Errorf("role could not read allowlisted public.legal_documents: %v", err)
 		}
 		// Outgoing mail: the address is NULL, the domain stays, and an address
 		// quoted inside SMTP text or a send error is replaced.
