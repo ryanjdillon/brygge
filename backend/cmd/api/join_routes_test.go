@@ -79,3 +79,34 @@ func TestLoginVerifyRateLimit(t *testing.T) {
 		t.Fatalf("GET after the budget: %d, want 429 (shared budget)", rec.Code)
 	}
 }
+
+// The strict login limiter and the contact form's limiter fail closed: with
+// Redis unreachable each answers 503 rate_limit_unavailable before the
+// handler (BRY-662). Health, features and the standard-limited public reads
+// fail open and never answer 503 for a Redis outage.
+func TestStrictRateLimitRoutesFailClosed(t *testing.T) {
+	r := inertRouter(t, auth.NewSessionService(nil), nil)
+
+	for _, rt := range []struct{ method, path string }{
+		{http.MethodPost, "/api/v1/auth/magic-link"},
+		{http.MethodPost, "/api/v1/auth/verify"},
+		{http.MethodGet, "/api/v1/auth/verify?token=x"},
+		{http.MethodPost, "/api/v1/auth/passkeys/login/begin"},
+		{http.MethodPost, "/api/v1/auth/passkeys/login/finish"},
+		{http.MethodPost, "/api/v1/contact"},
+	} {
+		rec := serveAs(r, rt.method, rt.path, "")
+		if rec.Code != http.StatusServiceUnavailable || !strings.Contains(rec.Body.String(), "rate_limit_unavailable") {
+			t.Errorf("%s %s with Redis down: %d %s, want 503 rate_limit_unavailable", rt.method, rt.path, rec.Code, rec.Body.String())
+		}
+		if rec.Header().Get("Retry-After") == "" {
+			t.Errorf("%s %s: 503 without Retry-After", rt.method, rt.path)
+		}
+	}
+
+	for _, path := range []string{"/api/v1/health", "/api/v1/features", "/api/v1/pricing"} {
+		if rec := serveAs(r, http.MethodGet, path, ""); rec.Code == http.StatusServiceUnavailable {
+			t.Errorf("GET %s answered 503 with Redis down; it must not be behind a fail-closed limiter", path)
+		}
+	}
+}

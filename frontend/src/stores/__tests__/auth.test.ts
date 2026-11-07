@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
+import { i18n } from '@/i18n'
 
 vi.unmock('vue-i18n')
 vi.unmock('@tanstack/vue-query')
@@ -110,5 +111,39 @@ describe('auth store', () => {
 
     expect(auth.user).toBeNull()
     expect(auth.isAuthenticated).toBe(false)
+  })
+  describe('requestMagicLink refusals', () => {
+    async function requestWith(response: Response) {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('', { status: 401 }))
+      const auth = useAuthStore()
+      await auth.ready
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(response)
+      const ok = await auth.requestMagicLink('someone@example.test')
+      return { ok, auth }
+    }
+
+    it.each([
+      [429, 'login.errors.rateLimited', '{"error":"too many requests","retry_after":42}'],
+      [503, 'login.errors.unavailable', '{"error":"rate_limit_unavailable"}'],
+      [500, 'login.errors.sendFailed', '{"error":"internal error"}'],
+    ])('a %i shows %s and never the raw body', async (status, key, body) => {
+      const { ok, auth } = await requestWith(
+        new Response(body, { status, headers: { 'Content-Type': 'application/json' } }),
+      )
+      expect(ok).toBe(false)
+      expect(auth.loginError).toBe(i18n.global.t(key))
+      expect(auth.loginError).not.toBe(key)
+      expect(auth.loginError).not.toContain('{')
+      expect(auth.loginError).not.toContain('error')
+    })
+
+    it('a network failure shows the connection message', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('', { status: 401 }))
+      const auth = useAuthStore()
+      await auth.ready
+      vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      expect(await auth.requestMagicLink('someone@example.test')).toBe(false)
+      expect(auth.loginError).toBe(i18n.global.t('login.errors.network'))
+    })
   })
 })

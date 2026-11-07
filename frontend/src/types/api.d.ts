@@ -1174,7 +1174,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Request a magic-link sign-in email */
+        /**
+         * Request a magic-link sign-in email
+         * @description Mails a login link. 429 over the strict per-IP budget; 503 rate_limit_unavailable (with Retry-After) when the limiter cannot read Redis, since the strict limiter fails closed.
+         */
         post: operations["request-magic-link"];
         delete?: never;
         options?: never;
@@ -1208,7 +1211,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Begin usernameless passkey login — returns assertion options + a challenge id */
+        /**
+         * Begin usernameless passkey login — returns assertion options + a challenge id
+         * @description 429 over the strict per-IP budget; 503 rate_limit_unavailable (with Retry-After) when the limiter cannot read Redis, since the strict limiter fails closed.
+         */
         post: operations["passkey-login-begin"];
         delete?: never;
         options?: never;
@@ -1225,7 +1231,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Finish passkey login — verify + create a session */
+        /**
+         * Finish passkey login — verify + create a session
+         * @description 429 over the strict per-IP budget; 503 rate_limit_unavailable (with Retry-After) when the limiter cannot read Redis, since the strict limiter fails closed.
+         */
         post: operations["passkey-login-finish"];
         delete?: never;
         options?: never;
@@ -1362,13 +1371,13 @@ export interface paths {
         };
         /**
          * Redirect an old login link to the login page
-         * @description Consumes nothing: answers 302 to the SPA page /login/verify with the same token, where the member logs in with POST /api/v1/auth/verify. Kept for login links mailed before the page existed.
+         * @description Consumes nothing: answers 302 to the SPA page /login/verify with the same token, where the member logs in with POST /api/v1/auth/verify. Kept for login links mailed before the page existed. 429 over the strict per-IP budget; 503 rate_limit_unavailable (with Retry-After) when the limiter cannot read Redis, since the strict limiter fails closed.
          */
         get: operations["verify-magic-link"];
         put?: never;
         /**
          * Log in with a magic-link token
-         * @description Uses the token up and sets the session cookie. 410 with code login_token_invalid, login_token_used or login_token_expired; 415 unless Content-Type is application/json; 429 over the strict per-IP budget shared with the magic-link request.
+         * @description Uses the token up and sets the session cookie. 410 with code login_token_invalid, login_token_used or login_token_expired; 415 unless Content-Type is application/json; 429 over the strict per-IP budget shared with the magic-link request; 503 rate_limit_unavailable (with Retry-After) when the limiter cannot read Redis, since the strict limiter fails closed. The token is not used up by a 429 or 503, so the same request can be retried.
          */
         post: operations["consume-magic-link"];
         delete?: never;
@@ -1632,7 +1641,7 @@ export interface paths {
         put?: never;
         /**
          * Submit contact form
-         * @description Emails the message to the club's secretary (else chairman) with Reply-To set to the submitter. 502 when delivery fails, 503 when the club has no recipient or the server has no mail transport, 429 when rate limited (strict limiter).
+         * @description Emails the message to the club's secretary (else chairman) with Reply-To set to the submitter. 502 when delivery fails, 503 when the club has no recipient or the server has no mail transport, 429 over its own 5/min per-IP budget, 503 rate_limit_unavailable (with Retry-After) when that limiter cannot read Redis (it fails closed).
          */
         post: operations["submit-contact-form"];
         delete?: never;

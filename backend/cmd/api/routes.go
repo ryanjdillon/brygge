@@ -182,7 +182,12 @@ func newRouter(d routeDeps) *chi.Mux {
 		MaxAge:           300,
 	}))
 
-	strictRL := middleware.RateLimitByIP(rdb, log, 5, time.Minute)
+	// strictRL guards the unauthenticated login routes (magic link, verify,
+	// passkey login). It fails closed: with Redis down it answers 503 rather
+	// than lift the 5/min budget on a guessing target (BRY-662). Nothing that
+	// must answer during a Redis outage (health, features) goes behind it.
+	// All per-IP keys bucket an IPv6 client by its /64 (middleware.IPBucket).
+	strictRL := middleware.StrictRateLimitByIP(rdb, log, 5, time.Minute)
 	standardRL := middleware.RateLimitByIP(rdb, log, 30, time.Minute)
 	authedRL := middleware.RateLimitByUser(rdb, log, 120, time.Minute)
 
@@ -269,10 +274,11 @@ func newRouter(d routeDeps) *chi.Mux {
 		// submission, so it gets the strict budget rather than the standard
 		// one (BRY-475). Its own key keeps a visitor hammering the form from
 		// using up the IP's strict budget for magic-link login. RemoteAddr
-		// is already the client IP here (middleware.ClientIP).
+		// is already the client IP here (middleware.ClientIP). It fails closed
+		// like strictRL, since every request sends mail (BRY-662).
 		contactRL := middleware.NewRateLimiter(rdb, log, 5, time.Minute, func(r *http.Request) string {
-			return "contact:" + r.RemoteAddr
-		})
+			return "contact:" + middleware.IPBucket(r.RemoteAddr)
+		}).FailClosed()
 		r.Group(func(r chi.Router) {
 			r.Use(contactRL.Handler)
 			r.Post("/contact", contactHandler.HandleContactForm)
@@ -285,15 +291,15 @@ func newRouter(d routeDeps) *chi.Mux {
 		// confirm routes are token-addressed and cost no mail; their own key
 		// keeps them off the magic-link budget.
 		joinRL := middleware.NewRateLimiter(rdb, log, 5, time.Minute, func(r *http.Request) string {
-			return "join:" + r.RemoteAddr
+			return "join:" + middleware.IPBucket(r.RemoteAddr)
 		}).FailClosed()
 		joinConfirmRL := middleware.NewRateLimiter(rdb, log, 10, time.Minute, func(r *http.Request) string {
-			return "join-confirm:" + r.RemoteAddr
+			return "join-confirm:" + middleware.IPBucket(r.RemoteAddr)
 		})
 		// The join form's address type-ahead (BRY-639) proxies Kartverket's
 		// register; its own key keeps a fast typist off the standard budget.
 		joinAddressRL := middleware.NewRateLimiter(rdb, log, 30, time.Minute, func(r *http.Request) string {
-			return "join-address:" + r.RemoteAddr
+			return "join-address:" + middleware.IPBucket(r.RemoteAddr)
 		})
 		r.With(standardRL).Get("/join/status", joinHandler.HandleJoinStatus)
 		r.With(joinAddressRL.Handler).Get("/join/address-search", joinHandler.HandleAddressSearch)

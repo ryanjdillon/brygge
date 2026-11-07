@@ -387,6 +387,14 @@
         "failed": {
           "title": "Etwas ist schiefgelaufen",
           "body": "Wir konnten Sie nicht anmelden. Versuchen Sie es erneut oder fordern Sie einen neuen Anmeldelink an."
+        },
+        "rate_limited": {
+          "title": "Zu viele Versuche",
+          "body": "Warten Sie eine Minute und drücken Sie dann erneut auf die Schaltfläche. Ihr Anmeldelink ist weiterhin gültig."
+        },
+        "unavailable": {
+          "title": "Anmeldung vorübergehend nicht verfügbar",
+          "body": "Versuchen Sie es gleich noch einmal. Ihr Anmeldelink bleibt bis zum Ablauf gültig."
         }
       },
       "sessionFailed": {
@@ -394,7 +402,14 @@
         "body": "Die Anmeldung hat geklappt, aber wir konnten Ihr Konto nicht laden. Versuchen Sie es erneut oder gehen Sie zu den Mitgliederseiten.",
         "retry": "Erneut versuchen",
         "portal": "Zu den Mitgliederseiten"
-      }
+      },
+      "retry": "Erneut versuchen"
+    },
+    "errors": {
+      "rateLimited": "Zu viele Versuche. Warten Sie eine Minute und versuchen Sie es erneut.",
+      "unavailable": "Die Anmeldung ist vorübergehend nicht verfügbar. Versuchen Sie es gleich noch einmal.",
+      "sendFailed": "Der Anmeldelink konnte nicht gesendet werden. Versuchen Sie es erneut.",
+      "network": "Der Server ist nicht erreichbar. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
     }
   },
   "merchandise": {

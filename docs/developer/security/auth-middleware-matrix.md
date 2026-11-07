@@ -85,10 +85,10 @@ keep `moneyGate` (treasurer/admin + fresh step-up).
 |---|---|
 | `GET /health`, `GET /features` | none |
 | `GET /pricing`, `GET /products`, `GET /boat-models`, `GET /weather`, `GET /club`, `GET /club/logo[.svg]` | none (rate-limited) |
-| `POST /contact` | none (own 5/min per-IP limiter keyed `contact:<ip>`, separate from the strict auth bucket; fails open if Redis errors; mails the club; honeypot field `website`) |
+| `POST /contact` | none (own 5/min per-IP limiter keyed `contact:<ip bucket>`, separate from the strict auth bucket; fails closed (503 `rate_limit_unavailable`) if Redis errors; mails the club; honeypot field `website`) |
 | `GET /legal/{docType}` | none |
 | `GET /map/*` | none |
-| `POST /auth/magic-link`, `POST /auth/verify`, `GET /auth/verify` | none (strict rate-limit). `POST /auth/verify` is JSON-only (415 otherwise; with the single-origin CORS allow-list this is the login-CSRF guard) and ends any session the request already carried and is the only route that consumes a login token; the GET redirects to the SPA page `/login/verify` |
+| `POST /auth/magic-link`, `POST /auth/verify`, `GET /auth/verify`, `POST /auth/passkeys/login/begin`, `POST /auth/passkeys/login/finish` | none (strict rate-limit, 5/min per IP bucket (an IPv6 /64); fails closed: 503 `rate_limit_unavailable` with `Retry-After` while Redis is unreadable). `POST /auth/verify` is JSON-only (415 otherwise; with the single-origin CORS allow-list this is the login-CSRF guard) and ends any session the request already carried and is the only route that consumes a login token; the GET redirects to the SPA page `/login/verify` |
 | `GET /harbor/layout` | `OptionalSessionAuth` |
 | `POST /bookings` | `OptionalSessionAuth` (guest booking) |
 | `GET /betal/{token}`, `GET /checkout/{token}*`, `GET /betal/bruker/{token}` | none — the durable token is the capability (per-invoice and per-member payables links) |

@@ -282,3 +282,150 @@ func TestRateLimitLogRedactsPathToken(t *testing.T) {
 		t.Fatalf("rate limit log missing the redacted path: %q", out)
 	}
 }
+
+// IPBucket is the subject of every per-IP key: an IPv4 address per address
+// (mapped IPv6 included), an IPv6 address per /64.
+func TestIPBucket(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"ipv4", "192.0.2.10", "192.0.2.10"},
+		{"ipv4 with port", "192.0.2.10:1234", "192.0.2.10"},
+		{"ipv4 neighbour is its own bucket", "192.0.2.11", "192.0.2.11"},
+		{"ipv4-mapped ipv6", "::ffff:192.0.2.10", "192.0.2.10"},
+		{"ipv4-mapped ipv6 with port", "[::ffff:192.0.2.10]:443", "192.0.2.10"},
+		{"ipv6", "2001:db8:1:2::1", "2001:db8:1:2::/64"},
+		{"ipv6 same /64", "2001:db8:1:2:aaaa:bbbb:cccc:dddd", "2001:db8:1:2::/64"},
+		{"ipv6 with port", "[2001:db8:1:2::1]:443", "2001:db8:1:2::/64"},
+		{"ipv6 with zone", "fe80::1%eth0", "fe80::/64"},
+		{"ipv6 uppercase", "2001:DB8:1:2::A", "2001:db8:1:2::/64"},
+		{"ipv6 fully expanded", "2001:0db8:0001:0002:0000:0000:0000:000a", "2001:db8:1:2::/64"},
+		{"ipv4-compatible ipv6 is ipv6", "::192.0.2.1", "::/64"},
+		{"ipv6 loopback", "::1", "::/64"},
+		{"empty", "", "unknown"},
+		{"blank", "   ", "unknown"},
+		{"malformed", "not-an-ip", "not-an-ip"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := IPBucket(tt.in); got != tt.want {
+				t.Errorf("IPBucket(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+// A client rotating addresses inside its /64 shares one budget; another /64
+// and each IPv4 address get their own.
+func TestRateLimitIPv6SharesSlash64(t *testing.T) {
+	t.Parallel()
+	rdb, _ := testRedis(t)
+	handler := NewRateLimiter(rdb, zerolog.Nop(), 1, time.Minute, IPKey).Handler(okHandler())
+	hit := func(addr string) int {
+		req := httptest.NewRequest(http.MethodPost, "/auth/magic-link", nil)
+		req.RemoteAddr = addr
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	steps := []struct {
+		addr string
+		want int
+	}{
+		{"2001:db8:1:2::1", http.StatusOK},
+		{"2001:db8:1:2::2", http.StatusTooManyRequests},           // same /64
+		{"2001:db8:1:2:dead:beef::9", http.StatusTooManyRequests}, // same /64
+		{"2001:db8:1:3::1", http.StatusOK},                        // other /64
+		{"192.0.2.10", http.StatusOK},                             // IPv4
+		{"192.0.2.11", http.StatusOK},                             // IPv4 neighbour
+		{"::ffff:192.0.2.10", http.StatusTooManyRequests},         // mapped = 192.0.2.10
+		{"", http.StatusOK},                                       // unknown bucket
+		{"", http.StatusTooManyRequests},                          // still one bucket
+	}
+	for i, s := range steps {
+		if got := hit(s.addr); got != s.want {
+			t.Fatalf("step %d (%q): got %d, want %d", i, s.addr, got, s.want)
+		}
+	}
+}
+
+// The strict limiter refuses with 503 + Retry-After while Redis is down; the
+// standard (and per-user) limiters let the request through.
+func TestStrictRateLimitFailsClosedStandardFailsOpen(t *testing.T) {
+	t.Parallel()
+	rdb, mr := testRedis(t)
+	mr.Close()
+
+	reached := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reached = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	rec := httptest.NewRecorder()
+	StrictRateLimitByIP(rdb, zerolog.Nop(), 5, time.Minute)(next).
+		ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/auth/magic-link", nil))
+	if rec.Code != http.StatusServiceUnavailable || reached {
+		t.Fatalf("strict limiter: got %d, reached=%v; want 503 and the handler not reached", rec.Code, reached)
+	}
+	if rec.Header().Get("Retry-After") == "" {
+		t.Error("strict limiter 503 has no Retry-After")
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("strict limiter 503 Content-Type = %q, want application/json", ct)
+	}
+	var body map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil || body["error"] != "rate_limit_unavailable" {
+		t.Fatalf("strict limiter body = %v (err %v), want error rate_limit_unavailable", body, err)
+	}
+
+	for name, mw := range map[string]func(http.Handler) http.Handler{
+		"standard": RateLimitByIP(rdb, zerolog.Nop(), 30, time.Minute),
+		"authed":   RateLimitByUser(rdb, zerolog.Nop(), 120, time.Minute),
+	} {
+		reached = false
+		rec := httptest.NewRecorder()
+		mw(next).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/pricing", nil))
+		if rec.Code != http.StatusOK || !reached {
+			t.Errorf("%s limiter: got %d, reached=%v; want 200 and the handler reached", name, rec.Code, reached)
+		}
+	}
+}
+
+// The window is fixed from the first hit: steady hits do not push the reset
+// out. Hits 20 s apart fill a 3/min budget, the fourth is refused, and the
+// first request after the 60 s window from the first hit goes through.
+func TestRateLimitFixedWindowNotExtendedByHits(t *testing.T) {
+	t.Parallel()
+	rdb, mr := testRedis(t)
+	handler := NewRateLimiter(rdb, zerolog.Nop(), 3, time.Minute, IPKey).Handler(okHandler())
+	hit := func() int {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/auth/magic-link", nil))
+		return rec.Code
+	}
+
+	for i := range 3 { // t = 0, 20, 40
+		if i > 0 {
+			mr.FastForward(20 * time.Second)
+		}
+		if got := hit(); got != http.StatusOK {
+			t.Fatalf("hit %d at %ds: got %d, want 200", i+1, i*20, got)
+		}
+	}
+	// t = 59 s: still the first window, budget spent.
+	mr.FastForward(19 * time.Second)
+	if got := hit(); got != http.StatusTooManyRequests {
+		t.Fatalf("hit 4 at 59s: got %d, want 429", got)
+	}
+	// t = 61 s: the window that opened at t = 0 has ended.
+	mr.FastForward(2 * time.Second)
+	if got := hit(); got != http.StatusOK {
+		t.Fatalf("hit at 61s: got %d, want 200 (window must not be extended by later hits)", got)
+	}
+}

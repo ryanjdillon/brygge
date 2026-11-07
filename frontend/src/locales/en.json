@@ -450,6 +450,14 @@
         "failed": {
           "title": "Something went wrong",
           "body": "We could not log you in. Try again, or request a new login link."
+        },
+        "rate_limited": {
+          "title": "Too many attempts",
+          "body": "Wait a minute, then press the button again. Your login link still works."
+        },
+        "unavailable": {
+          "title": "Login is temporarily unavailable",
+          "body": "Try again shortly. Your login link still works until it expires."
         }
       },
       "sessionFailed": {
@@ -457,7 +465,14 @@
         "body": "Your login went through, but we could not load your account. Try again, or go to the member pages.",
         "retry": "Try again",
         "portal": "Go to the member pages"
-      }
+      },
+      "retry": "Try again"
+    },
+    "errors": {
+      "rateLimited": "Too many attempts. Wait a minute and try again.",
+      "unavailable": "Login is temporarily unavailable. Try again shortly.",
+      "sendFailed": "Could not send the login link. Try again.",
+      "network": "Could not reach the server. Check your connection and try again."
     }
   },
   "portal": {

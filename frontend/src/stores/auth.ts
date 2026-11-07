@@ -1,9 +1,21 @@
 import { ref, computed, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { useTotpGateStore } from '@/stores/totpGate'
-import { setLocale, hasExplicitLocale } from '@/i18n'
+import { i18n, setLocale, hasExplicitLocale } from '@/i18n'
 import { canViewAdmin } from '@/lib/adminAccess'
 import { isApplicantOnly } from '@/lib/applicantAccess'
+
+/**
+ * loginErrorMessage is the message a login request refused with `status`
+ * shows. The strict login limiter answers 429 over the budget and 503
+ * rate_limit_unavailable while it cannot read Redis (it fails closed); any
+ * other refusal gets a generic message. Never the response body.
+ */
+export function loginErrorMessage(status: number): string {
+  if (status === 429) return i18n.global.t('login.errors.rateLimited')
+  if (status === 503) return i18n.global.t('login.errors.unavailable')
+  return i18n.global.t('login.errors.sendFailed')
+}
 
 interface User {
   id: string
@@ -142,13 +154,12 @@ export const useAuthStore = defineStore('auth', () => {
         body: JSON.stringify({ email }),
       })
       if (!res.ok) {
-        const text = await res.text().catch(() => '')
-        loginError.value = text || 'Kunne ikke sende innloggingslenke'
+        loginError.value = loginErrorMessage(res.status)
         return false
       }
       return true
     } catch {
-      loginError.value = 'Kunne ikke koble til serveren'
+      loginError.value = i18n.global.t('login.errors.network')
       return false
     }
   }

@@ -144,4 +144,41 @@ describe('LoginVerifyView', () => {
     expect(wrapper.find('[data-testid="verify-problem-failed"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="verify-request-new"]').attributes('href')).toBe('/login')
   })
+  // The limiter refuses before the token is read, so the page keeps it and
+  // offers the login button again besides a new link.
+  it.each([
+    [429, 'rate_limited', 'too many requests'],
+    [503, 'unavailable', 'rate_limit_unavailable'],
+  ])('a %i shows %s and retries with the same token', async (status, problem, error) => {
+    client.POST.mockResolvedValueOnce({ error: { error }, response: new Response(null, { status }) })
+    const { wrapper, router } = await mountAt('?token=tok-1')
+    const replace = vi.spyOn(router, 'replace')
+    const auth = useAuthStore()
+
+    await wrapper.find('[data-testid="verify-button"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find(`[data-testid="verify-problem-${problem}"]`).text()).toBe(`login.verify.problems.${problem}.body`)
+    expect(wrapper.find('[data-testid="verify-request-new"]').attributes('href')).toBe('/login')
+    const retry = wrapper.find('[data-testid="verify-retry"]')
+    expect(retry.exists()).toBe(true)
+    expect(retry.text()).toBe('login.verify.retry')
+    expect(retry.classes()).toContain('min-h-11')
+    expect(auth.checkSession).not.toHaveBeenCalled()
+
+    client.POST.mockResolvedValueOnce(ok({ status: 'logged_in' }))
+    signsIn(auth)
+    await retry.trigger('click')
+    await flushPromises()
+    expect(client.POST).toHaveBeenCalledTimes(2)
+    expect(client.POST).toHaveBeenLastCalledWith('/api/v1/auth/verify', { body: { token: 'tok-1' } })
+    expect(replace).toHaveBeenCalledWith('/portal')
+  })
+
+  it('offers no retry for a spent token', async () => {
+    client.POST.mockResolvedValue(fail(410, 'login_token_used'))
+    const { wrapper } = await mountAt('?token=tok-1')
+    await wrapper.find('[data-testid="verify-button"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="verify-retry"]').exists()).toBe(false)
+  })
 })

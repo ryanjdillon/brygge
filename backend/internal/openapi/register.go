@@ -67,6 +67,7 @@ func registerAuthOps(api huma.API) {
 		Path:        "/api/v1/auth/magic-link",
 		Tags:        []string{"Auth"},
 		Summary:     "Request a magic-link sign-in email",
+		Description: "Mails a login link. 429 over the strict per-IP budget; 503 rate_limit_unavailable (with Retry-After) when the limiter cannot read Redis, since the strict limiter fails closed.",
 	}, stub[struct {
 		Body struct {
 			Email string `json:"email" format:"email" doc:"Email address to send the link to"`
@@ -79,7 +80,7 @@ func registerAuthOps(api huma.API) {
 		Path:        "/api/v1/auth/verify",
 		Tags:        []string{"Auth"},
 		Summary:     "Redirect an old login link to the login page",
-		Description: "Consumes nothing: answers 302 to the SPA page /login/verify with the same token, where the member logs in with POST /api/v1/auth/verify. Kept for login links mailed before the page existed.",
+		Description: "Consumes nothing: answers 302 to the SPA page /login/verify with the same token, where the member logs in with POST /api/v1/auth/verify. Kept for login links mailed before the page existed. 429 over the strict per-IP budget; 503 rate_limit_unavailable (with Retry-After) when the limiter cannot read Redis, since the strict limiter fails closed.",
 	}, stub[struct {
 		Token string `query:"token" doc:"Magic-link token from the email"`
 	}, struct{}]())
@@ -90,7 +91,7 @@ func registerAuthOps(api huma.API) {
 		Path:        "/api/v1/auth/verify",
 		Tags:        []string{"Auth"},
 		Summary:     "Log in with a magic-link token",
-		Description: "Uses the token up and sets the session cookie. 410 with code login_token_invalid, login_token_used or login_token_expired; 415 unless Content-Type is application/json; 429 over the strict per-IP budget shared with the magic-link request.",
+		Description: "Uses the token up and sets the session cookie. 410 with code login_token_invalid, login_token_used or login_token_expired; 415 unless Content-Type is application/json; 429 over the strict per-IP budget shared with the magic-link request; 503 rate_limit_unavailable (with Retry-After) when the limiter cannot read Redis, since the strict limiter fails closed. The token is not used up by a 429 or 503, so the same request can be retried.",
 	}, stub[struct{ Body MagicLinkVerifyRequest }, struct{ Body MagicLinkVerifyResponse }]())
 
 	huma.Register(api, huma.Operation{
@@ -179,6 +180,7 @@ func registerPasskeyOps(api huma.API) {
 		Path:        "/api/v1/auth/passkeys/login/begin",
 		Tags:        []string{"Passkeys"},
 		Summary:     "Begin usernameless passkey login — returns assertion options + a challenge id",
+		Description: "429 over the strict per-IP budget; 503 rate_limit_unavailable (with Retry-After) when the limiter cannot read Redis, since the strict limiter fails closed.",
 	}, stub[struct{}, struct{ Body PasskeyLoginBeginResponse }]())
 
 	huma.Register(api, huma.Operation{
@@ -187,6 +189,7 @@ func registerPasskeyOps(api huma.API) {
 		Path:        "/api/v1/auth/passkeys/login/finish",
 		Tags:        []string{"Passkeys"},
 		Summary:     "Finish passkey login — verify + create a session",
+		Description: "429 over the strict per-IP budget; 503 rate_limit_unavailable (with Retry-After) when the limiter cannot read Redis, since the strict limiter fails closed.",
 	}, stub[struct {
 		Cid  string `query:"cid"`
 		Body PasskeyCeremony
@@ -291,7 +294,7 @@ func registerPublicContentOps(api huma.API) {
 		Path:        "/api/v1/contact",
 		Tags:        []string{"Contact"},
 		Summary:     "Submit contact form",
-		Description: "Emails the message to the club's secretary (else chairman) with Reply-To set to the submitter. 502 when delivery fails, 503 when the club has no recipient or the server has no mail transport, 429 when rate limited (strict limiter).",
+		Description: "Emails the message to the club's secretary (else chairman) with Reply-To set to the submitter. 502 when delivery fails, 503 when the club has no recipient or the server has no mail transport, 429 over its own 5/min per-IP budget, 503 rate_limit_unavailable (with Retry-After) when that limiter cannot read Redis (it fails closed).",
 	}, stub[struct{ Body ContactRequest }, struct{ Body StatusResponse }]())
 
 	huma.Register(api, huma.Operation{

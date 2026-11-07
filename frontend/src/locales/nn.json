@@ -443,6 +443,14 @@
         "failed": {
           "title": "Noko gjekk gale",
           "body": "Vi fekk ikkje logga deg inn. Prøv igjen, eller be om ei ny innloggingslenkje."
+        },
+        "rate_limited": {
+          "title": "For mange forsøk",
+          "body": "Vent eit minutt, og trykk på knappen igjen. Innloggingslenkja verkar framleis."
+        },
+        "unavailable": {
+          "title": "Innlogging er mellombels utilgjengeleg",
+          "body": "Prøv igjen om litt. Innloggingslenkja verkar framleis til ho går ut."
         }
       },
       "sessionFailed": {
@@ -450,7 +458,14 @@
         "body": "Innlogginga gjekk gjennom, men vi fekk ikkje lasta kontoen din. Prøv igjen, eller gå til medlemssidene.",
         "retry": "Prøv igjen",
         "portal": "Gå til medlemssidene"
-      }
+      },
+      "retry": "Prøv igjen"
+    },
+    "errors": {
+      "rateLimited": "For mange forsøk. Vent eit minutt og prøv igjen.",
+      "unavailable": "Innlogging er mellombels utilgjengeleg. Prøv igjen om litt.",
+      "sendFailed": "Kunne ikkje sende innloggingslenkje. Prøv igjen.",
+      "network": "Kunne ikkje kople til tenaren. Sjekk tilkoplinga og prøv igjen."
     }
   },
   "portal": {

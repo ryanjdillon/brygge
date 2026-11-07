@@ -2,13 +2,13 @@ package handlers
 
 import (
 	"context"
-	"net"
 	"net/http"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 
 	"github.com/brygge-klubb/brygge/internal/audit"
+	"github.com/brygge-klubb/brygge/internal/middleware"
 )
 
 // loginFailDedupeWindow is how long one anonymous auth.login_failed row
@@ -65,8 +65,9 @@ func auditLoginSuccess(ctx context.Context, a *audit.Service, r *http.Request, u
 // covers that volume.
 //
 // A row with no actor is written at most once per loginFailDedupeWindow per
-// client IP, method and reason (dedupe, may be nil), so random tokens from one
-// address cannot flood the table. A row naming a user is always written.
+// client IP bucket (an IPv6 /64, see middleware.IPBucket), method and reason
+// (dedupe, may be nil), so random tokens from one address cannot flood the
+// table. A row naming a user is always written.
 func auditLoginFailed(ctx context.Context, a *audit.Service, dedupe *redis.Client, r *http.Request, userID, clubID, clubSlug, method, reason string) {
 	if a == nil {
 		return
@@ -90,13 +91,16 @@ func firstAnonymousLoginFail(ctx context.Context, rdb *redis.Client, r *http.Req
 	if rdb == nil {
 		return true
 	}
-	ip := r.RemoteAddr
-	if host, _, err := net.SplitHostPort(ip); err == nil {
-		ip = host
-	}
-	ok, err := rdb.SetNX(ctx, "loginfail:"+ip+":"+method+":"+reason, 1, loginFailDedupeWindow).Result()
+	ok, err := rdb.SetNX(ctx, loginFailDedupeKey(r, method, reason), 1, loginFailDedupeWindow).Result()
 	if err != nil {
 		return true
 	}
 	return ok
+}
+
+// loginFailDedupeKey is the Redis key of the anonymous-failure dedupe. The
+// client is its rate-limit IP bucket, so an IPv6 client counts per /64 and
+// cannot dodge the dedupe by rotating addresses within its prefix.
+func loginFailDedupeKey(r *http.Request, method, reason string) string {
+	return "loginfail:" + middleware.IPBucket(r.RemoteAddr) + ":" + method + ":" + reason
 }

@@ -547,7 +547,7 @@ The public join routes (`handlers/join.go`) answer refusals as `{error, code}`.
 | `join_token_expired` | 410 | `POST /join/confirm` | The 24 hours are up. |
 | `rejoin_blocked` | 409 | `POST /join/confirm` | The board marked the address "can't rejoin" (`users.rejoin_blocked`, BRD-15) after the request; nothing is changed and the token is spent. |
 | `already_member` | 409 | `POST /join/confirm` | The address became an active user with another role after the request; nothing is created and the token is spent. |
-| `rate_limit_unavailable` | 503 | `POST /join` | The per-IP limiter could not read Redis; the route fails closed. |
+| `rate_limit_unavailable` | 503 | `POST /join`, `POST /contact`, and the strict login routes: `POST /auth/magic-link`, `GET`/`POST /auth/verify`, `POST /auth/passkeys/login/begin`, `POST /auth/passkeys/login/finish` | The per-IP limiter could not read Redis; the route fails closed (with `Retry-After: 60`) and the handler is not reached (BRY-662). |
 | `address_query_invalid` | 400 | `GET /join/address-search` | `q` is not 3 to 100 characters after trimming and collapsing spaces; the register is not called. |
 | `not_applicant` | 409 | `POST /join/bank-invoice` | The signed-in user holds no `applicant` role (or is deactivated); nothing is issued. |
 | `no_pending_join` | 409 | `POST /join/bank-invoice` | The applicant has no owed join faktura and no pending join order to bill (it was paid, or the join expired). |

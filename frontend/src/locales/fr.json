@@ -387,6 +387,14 @@
         "failed": {
           "title": "Une erreur est survenue",
           "body": "Nous n'avons pas pu vous connecter. Réessayez, ou demandez un nouveau lien de connexion."
+        },
+        "rate_limited": {
+          "title": "Trop de tentatives",
+          "body": "Patientez une minute, puis appuyez de nouveau sur le bouton. Votre lien de connexion fonctionne toujours."
+        },
+        "unavailable": {
+          "title": "Connexion temporairement indisponible",
+          "body": "Réessayez dans un instant. Votre lien de connexion reste valable jusqu'à son expiration."
         }
       },
       "sessionFailed": {
@@ -394,7 +402,14 @@
         "body": "La connexion a réussi, mais nous n'avons pas pu charger votre compte. Réessayez, ou allez aux pages membres.",
         "retry": "Réessayer",
         "portal": "Aller aux pages membres"
-      }
+      },
+      "retry": "Réessayer"
+    },
+    "errors": {
+      "rateLimited": "Trop de tentatives. Patientez une minute et réessayez.",
+      "unavailable": "La connexion est temporairement indisponible. Réessayez dans un instant.",
+      "sendFailed": "Impossible d'envoyer le lien de connexion. Réessayez.",
+      "network": "Impossible de joindre le serveur. Vérifiez votre connexion et réessayez."
     }
   },
   "merchandise": {

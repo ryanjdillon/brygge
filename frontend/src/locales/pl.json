@@ -387,6 +387,14 @@
         "failed": {
           "title": "Coś poszło nie tak",
           "body": "Nie udało się Cię zalogować. Spróbuj ponownie lub poproś o nowy link logowania."
+        },
+        "rate_limited": {
+          "title": "Zbyt wiele prób",
+          "body": "Odczekaj minutę, a potem ponownie naciśnij przycisk. Twój link logowania nadal działa."
+        },
+        "unavailable": {
+          "title": "Logowanie chwilowo niedostępne",
+          "body": "Spróbuj ponownie za chwilę. Twój link logowania działa do czasu wygaśnięcia."
         }
       },
       "sessionFailed": {
@@ -394,7 +402,14 @@
         "body": "Logowanie się powiodło, ale nie udało się wczytać Twojego konta. Spróbuj ponownie lub przejdź do stron członkowskich.",
         "retry": "Spróbuj ponownie",
         "portal": "Przejdź do stron członkowskich"
-      }
+      },
+      "retry": "Spróbuj ponownie"
+    },
+    "errors": {
+      "rateLimited": "Zbyt wiele prób. Odczekaj minutę i spróbuj ponownie.",
+      "unavailable": "Logowanie jest chwilowo niedostępne. Spróbuj ponownie za chwilę.",
+      "sendFailed": "Nie udało się wysłać linku logowania. Spróbuj ponownie.",
+      "network": "Nie można połączyć się z serwerem. Sprawdź połączenie i spróbuj ponownie."
     }
   },
   "merchandise": {

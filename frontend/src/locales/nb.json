@@ -446,6 +446,14 @@
         "failed": {
           "title": "Noe gikk galt",
           "body": "Vi fikk ikke logget deg inn. Prøv igjen, eller be om en ny innloggingslenke."
+        },
+        "rate_limited": {
+          "title": "For mange forsøk",
+          "body": "Vent et minutt, og trykk på knappen igjen. Innloggingslenken virker fortsatt."
+        },
+        "unavailable": {
+          "title": "Innlogging er midlertidig utilgjengelig",
+          "body": "Prøv igjen om litt. Innloggingslenken virker fortsatt til den utløper."
         }
       },
       "sessionFailed": {
@@ -453,7 +461,14 @@
         "body": "Innloggingen gikk gjennom, men vi fikk ikke lastet kontoen din. Prøv igjen, eller gå til medlemssidene.",
         "retry": "Prøv igjen",
         "portal": "Gå til medlemssidene"
-      }
+      },
+      "retry": "Prøv igjen"
+    },
+    "errors": {
+      "rateLimited": "For mange forsøk. Vent et minutt og prøv igjen.",
+      "unavailable": "Innlogging er midlertidig utilgjengelig. Prøv igjen om litt.",
+      "sendFailed": "Kunne ikke sende innloggingslenke. Prøv igjen.",
+      "network": "Kunne ikke koble til serveren. Sjekk tilkoblingen og prøv igjen."
     }
   },
   "portal": {

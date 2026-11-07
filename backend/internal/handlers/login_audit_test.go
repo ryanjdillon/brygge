@@ -522,8 +522,8 @@ func TestIntegration_LoginAuditPasskey(t *testing.T) {
 	})
 }
 
-// Anonymous failure rows are written once per client IP, method and reason a
-// minute; rows that name a user are never deduped; a Redis outage writes the
+// Anonymous failure rows are written once per client IP (an IPv6 /64),
+// method and reason a minute; rows that name a user are never deduped; a Redis outage writes the
 // row rather than losing it.
 func TestIntegration_LoginAuditAnonymousDedupe(t *testing.T) {
 	t.Parallel()
@@ -585,12 +585,49 @@ func TestIntegration_LoginAuditAnonymousDedupe(t *testing.T) {
 		t.Errorf("%d anonymous rows after the window, want 3", n)
 	}
 
+	// IPv6: two addresses in one /64 are one client; another /64 is not.
+	verifyFrom("2001:db8:1:2::a", "unknown-v6-a")
+	verifyFrom("2001:db8:1:2:ffff::b", "unknown-v6-b")
+	if n := count(""); n != 4 {
+		t.Fatalf("%d anonymous rows after two addresses in one /64, want 4", n)
+	}
+	verifyFrom("2001:db8:1:3::a", "unknown-v6-other-64")
+	if n := count(""); n != 5 {
+		t.Fatalf("%d anonymous rows after a second /64, want 5", n)
+	}
+
 	// Redis down: the row is written.
 	mr.Close()
 	verifyFrom("192.0.2.20", "unknown-redis-down-1")
 	verifyFrom("192.0.2.20", "unknown-redis-down-2")
-	if n := count(""); n != 5 {
-		t.Errorf("%d anonymous rows with Redis down, want 5", n)
+	if n := count(""); n != 7 {
+		t.Errorf("%d anonymous rows with Redis down, want 7", n)
+	}
+}
+
+// The dedupe key counts a client by its rate-limit IP bucket: an IPv6 /64,
+// an IPv4 address (mapped or not).
+func TestLoginFailDedupeKey(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		remote string
+		want   string
+	}{
+		{"192.0.2.20", "loginfail:192.0.2.20:magic_link:invalid"},
+		{"192.0.2.20:4242", "loginfail:192.0.2.20:magic_link:invalid"},
+		{"::ffff:192.0.2.20", "loginfail:192.0.2.20:magic_link:invalid"},
+		{"2001:db8:1:2::a", "loginfail:2001:db8:1:2::/64:magic_link:invalid"},
+		{"[2001:db8:1:2:ffff::b]:443", "loginfail:2001:db8:1:2::/64:magic_link:invalid"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.remote, func(t *testing.T) {
+			t.Parallel()
+			r := httptest.NewRequest(http.MethodPost, "/auth/verify", nil)
+			r.RemoteAddr = tt.remote
+			if got := loginFailDedupeKey(r, loginMethodMagicLink, loginFailInvalid); got != tt.want {
+				t.Errorf("loginFailDedupeKey(%q) = %q, want %q", tt.remote, got, tt.want)
+			}
+		})
 	}
 }
 

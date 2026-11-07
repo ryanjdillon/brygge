@@ -387,6 +387,14 @@
         "failed": {
           "title": "Er ging iets mis",
           "body": "We konden je niet inloggen. Probeer het opnieuw, of vraag een nieuwe inloglink aan."
+        },
+        "rate_limited": {
+          "title": "Te veel pogingen",
+          "body": "Wacht een minuut en druk dan opnieuw op de knop. Je inloglink werkt nog steeds."
+        },
+        "unavailable": {
+          "title": "Inloggen tijdelijk niet beschikbaar",
+          "body": "Probeer het zo opnieuw. Je inloglink blijft werken tot hij verloopt."
         }
       },
       "sessionFailed": {
@@ -394,7 +402,14 @@
         "body": "Het inloggen is gelukt, maar we konden je account niet laden. Probeer het opnieuw, of ga naar de ledenpagina's.",
         "retry": "Opnieuw proberen",
         "portal": "Naar de ledenpagina's"
-      }
+      },
+      "retry": "Opnieuw proberen"
+    },
+    "errors": {
+      "rateLimited": "Te veel pogingen. Wacht een minuut en probeer het opnieuw.",
+      "unavailable": "Inloggen is tijdelijk niet beschikbaar. Probeer het zo opnieuw.",
+      "sendFailed": "De inloglink kon niet worden verzonden. Probeer het opnieuw.",
+      "network": "Kan de server niet bereiken. Controleer je verbinding en probeer het opnieuw."
     }
   },
   "merchandise": {

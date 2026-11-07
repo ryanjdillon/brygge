@@ -2,11 +2,11 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore, loginErrorMessage } from '@/stores/auth'
 import { LogIn, Users, Fingerprint } from 'lucide-vue-next'
 import Input from '@/components/ui/form/Input.vue'
 import FormField from '@/components/ui/form/FormField.vue'
-import { usePasskey, passkeysSupported } from '@/composables/usePasskey'
+import { usePasskey, passkeysSupported, PasskeyError } from '@/composables/usePasskey'
 import { useJoinStatus } from '@/composables/useJoinStatus'
 
 const { t } = useI18n()
@@ -32,6 +32,8 @@ async function signInWithPasskey() {
   } catch (e) {
     if (e instanceof DOMException && (e.name === 'NotAllowedError' || e.name === 'AbortError')) {
       // User dismissed the passkey prompt — not an error.
+    } else if (e instanceof PasskeyError && (e.status === 429 || e.status === 503)) {
+      auth.loginError = loginErrorMessage(e.status)
     } else {
       auth.loginError = t('login.passkeyFailed')
     }

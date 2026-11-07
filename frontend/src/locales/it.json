@@ -387,6 +387,14 @@
         "failed": {
           "title": "Qualcosa è andato storto",
           "body": "Non siamo riusciti a farti accedere. Riprova o richiedi un nuovo link di accesso."
+        },
+        "rate_limited": {
+          "title": "Troppi tentativi",
+          "body": "Attendi un minuto, poi premi di nuovo il pulsante. Il tuo link di accesso funziona ancora."
+        },
+        "unavailable": {
+          "title": "Accesso temporaneamente non disponibile",
+          "body": "Riprova tra poco. Il tuo link di accesso resta valido fino alla scadenza."
         }
       },
       "sessionFailed": {
@@ -394,7 +402,14 @@
         "body": "L'accesso è riuscito, ma non siamo riusciti a caricare il tuo account. Riprova o vai alle pagine dei soci.",
         "retry": "Riprova",
         "portal": "Vai alle pagine dei soci"
-      }
+      },
+      "retry": "Riprova"
+    },
+    "errors": {
+      "rateLimited": "Troppi tentativi. Attendi un minuto e riprova.",
+      "unavailable": "L'accesso è temporaneamente non disponibile. Riprova tra poco.",
+      "sendFailed": "Impossibile inviare il link di accesso. Riprova.",
+      "network": "Impossibile raggiungere il server. Controlla la connessione e riprova."
     }
   },
   "merchandise": {
