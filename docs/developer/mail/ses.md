@@ -10,9 +10,10 @@ Brygge stores those events per send, which is what the Leveringslogg shows.
 
 Everything on the AWS side is created by Terraform in
 [`terraform/aws/ses.nix`](../../../terraform/aws/ses.nix), gated on the tfvars flag
-`ses_enabled`. With the flag off (the default) Terraform creates nothing on
-AWS, publishes no SES DNS records and makes no AWS API calls, and the host
-sets none of the `SES_*` variables.
+`ses_enabled`. Before the first apply with the flag on (it defaults to off)
+Terraform creates nothing on AWS, publishes no SES DNS records and makes no
+AWS API calls, and the host sets none of the `SES_*` variables. After that the
+flag stays on; see [aws-setup.md § tfvars flags](../aws-setup.md#tfvars-flags).
 
 ## AWS resources
 
@@ -46,7 +47,9 @@ Storage keys for the state backend. The `aws` provider in
 gets explicit keys: `aws_access_key` / `aws_secret_key` from tfvars, or a
 placeholder with credential validation skipped when they are empty. It never
 falls back to the ambient credential chain. With `ses_enabled = true` and
-empty keys the plan fails on a precondition before any AWS call.
+empty keys the plan fails: on the precondition for a first apply, and once
+resources are in state possibly with an AWS authentication error from the
+refresh as well.
 
 These Terraform keys belong to an admin/bootstrap principal in the owner's
 account. They are separate from the app user's runtime key.
@@ -68,7 +71,7 @@ does not export. `aws/ses.nix` derives it from AWS's
 `dkim.amazonses.com` for eu-north-1 and most regions, `dkim.<region>.amazonses.com`
 for the listed newer ones. AWS notes the zone can differ per identity, so after
 the first apply compare the CNAME targets with the SES console (identity →
-Authentication → DNS records) or `aws sesv2 get-email-identity` (step 7 below).
+Authentication → DNS records) or `aws sesv2 get-email-identity` (see the runbook below).
 
 Untouched: the apex MX (inbound stays on Stalwart), the apex SPF
 (`v=spf1 mx -all`; SES mail authenticates SPF on `send.`, not the apex) and
@@ -81,56 +84,26 @@ Untouched: the apex MX (inbound stays on Stalwart), the apex SPF
 
 ## Owner setup runbook
 
-1. **Bootstrap credentials.** In the AWS account, create (or reuse) an
-   admin/bootstrap IAM principal able to manage SES, SNS, SQS and IAM, and an
-   access key for it.
-2. **Fill tfvars** by hand in `terraform/terraform.tfvars.json` (never commit
-   it):
+The account, the Terraform principal and its IAM policy, the app key, the
+tfvars flags and the order of the first rollout are in
+[aws-setup.md](../aws-setup.md). In short: Terraform principal and tfvars →
+`tf-apply` → DKIM and MAIL FROM *Successful* → app key in `/etc/brygge/env` →
+production access → deploy with `ses_enabled` on and `ses_sending` off.
 
-   ```json
-   "ses_enabled": true,
-   "aws_region": "eu-north-1",
-   "aws_access_key": "<bootstrap key id>",
-   "aws_secret_key": "<bootstrap secret>"
-   ```
+`ses_enabled` stays `true` once applied; `ses_sending` is the cutover switch.
 
-   `club_slug` must be set (it names every resource).
-3. **Plan and apply.** `nix run .#tf-plan`, review, then `nix run .#tf-apply`.
-   Expect the SES/SNS/SQS/IAM resources plus five `hcloud_zone_rrset`
-   records.
-4. **Create the app key by hand.** IAM console → Users →
-   `brygge-<slug>-app` → Security credentials → Create access key
-   ("Application running outside AWS"). Copy both values once.
-5. **Install the secrets** in `/etc/brygge/env` on the host (root-owned,
-   0400):
+SES SMTP authenticates with the app key id as username and a password derived
+from the secret key with AWS's SigV4 algorithm (region-specific). Brygge
+derives it at startup from `AWS_SECRET_ACCESS_KEY`, so there is no separate
+SMTP secret to store
+([Obtaining SES SMTP credentials](https://docs.aws.amazon.com/ses/latest/dg/smtp-credentials.html)).
+After the first apply, `aws sesv2 get-email-identity` shows the identity's
+real DKIM zone, to compare with the CNAME targets:
 
-   ```sh
-   AWS_ACCESS_KEY_ID=<app key id>
-   AWS_SECRET_ACCESS_KEY=<app secret>
-   ```
-
-   The non-secret `SES_REGION`, `SES_CONFIGURATION_SET`,
-   `SES_EVENTS_QUEUE_NAME` and `SES_EVENTS_DLQ_NAME` come from
-   `nix/host.nix` once the deploy picks up `ses_enabled`.
-6. **SMTP password: nothing to do.** SES SMTP authenticates with the app
-   key id as username and a password derived from the secret key with AWS's
-   SigV4 algorithm (region-specific). Brygge derives it at startup from
-   `AWS_SECRET_ACCESS_KEY`, so there is no separate SMTP secret to store
-   ([Obtaining SES SMTP credentials](https://docs.aws.amazon.com/ses/latest/dg/smtp-credentials.html)).
-7. **Verify.** SES console → Identities → `<domain>`: DKIM status
-   *Successful* and custom MAIL FROM status *Successful* (DNS propagation can
-   take up to 72 hours, usually minutes). Or:
-
-   ```sh
-   aws sesv2 get-email-identity --email-identity <domain> --region eu-north-1 \
-     --query '{dkim:DkimAttributes.Status,dkimZone:DkimAttributes.SigningHostedZone,mailFrom:MailFromAttributes.MailFromDomainStatus}'
-   ```
-8. **Request production access.** New accounts start in the sandbox: only
-   verified recipients, 200 messages per 24 hours, 1 message per second
-   ([quotas](https://docs.aws.amazon.com/ses/latest/dg/quotas.html)). Request
-   production access from the SES console
-   ([request production access](https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html));
-   AWS usually answers within 24 hours.
+```sh
+aws sesv2 get-email-identity --email-identity <domain> --region eu-north-1 \
+  --query '{dkim:DkimAttributes.Status,dkimZone:DkimAttributes.SigningHostedZone,mailFrom:MailFromAttributes.MailFromDomainStatus}'
+```
 
 ## Sending app mail through SES
 
@@ -158,9 +131,10 @@ and the decision is recorded as MAIL-3 in [docs/adr/mail.md](../../adr/mail.md).
 Infrastructure (`ses_enabled`) and sending (`ses_sending`) are separate tfvars
 flags, so the AWS side can be created and verified before any mail moves.
 
-1. Complete the runbook above. DKIM and MAIL FROM must both be *Successful*
-   and production access granted. In the sandbox, mail to any unverified
-   member is refused.
+1. Complete the [first rollout](../aws-setup.md#first-rollout). DKIM and
+   MAIL FROM must both be *Successful*, the event worker running and
+   production access granted. In the sandbox, mail to any unverified member
+   is refused.
 2. Set `"ses_sending": true` in `terraform/terraform.tfvars.json` and deploy.
    The host then sets `EMAIL_PROVIDER=ses`. The API refuses to start if the
    AWS keys or the configuration set are missing.
@@ -169,7 +143,9 @@ flags, so the AWS side can be created and verified before any mail moves.
 
 **Rollback:** set `"ses_sending": false` and deploy. App mail goes back to
 Stalwart at once. The event worker keeps running while `ses_enabled` is on,
-so events for mail already sent through SES still arrive.
+so events for mail already sent through SES still arrive. Never roll back with
+`ses_enabled`: the deploy would stop the worker, and Terraform refuses the
+plan (`prevent_destroy`) rather than delete the identity and DNS records.
 
 ## Leveringslogg and the suppression list
 

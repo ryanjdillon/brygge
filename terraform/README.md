@@ -10,7 +10,8 @@ backend.nix      S3 state on Hetzner Object Storage
 variables.nix    every tfvars key
 outputs.nix
 hetzner/         Hetzner Cloud: server.nix (VM, firewall, rDNS), dns.nix (zone records)
-aws/             Amazon SES: ses.nix (identity, configuration set, SNS → SQS, IAM)
+aws/             Amazon SES: ses.nix (identity, configuration set, SNS → SQS, IAM);
+                 account, IAM policy and keys in docs/developer/aws-setup.md
 ```
 
 Provider directories group modules; they are not separate roots. Values

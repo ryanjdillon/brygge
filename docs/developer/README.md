@@ -50,7 +50,8 @@ Audience: deployers, contributors, and anyone troubleshooting at the OS / protoc
 | Subdir | Description |
 |--------|-------------|
 | [security/](security/) | TOTP / 2FA, the auth middleware matrix, the member lifecycle (join to purge), developer DB query access, log redaction |
-| [mail/](mail/) | Self-hosted Stalwart + Bulwark — setup, shared inbox, internals, BIMI |
+| [mail/](mail/) | Stalwart + Bulwark and Amazon SES app mail — setup, shared inbox, internals, BIMI |
+| [aws-setup.md](aws-setup.md) | AWS account for SES: Terraform principal and its IAM policy, app key, `ses_enabled`/`ses_sending` flags, first rollout, key rotation, teardown |
 | [otel/](otel/) | OpenTelemetry — instrumentation, collectors, alerting |
 
 ## Subsystem READMEs (colocated with code)

@@ -85,6 +85,8 @@ Each is a self-contained module covering one subject in depth. Per the deep-modu
 | [developer/mail/inbox.md](developer/mail/inbox.md) | Operators + Developers | Role-gated shared inbox at `/admin/inbox`: spec format, reconciler, per-user provisioning, send path, verification recipes |
 | [developer/mail/stalwart-internals.md](developer/mail/stalwart-internals.md) | Developers | Stalwart 0.15 protocol quirks (admin REST, JMAP, password hashing). Reference for when something at the protocol layer breaks. |
 | [developer/mail/bimi.md](developer/mail/bimi.md) | Operators | BIMI: publishing the club logo so it renders next to outbound mail |
+| [developer/mail/ses.md](developer/mail/ses.md) | Operators + Developers | Amazon SES for app mail: Terraform resources, DNS records, cutover and rollback, Leveringslogg and suppression list |
+| [developer/aws-setup.md](developer/aws-setup.md) | Operators | AWS account setup: Terraform principal IAM policy, app key, tfvars flags, first rollout, key rotation, teardown |
 
 #### [developer/otel/](developer/otel/) — OpenTelemetry
 

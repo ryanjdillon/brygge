@@ -41,11 +41,18 @@ in
   # hetzner/dns.nix turns them into `<token>._domainkey` CNAMEs. Signing with
   # d=<domain> is what makes DMARC align for mail sent through SES.
   # https://docs.aws.amazon.com/ses/latest/dg/send-email-authentication-dkim-easy.html
+  #
+  # prevent_destroy makes a plan with ses_enabled switched back to false fail
+  # instead of deleting the identity, the event pipeline and the DKIM/MAIL
+  # FROM records the domain's mail depends on. ses_sending, not ses_enabled,
+  # moves mail back to Stalwart. A deliberate teardown removes this line first
+  # (docs/developer/aws-setup.md § Teardown).
   resource.aws_sesv2_email_identity.domain = {
     count                  = enabled;
     email_identity         = "\${var.domain}";
     configuration_set_name = "\${aws_sesv2_configuration_set.main[0].configuration_set_name}";
     dkim_signing_attributes.next_signing_key_length = "RSA_2048_BIT";
+    lifecycle.prevent_destroy = true;
   };
 
   # Custom MAIL FROM so the envelope sender (and therefore SPF) is on our

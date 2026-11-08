@@ -65,7 +65,7 @@ Every send, through either relay, is logged in `email_sends` before the relay is
 
 With `EMAIL_PROVIDER=ses` the API sends through the SES SMTP interface: host `email-smtp.<SES_REGION>.amazonaws.com`, port 465 (implicit TLS), username `AWS_ACCESS_KEY_ID`, and a password the API derives from `AWS_SECRET_ACCESS_KEY` with [AWS's documented algorithm](https://docs.aws.amazon.com/ses/latest/dg/smtp-credentials.html#smtp-credentials-convert) — no extra secret. Every message carries `X-SES-CONFIGURATION-SET: $SES_CONFIGURATION_SET` and `X-SES-MESSAGE-TAGS: send_id=<email_sends.id>, kind=<kind>`. `EMAIL_FROM` and `EMAIL_REPLY_TO` apply unchanged; the From domain must be the SES-verified identity.
 
-Required with `ses`: `SES_REGION`, `SES_CONFIGURATION_SET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `EMAIL_FROM`. Any missing one stops the API at startup with the names listed, rather than falling back to Stalwart unnoticed. The `SMTP_*` relay, when configured, receives a magic link that SES refused outright (not one whose outcome is unknown). Cutover and rollback: [mail/ses.md § Cutover](mail/ses.md#cutover-sending-app-mail-through-ses).
+Required with `ses`: `SES_REGION`, `SES_CONFIGURATION_SET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `EMAIL_FROM`. Any missing one stops the API at startup with the names listed, rather than falling back to Stalwart unnoticed. The `SMTP_*` relay, when configured, receives a magic link that SES refused outright (not one whose outcome is unknown). Cutover and rollback: [mail/ses.md § Cutover](mail/ses.md#cutover-and-rollback).
 
 ### Contact form recipient
 

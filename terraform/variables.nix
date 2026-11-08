@@ -139,7 +139,7 @@
     ses_enabled = {
       type        = "bool";
       default     = false;
-      description = "Create the SES identity, configuration set, SNS/SQS delivery-event pipeline, app IAM user and the matching DNS records. False creates nothing on AWS.";
+      description = "Create the SES identity, configuration set, SNS/SQS delivery-event pipeline, app IAM user and the matching DNS records. False creates nothing on AWS. Once applied, keep it true: switching it off fails the plan (prevent_destroy) rather than tearing SES down; ses_sending is the cutover/rollback switch.";
     };
     # Read by the flake (clubConfig.sesSending), not by any resource: it is
     # declared so the shared tfvars file carries no undeclared key.
