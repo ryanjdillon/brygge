@@ -168,9 +168,23 @@ func parseHarborSharePaidOn(v string) (*string, bool) {
 	return nil, false
 }
 
+// harborShareHeaderAliases are the Norwegian column names a member sheet
+// usually already has, so it can be uploaded without renaming its headers.
+// Names are matched lower-cased. A club-specific column whose meaning differs
+// between clubs (such as "fast plass") is deliberately not an alias.
+var harborShareHeaderAliases = map[string][]string{
+	"email":                {"e-post", "epost", "e-postadresse"},
+	"name":                 {"navn", "fullt navn"},
+	"first_name":           {"fornavn"},
+	"last_name":            {"etternavn"},
+	"harbor_share_owner":   {"moloandel", "moloandelseier", "moloandel eier", "moloandel-eier"},
+	"harbor_share_paid_on": {"moloandel betalt", "betalt dato"},
+}
+
 // readHarborShareInputs parses the data rows. Wholly blank rows are dropped,
 // as spreadsheets often save a few after the data.
 func readHarborShareInputs(u *csvUpload) ([]harborShareInput, error) {
+	u.alias(harborShareHeaderAliases)
 	if !u.has("harbor_share_owner") {
 		return nil, errors.New(`missing required column "harbor_share_owner"`)
 	}
