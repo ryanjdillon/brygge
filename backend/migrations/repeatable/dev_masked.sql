@@ -94,6 +94,7 @@ SELECT
     vipps_portal_url,                    -- club's own portal address, host-restricted
     automatic_booking,                   -- boolean switch
     join_price_item_id,                  -- catalog id
+    public_description,                  -- public landing-page text
     NULL::text AS board_notification_email -- may be a board member's own address
 FROM public.clubs;
 

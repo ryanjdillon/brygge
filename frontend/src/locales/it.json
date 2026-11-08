@@ -67,7 +67,9 @@
     "featureBookingsDesc": "Prenota posti barca ospiti, sale e altri servizi",
     "featureMembers": "Soci",
     "featureMembersDesc": "Entra nella comunità e accedi ai vantaggi riservati ai soci",
-    "ctaJoin": "Diventa socio"
+    "ctaJoin": "Diventa socio",
+    "joinCardBody": "L'iscrizione avviene qui sul sito: compila un breve modulo, conferma il tuo indirizzo e-mail e paga la quota associativa.",
+    "joinCardCue": "Iscriviti"
   },
   "calendar": {
     "title": "Calendario del circolo",
@@ -2020,7 +2022,10 @@
     },
     "siteSettings": {
       "boardNotificationEmail": "Avvisi di adesione a",
-      "boardNotificationEmailHint": "Dove il consiglio riceve gli avvisi di nuovi soci, quote di adesione rimborsate, adesioni da controllare, recessi e recessi annullati, e recessi che non è stato possibile completare. Lascia vuoto per usare la casella condivisa del club (post@), altrimenti il segretario o il presidente."
+      "boardNotificationEmailHint": "Dove il consiglio riceve gli avvisi di nuovi soci, quote di adesione rimborsate, adesioni da controllare, recessi e recessi annullati, e recessi che non è stato possibile completare. Lascia vuoto per usare la casella condivisa del club (post@), altrimenti il segretario o il presidente.",
+      "publicDescription": "Descrizione breve",
+      "publicDescriptionHint": "Mostrata sotto il titolo di benvenuto nella pagina iniziale. Se il campo è vuoto, viene usato lo slogan predefinito. Massimo 200 caratteri.",
+      "publicDescriptionInvalid": "La descrizione può avere al massimo 200 caratteri, su una sola riga."
     }
   },
   "projects": {

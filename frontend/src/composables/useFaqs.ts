@@ -2,7 +2,7 @@ import { ref } from 'vue'
 import type { FaqItem } from '@/lib/faqData'
 
 // Published FAQ items for the deploy's club, fetched once and shared across
-// the home teaser, the /faq page, and the footer link. Mirrors the club
+// the home page's FAQ tile, the /faq page, and the footer link. Mirrors the club
 // store's cached single-flight fetch. Failures leave the list empty, which
 // simply hides the FAQ entry points.
 const items = ref<FaqItem[]>([])

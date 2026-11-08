@@ -12,6 +12,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -326,6 +328,10 @@ type clubFinancialSettings struct {
 	// count as local when they join (BRY-643, BRD-16); empty means
 	// residency cannot be decided.
 	MunicipalityCodes []string `json:"municipality_codes"`
+
+	// PublicDescription is the short text under the welcome heading on the
+	// public landing page (BRY-666); empty means the page's default tagline.
+	PublicDescription string `json:"public_description"`
 }
 
 // HandleGetFinancialSettings returns the club's invoice-relevant
@@ -370,7 +376,8 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		        (anthropic_api_key IS NOT NULL AND anthropic_api_key != ''),
 		        board_notification_email,
 		        COALESCE(join_price_item_id::text, ''),
-		        municipality_codes
+		        municipality_codes,
+		        public_description
 		   FROM clubs WHERE id = $1`,
 		claims.ClubID,
 	).Scan(&s.Name, &s.OrgNumber, &s.Address,
@@ -402,7 +409,8 @@ func (h *ClubSettingsHandler) HandleGetFinancialSettings(w http.ResponseWriter, 
 		&s.HasAnthropicKey,
 		&s.BoardNotificationEmail,
 		&s.JoinPriceItemID,
-		&s.MunicipalityCodes); err != nil {
+		&s.MunicipalityCodes,
+		&s.PublicDescription); err != nil {
 		h.log.Error().Err(err).Msg("load financial settings")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
@@ -490,6 +498,11 @@ type updateFinancialSettingsRequest struct {
 	// MunicipalityCodes: omitted (or null) = keep; [] = clear; otherwise
 	// four-digit kommunenummer, deduplicated, at most maxMunicipalityCodes.
 	MunicipalityCodes *[]string `json:"municipality_codes,omitempty"`
+
+	// PublicDescription: omitted = keep; "" (or blank) = use the landing
+	// page's default tagline; otherwise one line of plain text, trimmed, at
+	// most maxPublicDescriptionLen characters.
+	PublicDescription *string `json:"public_description,omitempty"`
 }
 
 // HandleUpdateFinancialSettings updates org_number, address, and
@@ -534,8 +547,7 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		}
 		*p = norm
 	}
-	if !normalizeOptionalEmail(req.BoardNotificationEmail) {
-		Error(w, http.StatusBadRequest, "board_notification_email must be an email address")
+	if !checkTextSettings(w, &req) {
 		return
 	}
 	msg, err := h.validateStripeSettings(ctx, claims.ClubID, &req)
@@ -620,7 +632,8 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		   join_price_item_id        = CASE
 		                                 WHEN $45::text IS NULL THEN join_price_item_id
 		                                 ELSE NULLIF($45::text, '')::uuid END,
-		   municipality_codes        = COALESCE($46::text[], municipality_codes)
+		   municipality_codes        = COALESCE($46::text[], municipality_codes),
+		   public_description        = COALESCE($47, public_description)
 		 WHERE id = $1`,
 		claims.ClubID, req.OrgNumber, req.Address, req.Phone, req.VHFChannel,
 		req.Latitude, req.Longitude,
@@ -647,6 +660,7 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		req.BoardNotificationEmail,
 		req.JoinPriceItemID,
 		req.MunicipalityCodes,
+		req.PublicDescription,
 	); err != nil {
 		h.log.Error().Err(err).Msg("update financial settings")
 		Error(w, http.StatusInternalServerError, "internal error")
@@ -768,6 +782,63 @@ func validJoinPriceItem(ctx context.Context, q pgxQuerier, clubID string, id *st
 		*id, clubID,
 	).Scan(&ok)
 	return ok, err
+}
+
+// checkTextSettings normalises the board notification address and the public
+// description in req. It reports false having written the 400 response.
+func checkTextSettings(w http.ResponseWriter, req *updateFinancialSettingsRequest) bool {
+	if !normalizeOptionalEmail(req.BoardNotificationEmail) {
+		Error(w, http.StatusBadRequest, "board_notification_email must be an email address")
+		return false
+	}
+	if !normalizePublicDescription(req.PublicDescription) {
+		JSON(w, http.StatusBadRequest, map[string]string{
+			"error": fmt.Sprintf("public_description must be one line of at most %d characters", maxPublicDescriptionLen),
+			"code":  codeInvalidPublicDescription,
+		})
+		return false
+	}
+	return true
+}
+
+// maxPublicDescriptionLen caps the landing page's public description, in
+// characters: it is a short line under the heading, not a page of text.
+const maxPublicDescriptionLen = 200
+
+// codeInvalidPublicDescription is the 400 code of a refused public description.
+const codeInvalidPublicDescription = "invalid_public_description"
+
+// normalizePublicDescription trims an optional public description in place. It
+// reports false for text over maxPublicDescriptionLen characters or with a
+// character disallowedInPublicDescription refuses (a line break included): the
+// page shows it as one plain line, so markup is shown as typed and never
+// rendered.
+func normalizePublicDescription(p *string) bool {
+	if p == nil {
+		return true
+	}
+	*p = strings.TrimSpace(*p)
+	if utf8.RuneCountInString(*p) > maxPublicDescriptionLen || !utf8.ValidString(*p) {
+		return false
+	}
+	return !strings.ContainsFunc(*p, disallowedInPublicDescription)
+}
+
+// disallowedInPublicDescription reports a character the public description
+// may not hold: a control character, a line or paragraph separator, a bidi
+// embedding, override or isolate (they can reorder the text around them), a
+// zero-width space or a byte order mark. ZWJ and ZWNJ stay allowed: emoji
+// sequences and some scripts need them.
+func disallowedInPublicDescription(r rune) bool {
+	switch {
+	case unicode.IsControl(r), unicode.In(r, unicode.Zl, unicode.Zp):
+		return true
+	case r >= '\u202A' && r <= '\u202E', r >= '\u2066' && r <= '\u2069':
+		return true
+	case r == '\u200B', r == '\uFEFF':
+		return true
+	}
+	return false
 }
 
 // normalizeOptionalEmail cleans an optional address setting in place: blank
@@ -971,6 +1042,7 @@ func (h *ClubSettingsHandler) HandleGetPublicClub(w http.ResponseWriter, r *http
 		motorhomeCTATitle       string
 		motorhomeCTADescription string
 		defaultLanguage         string
+		publicDescription       string
 	)
 	_ = h.db.QueryRow(r.Context(),
 		`SELECT COALESCE(org_number, ''),
@@ -996,14 +1068,15 @@ func (h *ClubSettingsHandler) HandleGetPublicClub(w http.ResponseWriter, r *http
 		        COALESCE(motorhome_rules, ''),
 		        COALESCE(motorhome_cta_title, ''),
 		        COALESCE(motorhome_cta_description, ''),
-		        default_language
+		        default_language,
+		        public_description
 		   FROM clubs WHERE slug = $1`,
 		h.config.ClubSlug,
 	).Scan(&orgNumber, &address, &phone, &vhf, &lat, &lon,
 		&website, &chairman, &viceChairman, &treasurer, &secretary, &harborMaster, &hasLogo,
 		&harborApproach, &harborDepth, &harborVHF, &harborCTATitle, &harborCTADescription,
 		&motorhomePower, &motorhomeFacilities, &motorhomeCheckin, &motorhomeRules,
-		&motorhomeCTATitle, &motorhomeCTADescription, &defaultLanguage)
+		&motorhomeCTATitle, &motorhomeCTADescription, &defaultLanguage, &publicDescription)
 	// The clubs row may not exist yet on a fresh deploy; the column default
 	// is the right answer then too.
 	if defaultLanguage == "" {
@@ -1039,6 +1112,7 @@ func (h *ClubSettingsHandler) HandleGetPublicClub(w http.ResponseWriter, r *http
 		"motorhome_cta_title":       motorhomeCTATitle,
 		"motorhome_cta_description": motorhomeCTADescription,
 		"default_language":          defaultLanguage,
+		"public_description":        publicDescription,
 	})
 }
 

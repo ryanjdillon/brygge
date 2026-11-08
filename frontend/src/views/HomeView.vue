@@ -11,16 +11,12 @@ import {
   Tag,
   ShoppingBag,
   ArrowRight,
-  LogIn,
   HelpCircle,
-  UserPlus,
 } from 'lucide-vue-next'
 import { useFeatures } from '@/composables/useFeatures'
 import { useClubStore } from '@/stores/club'
 import { useFaqs } from '@/composables/useFaqs'
 import { useJoinStatus } from '@/composables/useJoinStatus'
-import { formatNOK } from '@/lib/format'
-import FaqList from '@/components/FaqList.vue'
 import heroImage from '@/assets/hero.jpg'
 
 const { t } = useI18n()
@@ -28,14 +24,23 @@ const { isEnabled } = useFeatures()
 const club = useClubStore()
 club.ensureLoaded()
 
-const { items: faqItems } = useFaqs()
-useFaqs().ensureLoaded()
+// The FAQ tile shows only when the club has published questions.
+const faqs = useFaqs()
+faqs.ensureLoaded()
+const faqItems = faqs.items
 const hasFaq = computed(() => faqItems.value.length > 0)
-// A short, broadly useful subset for the teaser.
-const featuredFaqs = computed(() => faqItems.value.slice(0, 5))
 
 const clubName = computed(() => club.name || 'Brygge')
-const { open: joinOpen, price: joinPrice, year: joinYear } = useJoinStatus()
+// The club's own short description (Site settings), else the default tagline.
+// Shown once the club load has settled (a failed load falls back to the
+// tagline), so a custom description never flashes in over the default.
+const tagline = computed(() => club.publicDescription.trim() || t('home.tagline'))
+const { open: joinOpen } = useJoinStatus()
+
+// Shared by the tiles and the join card: one lift-and-shadow hover, and a
+// focus ring that follows the rounded corners (the global outline does not).
+const linkCardClass =
+  'group rounded-2xl border border-slate-200 bg-white transition duration-200 hover:-translate-y-0.5 hover:border-slate-400 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2'
 
 type FeatureFlag = 'bookings' | 'projects' | 'calendar' | 'commerce' | 'accounting'
 
@@ -114,24 +119,24 @@ const sections = computed<Section[]>(() => {
         <h1 class="text-4xl font-bold tracking-tight drop-shadow-md sm:text-5xl">
           {{ t('home.welcomeWith', { club: clubName }) }}
         </h1>
-        <p class="mx-auto mt-4 max-w-xl text-lg text-white/90 drop-shadow">
-          {{ t('home.tagline') }}
+        <!-- min-h-7 holds one line (text-lg) while the club loads, so the
+             buttons below do not jump when the text arrives. -->
+        <p class="mx-auto mt-4 min-h-7 max-w-xl text-lg text-balance text-white/90 drop-shadow" data-testid="hero-tagline">
+          <template v-if="club.settled">{{ tagline }}</template>
         </p>
         <div class="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <RouterLink
             to="/login"
-            class="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-7 py-3 text-sm font-semibold text-slate-900 shadow-lg shadow-black/30 transition hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-xl"
+            class="inline-flex min-h-11 items-center justify-center rounded-full bg-white px-7 py-3 text-sm font-semibold text-slate-900 shadow-lg shadow-black/30 transition hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-xl"
           >
-            <LogIn class="h-4 w-4" aria-hidden="true" />
             {{ t('home.ctaLogin') }}
           </RouterLink>
           <RouterLink
             v-if="joinOpen"
             to="/join"
-            class="inline-flex min-h-11 items-center gap-2 rounded-full px-7 py-3 text-sm font-semibold text-white ring-1 ring-white/60 backdrop-blur-sm transition hover:-translate-y-0.5 hover:bg-white/10"
+            class="inline-flex min-h-11 items-center justify-center rounded-full px-7 py-3 text-sm font-semibold text-white ring-1 ring-white/60 backdrop-blur-sm transition hover:-translate-y-0.5 hover:bg-white/10"
             data-testid="hero-join"
           >
-            <UserPlus class="h-4 w-4" aria-hidden="true" />
             {{ t('home.ctaJoin') }}
           </RouterLink>
         </div>
@@ -139,19 +144,16 @@ const sections = computed<Section[]>(() => {
     </section>
 
     <div class="mx-auto max-w-7xl px-4 py-14 sm:px-6 sm:py-20 lg:px-8">
-      <section v-for="(section, idx) in sections" :key="section.titleKey" :class="idx > 0 ? 'mt-14 sm:mt-20' : ''">
-        <header class="mb-6 flex items-center gap-3">
-          <span class="h-px w-8 bg-slate-400" aria-hidden="true" />
-          <h2 class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-            {{ t(section.titleKey) }}
-          </h2>
-        </header>
+      <section v-for="(section, idx) in sections" :key="section.titleKey" :class="idx > 0 ? 'mt-12 sm:mt-16' : ''">
+        <h2 class="mb-5 text-xl font-semibold text-slate-900 sm:mb-6 sm:text-2xl">
+          {{ t(section.titleKey) }}
+        </h2>
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <RouterLink
             v-for="tile in section.tiles"
             :key="tile.to"
             :to="tile.to"
-            class="group relative flex items-start gap-4 rounded-2xl border border-slate-200 bg-white p-5 transition duration-200 hover:-translate-y-0.5 hover:border-slate-400 hover:shadow-lg"
+            :class="[linkCardClass, 'relative flex items-start gap-4 p-5']"
           >
             <div class="flex h-11 w-11 flex-none items-center justify-center rounded-xl bg-slate-100 transition group-hover:bg-slate-200">
               <component :is="tile.icon" class="h-5 w-5 text-slate-600 transition group-hover:text-slate-800" aria-hidden="true" />
@@ -173,57 +175,29 @@ const sections = computed<Section[]>(() => {
       </section>
     </div>
 
-    <!-- FAQ teaser: a short, broadly useful subset with a link through to
-         the full page. Keeps the common questions one click from the home
-         page without lengthening it with the whole list. -->
-    <section v-if="hasFaq" class="mx-auto max-w-3xl px-4 pb-4 sm:px-6 lg:px-8">
-      <header class="mb-6 flex items-center justify-between gap-4">
-        <div class="flex items-center gap-3">
-          <span class="h-px w-8 bg-slate-400" aria-hidden="true" />
-          <h2 class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-            {{ t('faq.home.title') }}
-          </h2>
-        </div>
-        <RouterLink
-          to="/faq"
-          class="inline-flex items-center gap-1 text-sm font-semibold text-teal-700 hover:text-teal-800 hover:underline"
+    <!-- Bli medlem: the whole card is one link, to the join form while the
+         club takes joins, otherwise to the contact page. Its accessible name
+         is its own content (heading, sentence, cue), read once. The wave backdrop
+         sets off the card; the section is sized to its content so the footer
+         sits flush below. -->
+    <section class="wave-bg px-4 py-14 sm:px-6 sm:py-20 lg:px-8">
+      <RouterLink
+        :to="joinOpen ? '/join' : '/contact'"
+        :class="[linkCardClass, 'mx-auto block max-w-2xl p-6 text-center shadow-sm sm:p-8']"
+        data-testid="home-join"
+      >
+        <Anchor class="mx-auto h-8 w-8 text-slate-400 transition group-hover:text-slate-500" aria-hidden="true" />
+        <h2 class="mt-3 text-xl font-semibold text-slate-900 sm:text-2xl">{{ t('join.title') }}</h2>
+        <p class="mx-auto mt-3 max-w-prose text-pretty text-slate-600">
+          {{ joinOpen ? t('home.joinCardBody') : t('join.closed.body') }}
+        </p>
+        <span
+          class="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 transition group-hover:text-brand-800"
         >
-          {{ t('faq.seeAll') }}
-          <ArrowRight class="h-4 w-4" aria-hidden="true" />
-        </RouterLink>
-      </header>
-      <FaqList :items="featuredFaqs" />
-    </section>
-
-    <!-- Bli medlem: the join form while the club takes joins, otherwise the
-         contact page. The wave backdrop sets off a high-contrast card; the
-         section is sized to its content so the footer sits flush below. -->
-    <section class="wave-bg px-4 py-14 sm:py-20">
-      <div class="mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm sm:p-8" data-testid="home-join">
-        <Anchor class="mx-auto h-8 w-8 text-slate-400" aria-hidden="true" />
-        <h2 class="mt-3 text-2xl font-bold text-slate-900">{{ t('join.title') }}</h2>
-        <template v-if="joinOpen">
-          <p v-if="joinPrice" class="mt-3 text-slate-600" data-testid="home-join-price">
-            {{ t('join.form.price', { year: joinYear, amount: formatNOK(joinPrice.amount) }) }}
-          </p>
-          <RouterLink
-            to="/join"
-            class="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 sm:w-auto"
-          >
-            <UserPlus class="h-4 w-4" aria-hidden="true" />
-            {{ t('nav.join') }}
-          </RouterLink>
-        </template>
-        <template v-else>
-          <p class="mt-3 text-slate-600">{{ t('join.closed.body') }}</p>
-          <RouterLink
-            to="/contact"
-            class="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-md border border-slate-300 px-5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:w-auto"
-          >
-            {{ t('join.closed.contact') }}
-          </RouterLink>
-        </template>
-      </div>
+          {{ joinOpen ? t('home.joinCardCue') : t('join.closed.contact') }}
+          <ArrowRight class="h-4 w-4 transition group-hover:translate-x-0.5" aria-hidden="true" />
+        </span>
+      </RouterLink>
     </section>
   </div>
 </template>

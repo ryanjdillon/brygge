@@ -67,7 +67,9 @@
     "featureBookingsDesc": "Reservieren Sie Gastliegeplätze, Räume und andere Dienste",
     "featureMembers": "Mitglieder",
     "featureMembersDesc": "Treten Sie der Gemeinschaft bei und nutzen Sie die Mitgliedervorteile",
-    "ctaJoin": "Mitglied werden"
+    "ctaJoin": "Mitglied werden",
+    "joinCardBody": "Die Anmeldung erfolgt hier auf der Website: kurzes Formular ausfüllen, E-Mail-Adresse bestätigen und den Mitgliedsbeitrag bezahlen.",
+    "joinCardCue": "Jetzt beitreten"
   },
   "calendar": {
     "title": "Vereinskalender",
@@ -2020,7 +2022,10 @@
     },
     "siteSettings": {
       "boardNotificationEmail": "Mitgliedschaftsmeldungen an",
-      "boardNotificationEmailHint": "Hierhin meldet die App dem Vorstand neue Mitglieder, erstattete Beitrittszahlungen, zu prüfende Beitritte, Austritte und zurückgenommene Austritte sowie Austritte, die nicht abgeschlossen werden konnten. Leer lassen, um das gemeinsame Postfach des Vereins (post@) zu verwenden, sonst Schriftführer oder Vorsitz."
+      "boardNotificationEmailHint": "Hierhin meldet die App dem Vorstand neue Mitglieder, erstattete Beitrittszahlungen, zu prüfende Beitritte, Austritte und zurückgenommene Austritte sowie Austritte, die nicht abgeschlossen werden konnten. Leer lassen, um das gemeinsame Postfach des Vereins (post@) zu verwenden, sonst Schriftführer oder Vorsitz.",
+      "publicDescription": "Kurzbeschreibung",
+      "publicDescriptionHint": "Wird auf der Startseite unter der Willkommensüberschrift angezeigt. Ist das Feld leer, wird der Standardtext verwendet. Höchstens 200 Zeichen.",
+      "publicDescriptionInvalid": "Die Beschreibung darf höchstens 200 Zeichen in einer Zeile haben."
     }
   },
   "projects": {

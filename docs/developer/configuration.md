@@ -242,6 +242,10 @@ Per-club financial settings are stored on `clubs` and edited in **Admin → Øko
 
 No switch books a payment to an imported faktura; see [invariants.md](reference/invariants.md#imported-fakturas-are-read-only).
 
+### Public description (landing page)
+
+`clubs.public_description` (BRY-666) is the short line under the welcome heading on the public landing page (`HomeView`). It is edited in **Admin → Site settings → Klubbidentitet** ("Kort skildring"), next to the club name, and saved by `PATCH /admin/settings/site` with the rest of that form (treasurer or admin, fresh TOTP). `public_description` on the request is trimmed; blank stores `''`. More than 200 characters (counted as Unicode code points), a control character such as a line break, a line or paragraph separator, a bidi embedding, override or isolate (U+202A–202E, U+2066–2069), a zero-width space or a byte order mark is refused with 400 `invalid_public_description`; ZWJ and ZWNJ are allowed (emoji sequences, some scripts). It is plain text, one text for every locale (not translated), and the page shows it as text, never as markup. `GET /admin/settings/site` and the public `GET /api/v1/club` return it. Empty (the default; the migration sets no club's text) means the page shows its translated default tagline (`home.tagline`). The audit row (`update_financial_settings`) names the field only, like the other settings on that form.
+
 ## Feature Flags
 
 Feature flags have two layers since migration 000049: env-var defaults (set at deploy time) and per-club DB overrides (toggled at runtime from `Admin → Site → Site content → Modules`). The public `/api/v1/features` endpoint reads the DB row first, falling back to the env default when no row exists or the lookup fails.

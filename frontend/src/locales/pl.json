@@ -67,7 +67,9 @@
     "featureBookingsDesc": "Zarezerwuj miejsce gościnne, pokój i inne usługi",
     "featureMembers": "Członkowie",
     "featureMembersDesc": "Dołącz do społeczności i korzystaj z przywilejów członkowskich",
-    "ctaJoin": "Zostań członkiem"
+    "ctaJoin": "Zostań członkiem",
+    "joinCardBody": "Zapisy odbywają się tutaj na stronie: wypełnij krótki formularz, potwierdź adres e-mail i opłać składkę członkowską.",
+    "joinCardCue": "Dołącz"
   },
   "calendar": {
     "title": "Kalendarz klubowy",
@@ -1991,7 +1993,10 @@
     },
     "siteSettings": {
       "boardNotificationEmail": "Powiadomienia o członkostwie do",
-      "boardNotificationEmailHint": "Tu zarząd otrzymuje informacje o nowych członkach, zwróconych opłatach wpisowych, przystąpieniach do sprawdzenia, rezygnacjach i cofniętych rezygnacjach oraz rezygnacjach, których nie udało się zakończyć. Zostaw puste, aby użyć wspólnej skrzynki klubu (post@), a w przeciwnym razie sekretarza lub prezesa."
+      "boardNotificationEmailHint": "Tu zarząd otrzymuje informacje o nowych członkach, zwróconych opłatach wpisowych, przystąpieniach do sprawdzenia, rezygnacjach i cofniętych rezygnacjach oraz rezygnacjach, których nie udało się zakończyć. Zostaw puste, aby użyć wspólnej skrzynki klubu (post@), a w przeciwnym razie sekretarza lub prezesa.",
+      "publicDescription": "Krótki opis",
+      "publicDescriptionHint": "Wyświetlany pod nagłówkiem powitalnym na stronie głównej. Gdy pole jest puste, używany jest domyślny slogan. Maksymalnie 200 znaków.",
+      "publicDescriptionInvalid": "Opis może mieć maksymalnie 200 znaków w jednym wierszu."
     }
   },
   "projects": {

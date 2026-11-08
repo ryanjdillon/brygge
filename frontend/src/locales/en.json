@@ -87,7 +87,9 @@
     "featurePricing": "Pricing",
     "featurePricingDesc": "Membership dues, slip fees and other prices",
     "featureMerchandise": "Merchandise",
-    "featureMerchandiseDesc": "Club apparel and gear"
+    "featureMerchandiseDesc": "Club apparel and gear",
+    "joinCardBody": "Membership is handled here on the website: fill in a short form, confirm your email address and pay the membership fee.",
+    "joinCardCue": "Join now"
   },
   "calendar": {
     "title": "Club Calendar",
@@ -2169,6 +2171,9 @@
       "logosGroup": "Logos",
       "clubName": "Club name",
       "clubNameHint": "Defined by the deployment; not editable here.",
+      "publicDescription": "Short description",
+      "publicDescriptionHint": "Shown under the welcome heading on the front page. When it is empty, the default tagline is used. At most 200 characters.",
+      "publicDescriptionInvalid": "The description can be at most 200 characters, on one line.",
       "orgNumber": "Organization number",
       "address": "Address",
       "phone": "Phone",
@@ -3581,12 +3586,8 @@
   "faq": {
     "title": "Frequently asked questions",
     "intro": "Answers to the most common questions about membership, berths and how the harbour is run. They are based on the club's harbour rules (hamnereglement) and bylaws (vedtekter).",
-    "seeAll": "See all questions",
     "notFound": "Didn't find what you were looking for?",
     "contactCta": "Contact the board",
-    "home": {
-      "title": "Frequently asked questions"
-    },
     "groups": {
       "newcomers": "Thinking of joining?",
       "members": "For members",

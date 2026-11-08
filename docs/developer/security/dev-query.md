@@ -134,6 +134,8 @@ Migration 000135 (self-service membership) adds columns that pass through raw: t
 
 The join form's address search results are cached in Redis for 10 minutes under the SHA-256 of the normalised query, never the query itself, and the Kartverket client is not traced, so a visitor's typed address reaches neither the cache keys nor the traces. Migration 000140 (BRY-639) adds the join address check to `users` and `membership_applications`. `address_verified` passes through (whether the register confirmed the address, a flag); `address_kommunenummer` is NULL, because the municipality narrows where a member lives, and so is `address_verified_at`.
 
+Migration 000143 (BRY-666) adds `clubs.public_description`, which passes through raw: it is the text the club publishes under the heading of its public landing page.
+
 The harbour share columns of migration 000133 (BRY-77, BRD-14), `users.harbor_share_owner` and `users.harbor_share_paid_on`, pass through raw: whether and when a member bought a share is club membership data, not identity, and the role sees it only against a `user_id`.
 
 ### Allowlist — readable raw (verified no PII)

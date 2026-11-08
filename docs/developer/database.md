@@ -641,6 +641,14 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   to `brygge_dev_ro` and has no `dev_masked` view. **The down** cannot recover
   tokens from hashes, so it deletes every row, then drops the CHECK and
   restores `token` as the primary key.
+- **Club public description.** 000143 (BRY-666) adds
+  `clubs.public_description` (TEXT NOT NULL DEFAULT ''), the short line under
+  the landing page's welcome heading; empty means the translated default
+  tagline, and no club gets a text (see
+  [configuration.md](configuration.md#public-description-landing-page)). The
+  handler trims it and caps it at 200 characters. `dev_masked.clubs` passes
+  it through (public text). **The down** drops `dev_masked.clubs` first, then
+  the column.
 - `invoice_pdf_archive` (migration 000050) — preserves prior PDF bytes when
   `invoices.pdf_data` is regenerated, so Norwegian bokføringsloven §13's
   5-year retention requirement is satisfied.

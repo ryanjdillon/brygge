@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { ArrowLeft, Calculator, Calendar, CalendarCheck, FolderKanban, Save, ShoppingBag } from 'lucide-vue-next'
 import { useFreshTotp } from '@/composables/useFreshTotp'
 import { useFeatures } from '@/composables/useFeatures'
+import { useClubStore } from '@/stores/club'
 import FileInput from '@/components/ui/form/FileInput.vue'
 import FormField from '@/components/ui/form/FormField.vue'
 import Input from '@/components/ui/form/Input.vue'
@@ -17,6 +18,13 @@ const { t } = useI18n()
 const { ensureFreshTotp, totpAwareFetch } = useFreshTotp()
 
 const clubName = ref('')
+// Shown under the landing page's welcome heading; empty = default tagline.
+const publicDescription = ref('')
+// The input's maxlength counts UTF-16 code units, the server counts runes
+// (code points), so an emoji-heavy text may stop short here but never passes
+// the browser and fails on the server.
+const PUBLIC_DESCRIPTION_MAX = 200
+const club = useClubStore()
 const orgNumber = ref('')
 const address = ref('')
 const phone = ref('')
@@ -180,6 +188,7 @@ async function load() {
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
     const body = await res.json()
     clubName.value = body.name ?? ''
+    publicDescription.value = body.public_description ?? ''
     orgNumber.value = body.org_number ?? ''
     address.value = body.address ?? ''
     phone.value = body.phone ?? ''
@@ -273,6 +282,7 @@ async function save() {
   if (!(await ensureFreshTotp())) return
   saving.value = true
   error.value = null
+  const description = publicDescription.value.trim()
   try {
     const res = await totpAwareFetch('/api/v1/admin/settings/site', {
       method: 'PATCH',
@@ -292,6 +302,7 @@ async function save() {
         secretary_email: secretaryEmail.value,
         harbor_master_email: harborMasterEmail.value,
         board_notification_email: boardNotificationEmail.value,
+        public_description: description,
         feature_bookings: features.bookings,
         feature_projects: features.projects,
         feature_calendar: features.calendar,
@@ -301,8 +312,15 @@ async function save() {
     })
     if (!res.ok) {
       const txt = await res.text().catch(() => '')
+      let code = ''
+      try { code = JSON.parse(txt)?.code ?? '' } catch { /* not JSON */ }
+      if (code === 'invalid_public_description') throw new Error(t('admin.siteSettings.publicDescriptionInvalid'))
       throw new Error(`${res.status} ${txt}`)
     }
+    publicDescription.value = description
+    // The landing page reads the club store; update it so the new text shows
+    // there without a reload.
+    club.publicDescription = description
     savedAt.value = new Date()
     // Refresh the public features cache so the sidebar updates
     // without a full reload after a module is toggled.
@@ -350,6 +368,20 @@ async function save() {
         <legend class="px-1 text-xs font-semibold text-slate-700">{{ t('admin.siteSettings.identityGroup') }}</legend>
       <FormField :label="t('admin.siteSettings.clubName')" :helper-text="t('admin.siteSettings.clubNameHint')">
         <Input :model-value="clubName" disabled />
+      </FormField>
+
+      <FormField
+        for="public-description"
+        :label="t('admin.siteSettings.publicDescription')"
+        :helper-text="t('admin.siteSettings.publicDescriptionHint')"
+      >
+        <Input
+          id="public-description"
+          v-model="publicDescription"
+          :maxlength="PUBLIC_DESCRIPTION_MAX"
+          :placeholder="t('home.tagline')"
+          data-testid="public-description"
+        />
       </FormField>
 
       <FormField :label="t('admin.siteSettings.orgNumber')">

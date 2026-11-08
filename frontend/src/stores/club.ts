@@ -32,6 +32,7 @@ interface ClubInfo {
   motorhome_cta_title?: string
   motorhome_cta_description?: string
   default_language?: string
+  public_description?: string
 }
 
 export const useClubStore = defineStore('club', () => {
@@ -65,7 +66,16 @@ export const useClubStore = defineStore('club', () => {
   // The club's own language: what an unpersonalised page and the main
   // label on printed material are written in.
   const defaultLanguage = ref<string>('nb')
+  // The club's own short line under the landing page's welcome heading;
+  // empty means the page shows its translated default tagline.
+  const publicDescription = ref<string>('')
   const loaded = ref(false)
+  // settled: a load attempt has finished, whether or not it succeeded, so a
+  // page can wait for it before choosing between club text and a fallback.
+  // failed: the last attempt got no club info (an error status or no
+  // network); the defaults stand.
+  const settled = ref(false)
+  const failed = ref(false)
   let inflight: Promise<void> | null = null
 
   async function ensureLoaded() {
@@ -74,7 +84,10 @@ export const useClubStore = defineStore('club', () => {
     inflight = (async () => {
       try {
         const res = await fetch('/api/v1/club', { credentials: 'include' })
-        if (!res.ok) return
+        if (!res.ok) {
+          failed.value = true
+          return
+        }
         const info = (await res.json()) as ClubInfo
         name.value = info.name || ''
         slug.value = info.slug || ''
@@ -108,8 +121,14 @@ export const useClubStore = defineStore('club', () => {
         // that hasn't migrated yet.
         hasLogo.value = info.has_site_logo === true || info.has_logo === true
         defaultLanguage.value = info.default_language || 'nb'
+        publicDescription.value = (info.public_description || '').trim()
         loaded.value = true
+        failed.value = false
+      } catch {
+        // No network or a body that is not JSON: keep the defaults.
+        failed.value = true
       } finally {
+        settled.value = true
         inflight = null
       }
     })()
@@ -134,6 +153,7 @@ export const useClubStore = defineStore('club', () => {
     harborMasterEmail,
     hasLogo,
     defaultLanguage,
+    publicDescription,
     harborApproach,
     harborDepth,
     harborVhf,
@@ -146,6 +166,8 @@ export const useClubStore = defineStore('club', () => {
     motorhomeCtaTitle,
     motorhomeCtaDescription,
     loaded,
+    settled,
+    failed,
     ensureLoaded,
   }
 })

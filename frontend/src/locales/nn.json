@@ -86,7 +86,9 @@
     "featurePricing": "Prisar",
     "featurePricingDesc": "Medlemskontingent, plassleige og andre prisar",
     "featureMerchandise": "Klubbeffektar",
-    "featureMerchandiseDesc": "Klubbsal og merchandise"
+    "featureMerchandiseDesc": "Klubbsal og merchandise",
+    "joinCardBody": "Innmeldinga skjer her på nettsida: du fyller ut eit kort skjema, stadfestar e‑postadressa og betaler kontingenten.",
+    "joinCardCue": "Meld deg inn"
   },
   "calendar": {
     "title": "Klubbkalender",
@@ -2058,6 +2060,9 @@
       "logosGroup": "Logoar",
       "clubName": "Klubbnamn",
       "clubNameHint": "Definert av distribusjonen; kan ikkje endrast her.",
+      "publicDescription": "Kort skildring",
+      "publicDescriptionHint": "Vist under velkomstoverskrifta på framsida. Står feltet tomt, blir standardteksten brukt. Høgst 200 teikn.",
+      "publicDescriptionInvalid": "Skildringa kan vere på høgst 200 teikn, på éi linje.",
       "orgNumber": "Organisasjonsnummer",
       "address": "Adresse",
       "phone": "Telefon",
@@ -3460,12 +3465,8 @@
   "faq": {
     "title": "Ofte stilte spørsmål",
     "intro": "Her finn du svar på dei vanlegaste spørsmåla om medlemskap, båtplass og drift av hamna. Svara byggjer på hamnereglementet og vedtektene til laget.",
-    "seeAll": "Sjå alle spørsmål",
     "notFound": "Fann du ikkje det du leita etter?",
     "contactCta": "Kontakt styret",
-    "home": {
-      "title": "Ofte stilte spørsmål"
-    },
     "groups": {
       "newcomers": "Vil du bli medlem?",
       "members": "For medlemer",

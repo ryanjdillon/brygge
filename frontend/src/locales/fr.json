@@ -67,7 +67,9 @@
     "featureBookingsDesc": "Réservez des places visiteurs, des salles et d'autres services",
     "featureMembers": "Membres",
     "featureMembersDesc": "Rejoignez la communauté et accédez aux avantages membres",
-    "ctaJoin": "Devenir membre"
+    "ctaJoin": "Devenir membre",
+    "joinCardBody": "L'adhésion se fait ici, sur le site : remplissez un court formulaire, confirmez votre adresse e-mail et réglez la cotisation.",
+    "joinCardCue": "Adhérer"
   },
   "calendar": {
     "title": "Calendrier du club",
@@ -2019,7 +2021,10 @@
     },
     "siteSettings": {
       "boardNotificationEmail": "Avis d'adhésion à",
-      "boardNotificationEmailHint": "Adresse où le bureau est informé des nouveaux membres, des paiements d’adhésion remboursés, des adhésions à vérifier, des résiliations et résiliations annulées, et des résiliations qui n’ont pas pu aboutir. Laissez vide pour utiliser la boîte partagée du club (post@), sinon le secrétaire ou le président."
+      "boardNotificationEmailHint": "Adresse où le bureau est informé des nouveaux membres, des paiements d’adhésion remboursés, des adhésions à vérifier, des résiliations et résiliations annulées, et des résiliations qui n’ont pas pu aboutir. Laissez vide pour utiliser la boîte partagée du club (post@), sinon le secrétaire ou le président.",
+      "publicDescription": "Description courte",
+      "publicDescriptionHint": "Affichée sous le titre de bienvenue de la page d'accueil. Si le champ est vide, le slogan par défaut est utilisé. 200 caractères maximum.",
+      "publicDescriptionInvalid": "La description ne peut dépasser 200 caractères, sur une seule ligne."
     }
   },
   "projects": {
