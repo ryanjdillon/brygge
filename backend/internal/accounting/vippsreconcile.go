@@ -26,6 +26,16 @@ const (
 // Bank rows for Vipps payouts look like: "Utb. 2000591 Vippsnr 698382".
 var VippsSettlementPattern = regexp.MustCompile(`(?i)Utb\.\s*(\d+)\s+Vippsnr\s+(\d+)`)
 
+// vippsSettlementPatternSQL is VippsSettlementPattern for Postgres'
+// regexp_match(description, pattern, 'i'), with the same two groups. It is a
+// fixed constant: imported text is matched against it, never made part of
+// it. Whitespace is spelled out as Go's \s ([ \t\n\f\r]) rather than \s,
+// whose meaning in Postgres depends on the database's LC_CTYPE (a no-break
+// space can count there and never does in Go). Two tests guard the two
+// against drift: TestVippsSettlementPatternSQLMatchesGo and
+// TestVippsSettlementPatternSQLMatchesPostgres.
+const vippsSettlementPatternSQL = `Utb\.[ \t\n\f\r]*([0-9]+)[ \t\n\f\r]+Vippsnr[ \t\n\f\r]+([0-9]+)`
+
 // VippsReconcileLine is one proposed line in the draft journal entry.
 type VippsReconcileLine struct {
 	VippsRowID       string  `json:"vipps_row_id,omitempty"`

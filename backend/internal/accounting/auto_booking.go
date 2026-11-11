@@ -255,7 +255,9 @@ func (s *Service) RunAutomaticBooking(ctx context.Context, clubID string, opts A
 	if !opts.Accounting {
 		s.log.Info().Str("club_id", clubID).Str("trigger", opts.Trigger).Bool("ingest_failed", res.IngestFailed).
 			Msg("automatic booking: accounting is off; ingest only")
-		s.finishAutoBooking(clubID, res, start)
+		// Nothing is booked by design, so the operator's last run is not
+		// failed, even when the ingest was cut short (BRY-571).
+		s.finishAutoBookingAs(clubID, res, start, false)
 		return res
 	}
 
@@ -282,7 +284,7 @@ func (s *Service) RunAutomaticBooking(ctx context.Context, clubID string, opts A
 	if !on {
 		s.log.Info().Str("club_id", clubID).Str("trigger", opts.Trigger).Bool("ingest_failed", res.IngestFailed).
 			Msg("automatic booking is off for the club; ingest only")
-		s.finishAutoBooking(clubID, res, start)
+		s.finishAutoBookingAs(clubID, res, start, false)
 		return res
 	}
 
@@ -459,9 +461,15 @@ func (s *Service) ingestVippsReportDays(ctx context.Context, src VippsReportSour
 
 // finishAutoBooking tells the observer and logs the run's one Info line.
 func (s *Service) finishAutoBooking(clubID string, res *AutoBookingResult, start time.Time) {
+	s.finishAutoBookingAs(clubID, res, start, res.Failed())
+}
+
+// finishAutoBookingAs is finishAutoBooking with what the observer is told:
+// a run that books nothing by design reports failed false.
+func (s *Service) finishAutoBookingAs(clubID string, res *AutoBookingResult, start time.Time, failed bool) {
 	res.Duration = time.Since(start)
 	if s.autoBookingObs != nil {
-		s.autoBookingObs.AutoBookingRun(AutoBookingProviderVipps, res.Failed())
+		s.autoBookingObs.AutoBookingRun(AutoBookingProviderVipps, failed)
 	}
 	ev := s.log.Info()
 	if res.Failed() {

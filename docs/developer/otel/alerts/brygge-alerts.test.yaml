@@ -981,3 +981,239 @@ tests:
               summary: "example.invalid: magic_link mail rejected by Amazon SES (other recipient, SMTP 5.1)"
               description: "Amazon SES reported 1 magic_link message(s) as rejected in the last hour (recipient domain class other, SMTP status class 5.1). Exact recipient domain, SMTP status and diagnostic: just prod-query \"SELECT e.event_at, s.kind, e.event_type, e.bounce_type, e.bounce_subtype, e.recipient_domain, e.smtp_status, e.diagnostic, e.remote_mta, s.related_type, s.related_id, s.user_id FROM mail_delivery_events e LEFT JOIN email_sends s ON s.id = e.send_id WHERE e.event_type IN ('bounce', 'complaint', 'reject', 'rendering_failure') AND e.received_at > now() - interval '24 hours' ORDER BY e.event_at DESC LIMIT 20\""
               runbook_url: "https://example.invalid/runbook#sesdeliveryfailed"
+
+  # Report sync: a success at minute 10 (last_success = 600), exported every
+  # 10 minutes. Fresh: quiet. 36h10m after the success the condition holds,
+  # firing after `for: 30m`. A new success at 38h resolves it once
+  # keep_firing_for (30m) has run out.
+  - interval: 10m
+    input_series:
+      - series: 'brygge_vipps_report_sync_last_success_seconds{job="example.invalid/brygge-api", msn="100001"}'
+        values: '600x227 136800x70'
+      - series: 'brygge_email_send_total{job="example.invalid/brygge-api", kind="other", result="ok"}'
+        values: '0x300'
+    alert_rule_test:
+      - eval_time: 1h
+        alertname: VippsReportSyncStale
+        exp_alerts: []
+      - eval_time: 36h30m
+        alertname: VippsReportSyncStale
+        exp_alerts: []
+      - eval_time: 37h
+        alertname: VippsReportSyncStale
+        exp_alerts:
+          - exp_labels:
+              msn: "100001"
+              service_namespace: example.invalid
+              club: example
+              severity: warn
+            exp_annotations:
+              summary: "example.invalid: no successful Vipps report sync for 36 hours"
+              description: "The Vipps Report API pull for merchant 100001 has not succeeded for more than 36 hours, or not since the API started. Nothing new from Vipps reaches Tildel, and days older than 4 are never pulled again by the job; booking what is already in Brygge still runs."
+              runbook_url: "https://example.invalid/runbook#vippsreportsyncstale"
+      - eval_time: 38h40m
+        alertname: VippsReportSyncStale
+        exp_alerts: []
+
+  # A restart 30h after the last success whose pulls keep failing: the
+  # series is absent from then on, but the last value still counts, so the
+  # alert fires 36h after the success, not 36h after the restart. Three
+  # days after the last sample (102h) the absent branch takes over, with the
+  # job label instead of the msn: keep_firing_for holds the msn alert through
+  # the job alert's `for` (102h15m), and from 102h30m only the job alert
+  # fires.
+  - interval: 10m
+    input_series:
+      - series: 'brygge_vipps_report_sync_last_success_seconds{job="example.invalid/brygge-api", msn="100001"}'
+        values: '600x180'
+      - series: 'brygge_email_send_total{job="example.invalid/brygge-api", kind="other", result="ok"}'
+        values: '0x700'
+    alert_rule_test:
+      - eval_time: 35h
+        alertname: VippsReportSyncStale
+        exp_alerts: []
+      - eval_time: 37h
+        alertname: VippsReportSyncStale
+        exp_alerts:
+          - exp_labels:
+              msn: "100001"
+              service_namespace: example.invalid
+              club: example
+              severity: warn
+            exp_annotations:
+              summary: "example.invalid: no successful Vipps report sync for 36 hours"
+              description: "The Vipps Report API pull for merchant 100001 has not succeeded for more than 36 hours, or not since the API started. Nothing new from Vipps reaches Tildel, and days older than 4 are never pulled again by the job; booking what is already in Brygge still runs."
+              runbook_url: "https://example.invalid/runbook#vippsreportsyncstale"
+      - eval_time: 101h
+        alertname: VippsReportSyncStale
+        exp_alerts:
+          - exp_labels:
+              msn: "100001"
+              service_namespace: example.invalid
+              club: example
+              severity: warn
+            exp_annotations:
+              summary: "example.invalid: no successful Vipps report sync for 36 hours"
+              description: "The Vipps Report API pull for merchant 100001 has not succeeded for more than 36 hours, or not since the API started. Nothing new from Vipps reaches Tildel, and days older than 4 are never pulled again by the job; booking what is already in Brygge still runs."
+              runbook_url: "https://example.invalid/runbook#vippsreportsyncstale"
+      - eval_time: 102h15m
+        alertname: VippsReportSyncStale
+        exp_alerts:
+          - exp_labels:
+              msn: "100001"
+              service_namespace: example.invalid
+              club: example
+              severity: warn
+            exp_annotations:
+              summary: "example.invalid: no successful Vipps report sync for 36 hours"
+              description: "The Vipps Report API pull for merchant 100001 has not succeeded for more than 36 hours, or not since the API started. Nothing new from Vipps reaches Tildel, and days older than 4 are never pulled again by the job; booking what is already in Brygge still runs."
+              runbook_url: "https://example.invalid/runbook#vippsreportsyncstale"
+      - eval_time: 103h
+        alertname: VippsReportSyncStale
+        exp_alerts:
+          - exp_labels:
+              job: example.invalid/brygge-api
+              service_namespace: example.invalid
+              club: example
+              severity: warn
+            exp_annotations:
+              summary: "example.invalid: no successful Vipps report sync for 36 hours"
+              description: "The Vipps Report API pull has not succeeded for more than 36 hours, or not since the API started. Nothing new from Vipps reaches Tildel, and days older than 4 are never pulled again by the job; booking what is already in Brygge still runs."
+              runbook_url: "https://example.invalid/runbook#vippsreportsyncstale"
+
+  # A start whose first pull fails, with no success on record: the absent
+  # branch fires after `for`. While the whole API is silent it is
+  # suppressed (ApiSilent fires instead).
+  - interval: 1m
+    input_series:
+      - series: 'brygge_email_send_total{job="example.invalid/brygge-api", kind="other", result="ok"}'
+        values: '0x60 _x120'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: VippsReportSyncStale
+        exp_alerts: []
+      - eval_time: 40m
+        alertname: VippsReportSyncStale
+        exp_alerts:
+          - exp_labels:
+              job: example.invalid/brygge-api
+              service_namespace: example.invalid
+              club: example
+              severity: warn
+            exp_annotations:
+              summary: "example.invalid: no successful Vipps report sync for 36 hours"
+              description: "The Vipps Report API pull has not succeeded for more than 36 hours, or not since the API started. Nothing new from Vipps reaches Tildel, and days older than 4 are never pulled again by the job; booking what is already in Brygge still runs."
+              runbook_url: "https://example.invalid/runbook#vippsreportsyncstale"
+      - eval_time: 150m
+        alertname: VippsReportSyncStale
+        exp_alerts: []
+
+  # Another club's stale sync doesn't fire this club's alert.
+  - interval: 10m
+    input_series:
+      - series: 'brygge_vipps_report_sync_last_success_seconds{job="example.invalid/brygge-api", msn="100001"}'
+        values: '600+600x300'
+      - series: 'brygge_vipps_report_sync_last_success_seconds{job="other.example.invalid/brygge-api", msn="100002"}'
+        values: '600x300'
+      - series: 'brygge_email_send_total{job="example.invalid/brygge-api", kind="other", result="ok"}'
+        values: '0x300'
+    alert_rule_test:
+      - eval_time: 48h
+        alertname: VippsReportSyncStale
+        exp_alerts: []
+
+  # Unbooked charges on two merchants: 100001 crosses 7 days at minute 14
+  # and fires after `for: 1h`; 100002 is an hour old. Another club's old
+  # charge is ignored.
+  - interval: 1m
+    input_series:
+      - series: 'brygge_vipps_unbooked_charge_oldest_age_seconds{job="example.invalid/brygge-api", msn="100001"}'
+        values: '604000+60x100'
+      - series: 'brygge_vipps_unbooked_charge_oldest_age_seconds{job="example.invalid/brygge-api", msn="100002"}'
+        values: '3600+60x100'
+      - series: 'brygge_vipps_unbooked_charge_oldest_age_seconds{job="other.example.invalid/brygge-api", msn="100003"}'
+        values: '9000000+60x100'
+    alert_rule_test:
+      - eval_time: 70m
+        alertname: VippsChargesUnbooked
+        exp_alerts: []
+      - eval_time: 80m
+        alertname: VippsChargesUnbooked
+        exp_alerts:
+          - exp_labels:
+              msn: "100001"
+              service_namespace: example.invalid
+              club: example
+              severity: warn
+            exp_annotations:
+              summary: "example.invalid: a Vipps payment on merchant 100001 has waited 7d 1h 6m 40s unbooked"
+              description: "The oldest Vipps charge on merchant 100001 that is not on a posted entry reached Brygge 7d 1h 6m 40s ago (threshold 7 days): ambiguous for the automatic rules, refused, undone by a person, on a draft or voided entry, or automatic booking stopped working. Book or dismiss it in Tildel."
+              runbook_url: "https://example.invalid/runbook#vippschargesunbooked"
+
+  # A ready payout at 47h: quiet. Over 48h from minute 61, firing after
+  # `for: 1h`; cleared at minute 130 (the gauge returns to 0), resolved.
+  - interval: 1m
+    input_series:
+      - series: 'brygge_vipps_ready_payout_oldest_age_seconds{job="example.invalid/brygge-api"}'
+        values: '169200+60x129 0x30'
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: VippsPayoutNotCleared
+        exp_alerts: []
+      - eval_time: 100m
+        alertname: VippsPayoutNotCleared
+        exp_alerts: []
+      - eval_time: 125m
+        alertname: VippsPayoutNotCleared
+        exp_alerts:
+          - exp_labels:
+              service_namespace: example.invalid
+              club: example
+              severity: warn
+            exp_annotations:
+              summary: "example.invalid: a Vipps payout has been clearable for 2d 1h 5m 0s but is not cleared"
+              description: "The oldest Vipps payout deposit whose charges are all booked has waited 2d 1h 5m 0s (threshold 48h, counted from the latest of its upload, its settlement's last posted or dismissed charge, and the opening of its year). The sweep refuses it; the latest accounting.auto_booking_run audit row lists why under payouts_failed."
+              runbook_url: "https://example.invalid/runbook#vippspayoutnotcleared"
+      - eval_time: 140m
+        alertname: VippsPayoutNotCleared
+        exp_alerts: []
+
+  # Failed runs, per provider: Vipps fails at minute 10 and recovers at 42;
+  # Stripe fails at 41. Each fires after `for: 5m` and resolves on its next
+  # good run. Another club's failure is ignored.
+  - interval: 1m
+    input_series:
+      - series: 'brygge_accounting_auto_booking_last_run_failed{job="example.invalid/brygge-api", provider="vipps"}'
+        values: '0x9 1x31 0x30'
+      - series: 'brygge_accounting_auto_booking_last_run_failed{job="example.invalid/brygge-api", provider="stripe"}'
+        values: '0x40 1x30'
+      - series: 'brygge_accounting_auto_booking_last_run_failed{job="other.example.invalid/brygge-api", provider="vipps"}'
+        values: '1x70'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: AutomaticBookingFailed
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: AutomaticBookingFailed
+        exp_alerts:
+          - exp_labels:
+              provider: vipps
+              service_namespace: example.invalid
+              club: example
+              severity: warn
+            exp_annotations:
+              summary: "example.invalid: the last vipps automatic booking run failed"
+              description: "The last automatic booking run for vipps failed or was aborted. The next run retries it; its accounting.auto_booking_run audit row lists the errors."
+              runbook_url: "https://example.invalid/runbook#automaticbookingfailed"
+      - eval_time: 50m
+        alertname: AutomaticBookingFailed
+        exp_alerts:
+          - exp_labels:
+              provider: stripe
+              service_namespace: example.invalid
+              club: example
+              severity: warn
+            exp_annotations:
+              summary: "example.invalid: the last stripe automatic booking run failed"
+              description: "The last automatic booking run for stripe failed or was aborted. The next run retries it; its accounting.auto_booking_run audit row lists the errors."
+              runbook_url: "https://example.invalid/runbook#automaticbookingfailed"

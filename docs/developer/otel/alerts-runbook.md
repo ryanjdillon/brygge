@@ -28,6 +28,10 @@ PW=$(cat /etc/stalwart/admin-password); U=http://127.0.0.1:8088
 | [JournalRetentionShort](#journalretentionshort) | warn | The journal is near its size cap and keeps less than 7 days |
 | [PaymentWebhookFailing](#paymentwebhookfailing) | page | A payment webhook was answered 5xx in the last hour and again 90 to 150 minutes ago |
 | [PaymentAttemptStuckAuthorized](#paymentattemptstuckauthorized) | page | A payment attempt has been authorized but unsettled for over an hour |
+| [VippsReportSyncStale](#vippsreportsyncstale) | warn | The Vipps Report API pull has not succeeded for 36 hours, or not since the API started |
+| [VippsChargesUnbooked](#vippschargesunbooked) | warn | A Vipps payment has been in Brygge for over 7 days without a posted booking |
+| [VippsPayoutNotCleared](#vippspayoutnotcleared) | warn | A Vipps payout deposit has been clearable for 48 hours but is not cleared |
+| [AutomaticBookingFailed](#automaticbookingfailed) | warn | The last automatic booking run of a provider failed |
 
 ---
 
@@ -290,3 +294,50 @@ The counter `brygge_payment_webhook_failure_total` has no event id, so "the same
 **The one legitimate long-authorized case: a partial capture.** If someone captured less than the full amount in the Stripe Dashboard, `payment_intent.succeeded` arrives with `amount_received` below the attempt's amount; the webhook logs `captured amount does not match the attempt, not marking paid`, answers 200 (a redelivery would read the same amount) and leaves the attempt `authorized` and the order unpaid, for the board to resolve. This alert then fires and keeps firing. Check the PaymentIntent in the Stripe Dashboard against the attempt's amount, and decide with the board: refund what was captured so the payer can pay the whole amount again, or settle the shortfall outside Brygge. Either way the attempt stays `authorized` (and blocks another online payment on that order) until an operator moves it off, as a reviewed step; the alert resolves only then.
 
 **Fixes.** If the provider has the payment captured: make the event arrive again (Stripe resend, see PaymentWebhookFailing; the redelivery books it once the database accepts the write). If the provider holds it uncaptured and the order is still unpaid, resend the event that authorized it (Stripe `checkout.session.completed`) so Brygge captures it, within the provider's hold period (typically 7 days for cards). If the authorization has lapsed or was voided and nothing was taken, the attempt can only be moved off `authorized` by hand; do that as a reviewed operator step, since the order stays unpayable online until then. Never capture or void at the provider by hand without checking the order: a duplicate payment can only be refunded afterwards.
+
+## VippsReportSyncStale
+
+**Meaning.** The automatic booking run's Vipps Report API pull (`brygge_vipps_report_sync_last_success_seconds`, per merchant `msn`) has not succeeded for more than 36 hours, or there is no success on record for three days or since the deployment started (the alert then carries `job` instead of `msn`). The run pulls d-1 to d-4 at every start and every 24 h, so 36 h is a missed night plus slack. Nothing new from Vipps reaches Tildel, and days older than 4 are never pulled again by the job. Booking what is already in Brygge still runs. The no-success-on-record form does not fire while the whole API is silent ([ApiSilent](#apisilent) does). A deployment without Vipps Report API credentials should not load this rule ([alerting.md § Label and job contract](alerting.md#label-and-job-contract)).
+
+**First checks.**
+
+1. `journalctl -u brygge --since -2d | grep -E 'vipps report sync|automatic booking'`: credential, ledger (`resolve ledger failed`) or HTTP errors, and whether the run starts at all.
+2. The latest summary rows (on the host: `audit_log` is not readable through `just prod-query`): `sudo -u brygge psql "postgres:///brygge?host=/run/postgresql" -c "SELECT created_at, details->'ingest' AS ingest, details->'ingest_failed' AS ingest_failed FROM audit_log WHERE action = 'accounting.auto_booking_run' ORDER BY created_at DESC LIMIT 5"`. `failed_dates` lists the days that errored; `ledger_failed` means no date was pulled. A run writes a row only when something happened, so a quiet night has none.
+3. Is the API's Vipps client configured (`VIPPS_*` in `/etc/brygge/env`)? Without it the run never pulls.
+
+**Fixes.** Fix the credentials or the network, then restart the API (`systemctl restart brygge`): the boot run pulls d-1 to d-4 at once and the alert resolves on its success. Days older than d-4 are pulled one date at a time with `POST /api/v1/accounting/vipps/report-sync` and body `{"date": "YYYY-MM-DD"}`, as a treasurer or admin with a fresh TOTP (there is no button for it); the pull is idempotent.
+
+## VippsChargesUnbooked
+
+**Meaning.** A Vipps payment (`msn` on the alert) has been in Brygge for more than 7 days without a posted booking (`brygge_vipps_unbooked_charge_oldest_age_seconds`, counted from when the row reached Brygge or its year was last created or reopened, whichever is later, so a late CSV import of old charges or a year opened late does not fire at once). `msn="unknown"` is a charge imported without a merchant number; zero and negative charges count too. It is ambiguous for the automatic rules, refused (the order's faktura is not open, closed period), undone by a person and not booked again ("Angre", which is final for the automatic passes), on a draft or voided entry, or automatic booking stopped working. Only clubs with automatic booking on are counted. Charges dated in a reference year, or in a missing, closed or locked fiscal year, are left out: the treasurer's fiscal year notice (BRY-575) covers what an automatic pass would book there, and the rest waits visibly in Tildel. They come back into the gauge, with a fresh clock, once the year is open.
+
+**First checks.**
+
+1. Which charges: `just prod-query "SELECT msn, booking_date, amount, created_at, order_id <> '' AS order_linked, auto_declined_at IS NOT NULL AS declined, journal_entry_id IS NOT NULL AS linked FROM vipps_import_rows WHERE row_type = 'belastning' AND dismissed_at IS NULL AND (journal_entry_id IS NULL OR journal_entry_id NOT IN (SELECT id FROM journal_entries WHERE status = 'posted')) ORDER BY created_at LIMIT 20"`.
+2. The latest `accounting.auto_booking_run` row (on the host, as under [VippsReportSyncStale](#vippsreportsyncstale)): `details->'vipps'` has `needs_review`, `orders_skipped` and `declined_skipped`.
+3. [AutomaticBookingFailed](#automaticbookingfailed) firing too means the run itself is failing.
+
+**Fixes.** Book or dismiss them in **Tildel** (the treasurer's step; tell them). A retired merchant's leftovers are fixed the same way.
+
+## VippsPayoutNotCleared
+
+**Meaning.** A Vipps payout deposit has been clearable for 48 hours (`brygge_vipps_ready_payout_oldest_age_seconds`): it is unbooked, its settlement's charges are all posted or dismissed, and neither the upload sweep nor the nightly run has cleared it, so the sweep refuses it. The clock is the latest of the deposit's upload, its settlement's last posted or dismissed charge, and the last change to the years of its two dates (a year created or reopened restarts it). Left out: deposits a person declined ("Angre innbetalingen", out of the sweep on purpose), clubs with automatic booking off or on the legacy model, deposits whose own date or settlement date lies in a reference, missing, closed or locked year (the treasurer's fiscal year notice (BRY-575) covers what an automatic pass would book there, and the rest waits visibly in Tildel), and deposits whose imported payout row has no booking date (the sweep reports those with "mangler dato"). A second deposit naming a settlement that is already cleared ("allerede avstemt") also ages into this alert; that is correct, it needs a person.
+
+**First checks.**
+
+1. The reasons, in the latest `accounting.auto_booking_run` row, on the host: `sudo -u brygge psql "postgres:///brygge?host=/run/postgresql" -c "SELECT created_at, details->'vipps'->'payouts_failed' AS payouts_failed, details->'vipps'->'payouts_skipped' AS skipped FROM audit_log WHERE action = 'accounting.auto_booking_run' ORDER BY created_at DESC LIMIT 3"`. A settlement that does not net to 0 is listed in `payouts_failed` although the sweep itself counts it as skipped. A stuck state writes a summary row every night, so the latest row always shows it.
+2. Or click **Synkroniser** and read the Vipps payout section.
+
+**Fixes.** Per reason: the deposit is not the net payout, or the settlement does not net to 0 (check the fee rows, and a charge imported twice, BRY-560); a closed period (reopen it or book by hand); two settlements on one day, or a settlement already cleared by another deposit (clear by hand with **Avstem Vipps-utbetaling**, or dismiss the duplicate deposit).
+
+## AutomaticBookingFailed
+
+**Meaning.** The last automatic booking run for `provider` (`vipps` or `stripe`) failed or was aborted (`brygge_accounting_auto_booking_last_run_failed` = 1): a step returned an error, the run hit its 10-minute deadline or was cancelled, the system actor could not be resolved, or the payout sweep or bank auto-assign could not run. A busy booking slot and a failed Report API pull do not count ([VippsReportSyncStale](#vippsreportsyncstale) covers the second). The next run retries; the alert resolves after the next good one (the nightly run, the next start, or for Stripe the next event).
+
+**First checks.**
+
+1. The latest summary row's `errors` (and `aborted`), on the host: `sudo -u brygge psql "postgres:///brygge?host=/run/postgresql" -c "SELECT created_at, details->'errors' AS errors, details->'aborted' AS aborted, details->'vipps'->'payouts_error' AS payouts_error, details->'bank'->'error' AS bank_error FROM audit_log WHERE action = 'accounting.auto_booking_run' ORDER BY created_at DESC LIMIT 3"`.
+2. `journalctl -u brygge --since -2d | grep 'automatic booking'` for the error text and the run's one summary line.
+3. Is the database healthy (`systemctl status postgresql`)? A run that keeps hitting its deadline points at locks or a slow query.
+
+**Fixes.** Fix what the error names; restart the API (`systemctl restart brygge`) to run again at once instead of waiting for the night.

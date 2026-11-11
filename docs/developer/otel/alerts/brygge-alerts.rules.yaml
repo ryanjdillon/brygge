@@ -351,3 +351,100 @@ groups:
           summary: "__SERVICE_NAMESPACE__: a payment has been authorized but unsettled for {{ $value | humanizeDuration }}"
           description: "The oldest payment attempt in status authorized is {{ $value | humanizeDuration }} old (threshold 1h). The provider holds or has taken the money and Brygge has not booked it."
           runbook_url: "__RUNBOOK_BASE__#paymentattemptstuckauthorized"
+
+  # The automatic booking run (ACC-13; accounting README § Automatic booking
+  # run). All warn: the books lag and the treasurer has work waiting, but no
+  # member is affected yet. The backlog gauges count only clubs with
+  # automatic booking on, and leave out rows dated in a reference, missing,
+  # closed or locked year: the treasurer's fiscal year notice covers what a
+  # pass would book there, and the rest waits visibly in Tildel.
+  # A deployment without Vipps Report API credentials never syncs: drop
+  # VippsReportSyncStale from its rendered copy, as one without SMTP drops
+  # ApiSilent.
+  - name: brygge-__CLUB_SLUG__-accounting
+    rules:
+      # last_success is the Unix time of the last Report API pull where every
+      # date answered; the run pulls at start and every 24h, so 36h is one
+      # missed night plus slack. Nothing is exported before a merchant's
+      # first success, so after a restart whose pulls fail the series is
+      # absent: last_over_time keeps the last value for three days, so the
+      # first branch still fires 36h after that success. Past three days, or
+      # on a deployment that has never synced, the absent branch fires,
+      # unless the whole API is silent (ApiSilent covers that). The branches
+      # carry different labels (msn, job): keep_firing_for holds the msn
+      # alert while the job one goes through `for`, so the switch does not
+      # resolve and re-fire.
+      - alert: VippsReportSyncStale
+        expr: |
+          (
+            time() - max by (msn) (last_over_time(brygge_vipps_report_sync_last_success_seconds{job="__SERVICE_NAMESPACE__/brygge-api"}[3d])) > 36 * 3600
+          )
+          or on ()
+          (
+            absent_over_time(brygge_vipps_report_sync_last_success_seconds{job="__SERVICE_NAMESPACE__/brygge-api"}[3d])
+            unless on ()
+            absent_over_time(brygge_email_send_total{job="__SERVICE_NAMESPACE__/brygge-api"}[15m])
+          )
+        for: 30m
+        keep_firing_for: 30m
+        labels:
+          service_namespace: __SERVICE_NAMESPACE__
+          club: __CLUB_SLUG__
+          severity: warn
+        annotations:
+          summary: "__SERVICE_NAMESPACE__: no successful Vipps report sync for 36 hours"
+          description: "The Vipps Report API pull{{ with $labels.msn }} for merchant {{ . }}{{ end }} has not succeeded for more than 36 hours, or not since the API started. Nothing new from Vipps reaches Tildel, and days older than 4 are never pulled again by the job; booking what is already in Brygge still runs."
+          runbook_url: "__RUNBOOK_BASE__#vippsreportsyncstale"
+
+      # The age of the oldest Vipps charge not on a posted entry, per
+      # merchant, from when it reached Brygge or its year was last opened or
+      # reopened, whichever is later. A merchant with none has no
+      # series. An ambiguous charge waits for the treasurer by design, so 7
+      # days flags neglect, not the normal queue.
+      - alert: VippsChargesUnbooked
+        expr: max by (msn) (brygge_vipps_unbooked_charge_oldest_age_seconds{job="__SERVICE_NAMESPACE__/brygge-api"}) > 7 * 86400
+        for: 1h
+        labels:
+          service_namespace: __SERVICE_NAMESPACE__
+          club: __CLUB_SLUG__
+          severity: warn
+        annotations:
+          summary: "__SERVICE_NAMESPACE__: a Vipps payment on merchant {{ $labels.msn }} has waited {{ $value | humanizeDuration }} unbooked"
+          description: "The oldest Vipps charge on merchant {{ $labels.msn }} that is not on a posted entry reached Brygge {{ $value | humanizeDuration }} ago (threshold 7 days): ambiguous for the automatic rules, refused, undone by a person, on a draft or voided entry, or automatic booking stopped working. Book or dismiss it in Tildel."
+          runbook_url: "__RUNBOOK_BASE__#vippschargesunbooked"
+
+      # The age of the oldest payout deposit the sweep could clear (its
+      # settlement's charges are all posted or dismissed) but has not, from
+      # the latest of its upload, the settlement's last posted or dismissed
+      # charge, and the last change to the years of its two dates; 0 when
+      # none. The upload sweep or the next night clears a healthy one,
+      # so 48h means the sweep refuses it. Absent when the database can't be
+      # read.
+      - alert: VippsPayoutNotCleared
+        expr: max(brygge_vipps_ready_payout_oldest_age_seconds{job="__SERVICE_NAMESPACE__/brygge-api"}) > 48 * 3600
+        for: 1h
+        labels:
+          service_namespace: __SERVICE_NAMESPACE__
+          club: __CLUB_SLUG__
+          severity: warn
+        annotations:
+          summary: "__SERVICE_NAMESPACE__: a Vipps payout has been clearable for {{ $value | humanizeDuration }} but is not cleared"
+          description: "The oldest Vipps payout deposit whose charges are all booked has waited {{ $value | humanizeDuration }} (threshold 48h, counted from the latest of its upload, its settlement's last posted or dismissed charge, and the opening of its year). The sweep refuses it; the latest accounting.auto_booking_run audit row lists why under payouts_failed."
+          runbook_url: "__RUNBOOK_BASE__#vippspayoutnotcleared"
+
+      # 1 when the provider's last automatic booking run failed or was
+      # aborted, 0 when it did not; absent before the first run. A busy
+      # booking slot or a failed Report API pull is not a failure here. It
+      # resolves on the next good run (nightly, at the next start, or for
+      # Stripe at the next event).
+      - alert: AutomaticBookingFailed
+        expr: max by (provider) (brygge_accounting_auto_booking_last_run_failed{job="__SERVICE_NAMESPACE__/brygge-api"}) > 0
+        for: 5m
+        labels:
+          service_namespace: __SERVICE_NAMESPACE__
+          club: __CLUB_SLUG__
+          severity: warn
+        annotations:
+          summary: "__SERVICE_NAMESPACE__: the last {{ $labels.provider }} automatic booking run failed"
+          description: "The last automatic booking run for {{ $labels.provider }} failed or was aborted. The next run retries it; its accounting.auto_booking_run audit row lists the errors."
+          runbook_url: "__RUNBOOK_BASE__#automaticbookingfailed"

@@ -399,6 +399,16 @@ func main() {
 	if err := payments.NewAuthorizedAttemptAge(db, log).RegisterMetrics(); err != nil {
 		log.Warn().Err(err).Msg("failed to register payment attempt metrics")
 	}
+	// Operator gauges for the automatic booking run (BRY-571): the Vipps
+	// backlog from the database, and the run's own last sync and last result.
+	if err := accounting.NewBacklogGauges(db, log).RegisterMetrics(); err != nil {
+		log.Warn().Err(err).Msg("failed to register accounting backlog metrics")
+	}
+	autoBookingMetrics := accounting.NewAutoBookingMetrics()
+	if err := autoBookingMetrics.RegisterMetrics(); err != nil {
+		log.Warn().Err(err).Msg("failed to register automatic booking metrics")
+	}
+	accountingSvc.SetAutoBookingObserver(autoBookingMetrics)
 	if stripeClient != nil {
 		accountingHandler.SetStripe(stripeClient)
 	}
