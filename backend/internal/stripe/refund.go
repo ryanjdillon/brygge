@@ -39,6 +39,14 @@ type Refund struct {
 	Charge        ObjectID          `json:"charge"`
 	PaymentIntent ObjectID          `json:"payment_intent"`
 	Metadata      map[string]string `json:"metadata"`
+	// BalanceTransaction is the refund's balance transaction, which Stripe
+	// sets when the refund is created (also while it is pending); the
+	// Stripe booking pass books the refund from it. Empty when Stripe has
+	// not reported one.
+	BalanceTransaction ObjectID `json:"balance_transaction"`
+	// FailureBalanceTransaction is the balance transaction that returns the
+	// money of a refund that failed; empty otherwise.
+	FailureBalanceTransaction ObjectID `json:"failure_balance_transaction"`
 }
 
 // RefundPage is one page of a refund list.

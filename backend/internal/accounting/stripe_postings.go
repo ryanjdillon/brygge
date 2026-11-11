@@ -146,15 +146,31 @@ func (s *Service) BookStripeBalanceReported(ctx context.Context, clubID, actorID
 // good ingest is logged and reported in its result's Error, so the ingest
 // is not lost.
 func (s *Service) TrySyncAndBookStripeBalance(ctx context.Context, src StripeBalanceSource, clubID, actorID string) (StripeSyncResult, *StripeBookResult, *StripePayoutSweepResult, error) {
+	return s.syncAndBookStripe(ctx, src, clubID, actorID, 0)
+}
+
+// SyncAndBookStripeBalance is TrySyncAndBookStripeBalance for the automatic
+// paths (BRY-570): it waits up to wait for the club's Stripe slot and
+// returns ErrStripeSyncBusy when the slot is still held then. A wait of 0
+// does not wait at all.
+func (s *Service) SyncAndBookStripeBalance(ctx context.Context, src StripeBalanceSource, clubID, actorID string, wait time.Duration) (StripeSyncResult, *StripeBookResult, *StripePayoutSweepResult, error) {
+	return s.syncAndBookStripe(ctx, src, clubID, actorID, wait)
+}
+
+// syncAndBookStripe ingests, books and sweeps in one hold of the club's
+// Stripe slot. wait == 0 takes the slot only if it is free (the endpoint's
+// 409); wait > 0 waits that long for it, then reports ErrStripeSyncBusy
+// unless ctx itself ended, which is ctx's error.
+func (s *Service) syncAndBookStripe(ctx context.Context, src StripeBalanceSource, clubID, actorID string, wait time.Duration) (StripeSyncResult, *StripeBookResult, *StripePayoutSweepResult, error) {
 	if src == nil {
 		return newStripeSyncResult(), nil, nil, errors.New("stripe client not configured")
 	}
 	if actorID == "" {
 		return newStripeSyncResult(), nil, nil, errors.New("booking stripe transactions needs an acting user")
 	}
-	release, ok := s.stripeSync.tryAcquire(clubID)
-	if !ok {
-		return newStripeSyncResult(), nil, nil, ErrStripeSyncBusy
+	release, err := s.acquireStripeSlotWithin(ctx, clubID, wait)
+	if err != nil {
+		return newStripeSyncResult(), nil, nil, err
 	}
 	defer release()
 	synced, err := s.syncStripeBalance(ctx, src, clubID)
@@ -172,6 +188,30 @@ func (s *Service) TrySyncAndBookStripeBalance(ctx context.Context, src StripeBal
 		payouts.Error = stripePayoutSweepFailedTxt
 	}
 	return synced, booked, payouts, nil
+}
+
+// acquireStripeSlotWithin takes the club's Stripe slot. wait <= 0 does not
+// wait (ErrStripeSyncBusy at once); otherwise it waits at most wait, and a
+// slot still held then is ErrStripeSyncBusy, while a ctx that ended is
+// ctx's error.
+func (s *Service) acquireStripeSlotWithin(ctx context.Context, clubID string, wait time.Duration) (func(), error) {
+	if wait <= 0 {
+		release, ok := s.stripeSync.tryAcquire(clubID)
+		if !ok {
+			return nil, ErrStripeSyncBusy
+		}
+		return release, nil
+	}
+	wctx, cancel := context.WithTimeout(ctx, wait)
+	defer cancel()
+	release, err := s.stripeSync.acquire(wctx, clubID)
+	if err == nil {
+		return release, nil
+	}
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	return nil, ErrStripeSyncBusy
 }
 
 // stripeBookableSQL is the row set the Stripe booking pass takes up, over
@@ -396,7 +436,13 @@ func bookStripeRowTx(ctx context.Context, tx pgx.Tx, clubID, actorID string, row
 // afterStripeBooked audits a committed booking and runs what must not hold
 // the booking's locks: the refund's delivery nudge and the charge's faktura
 // payment back-link.
+//
+// It runs on postCommitContext: the booking has committed, so a pass whose
+// context ends right after (an automatic run cut by shutdown) still writes
+// the audit rows, nudges the delivery worker and sets the back-link.
 func (s *Service) afterStripeBooked(ctx context.Context, clubID, actorID string, row *stripeTxnRow, date time.Time, b stripeBooked) {
+	ctx, cancel := postCommitContext(ctx)
+	defer cancel()
 	if b.refund != nil {
 		b.refund.rowID, b.refund.btID, b.refund.category = row.id, row.btID, row.category
 		s.afterRefundBooked(ctx, clubID, actorID, b.refund)

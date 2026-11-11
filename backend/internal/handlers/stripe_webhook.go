@@ -33,6 +33,10 @@ type StripeWebhookHandler struct {
 	ledger stripePayoutIngester
 	// mailer tells the treasurer about a new dispute; nil without SMTP.
 	mailer email.Sender
+	// booker is kicked after an event that moved money on the club's Stripe
+	// balance was handled, so the automatic Stripe run books it soon; nil
+	// kicks nothing (accounting off, or no Stripe credentials).
+	booker stripeBookingKicker
 	// payouts tracks payout ingests still running after their event was
 	// answered.
 	payouts sync.WaitGroup
@@ -50,6 +54,28 @@ type stripePayoutIngester interface {
 // mirror. Left unset when accounting is off.
 func (h *StripeWebhookHandler) SetLedger(l stripePayoutIngester) {
 	h.ledger = l
+}
+
+// stripeBookingKicker asks for the club's automatic Stripe run soon. Kick
+// must not block (accounting.StripeAutoBooker).
+type stripeBookingKicker interface {
+	Kick(clubID string)
+}
+
+// SetBookingKicker makes the handler kick the automatic Stripe run after a
+// capture, a refund, a dispute's funds moving or a payout (BRY-570). The
+// webhook itself still books nothing (ACC-5): the run reads the balance.
+func (h *StripeWebhookHandler) SetBookingKicker(k stripeBookingKicker) {
+	h.booker = k
+}
+
+// kickBooking kicks the automatic Stripe run for the club, if one is wired.
+// Call it only for an event about one of the club's payments that was
+// handled without error.
+func (h *StripeWebhookHandler) kickBooking(clubID string) {
+	if h.booker != nil {
+		h.booker.Kick(clubID)
+	}
 }
 
 // SetMailer lets the handler email the club's treasurer when a card payment

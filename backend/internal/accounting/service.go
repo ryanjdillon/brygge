@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -21,8 +22,9 @@ type Service struct {
 	// systemActorInsert replaces the SystemActor INSERT in tests, so a losing
 	// concurrent first call can be reproduced deterministically.
 	systemActorInsert func(ctx context.Context, clubID string) error
-	// stripeSync serialises the Stripe balance ingest per club across the
-	// nightly job, the sync endpoint and the payout webhook.
+	// stripeSync serialises the Stripe balance ingest and booking per club
+	// across the automatic Stripe run (boot, nightly and webhook-kicked),
+	// the sync endpoint, the bank paths and the payout webhook.
 	stripeSync clubSlot
 	// vippsBooking serialises the Vipps booking tail (order-linked charges,
 	// the auto-assign rules, the payout sweep) per club, so two Vipps bookings
@@ -35,6 +37,14 @@ type Service struct {
 	// autoBookingSlotWait bounds the automatic run's wait for vippsBooking;
 	// zero is defaultAutoBookingSlotWait. Tests shorten it.
 	autoBookingSlotWait time.Duration
+	// stripeAutoSlotWait bounds the automatic Stripe run's wait for
+	// stripeSync; zero is defaultStripeAutoSlotWait. Tests shorten it.
+	stripeAutoSlotWait time.Duration
+	// stripeAutoLastFailure is, per club, what the latest automatic Stripe
+	// run failed on (stripeFailureSignature), so a kicked run that fails the
+	// same way writes no second summary row. Guarded by stripeAutoMu.
+	stripeAutoMu          sync.Mutex
+	stripeAutoLastFailure map[string]string
 	// autoBookingObs is told about Report API syncs and automatic runs
 	// (SetAutoBookingObserver, the BRY-571 metrics); nil tells no one.
 	autoBookingObs AutoBookingObserver

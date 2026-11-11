@@ -91,7 +91,7 @@ func (h *AccountingHandler) HandleClearStripePayout(w http.ResponseWriter, r *ht
 		return
 	case errors.Is(err, accounting.ErrStripeSyncBusy):
 		JSON(w, http.StatusConflict, map[string]string{
-			"error": "A Stripe sync is already running; try again shortly", "code": stripeBusyCode,
+			"error": "A Stripe sync or the automatic Stripe booking is already running; try again shortly", "code": stripeBusyCode,
 		})
 		return
 	case errors.Is(err, accounting.ErrStripePayoutNotFound), errors.Is(err, accounting.ErrBankRowNotFound):

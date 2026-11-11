@@ -405,6 +405,16 @@ func main() {
 	if cfg.Features.Accounting {
 		stripeWebhookHandler.SetLedger(accountingSvc)
 	}
+	// The automatic Stripe run a webhook kicks (BRY-570): a capture, a
+	// refund, a dispute's funds or a payout kicks the club's run, which
+	// waits 30 s for more events and then ingests and books as the system
+	// actor when the club has automatic booking on. Started below with the
+	// other background work, and tracked so shutdown waits for it.
+	var stripeBooker *accounting.StripeAutoBooker
+	if cfg.Features.Accounting && stripeClient != nil {
+		stripeBooker = accounting.NewStripeAutoBooker(accountingSvc, stripeClient, log)
+		stripeWebhookHandler.SetBookingKicker(stripeBooker)
+	}
 	if emailClient != nil {
 		stripeWebhookHandler.SetMailer(emailClient)
 	}
@@ -779,44 +789,46 @@ func main() {
 		}()
 	}
 
-	// Nightly Stripe balance sync: mirror balance transactions and payouts
-	// into the Stripe review queue. Ingest only; booking needs an acting
-	// user. Idempotent, so the overlap with the previous run is free. Runs
-	// once at startup too.
+	// The automatic Stripe run (ACC-13, BRY-570): once at every start of the
+	// API and every 24 h after, the safety net for an event the webhook
+	// missed. It ingests the Stripe balance and, when the club has automatic
+	// booking on, books and clears as the system actor. Refunds Stripe never
+	// confirmed are looked up first, so a refund the payer's bank confirmed
+	// late has its payment_refunds state current when the booking reads it.
 	if stripeClient != nil && cfg.Features.Accounting {
+		autoBookingRuns.Add(1)
 		go func() {
+			defer autoBookingRuns.Done()
 			ticker := time.NewTicker(24 * time.Hour)
 			defer ticker.Stop()
+			trigger := accounting.AutoBookingTriggerBoot
 			for {
 				var clubID string
 				if err := db.QueryRow(ctx, `SELECT id FROM clubs WHERE slug = $1`, cfg.ClubSlug).Scan(&clubID); err != nil {
-					log.Warn().Err(err).Msg("stripe balance sync: resolve club failed")
-				} else if res, err := accountingSvc.SyncStripeBalance(ctx, stripeClient, clubID); err != nil {
-					log.Warn().Err(err).Msg("stripe balance sync failed")
+					log.Warn().Err(err).Msg("automatic stripe booking: resolve club failed")
 				} else {
-					log.Info().Int("fetched", res.Fetched).Int("inserted", res.Inserted).
-						Int("payouts_seen", res.PayoutsSeen).Int("errors", len(res.Errors)).
-						Msg("stripe balance synced")
-					if len(res.Errors) > 0 {
-						log.Warn().Strs("errors", res.Errors).Msg("stripe balance sync: some rows failed")
-					}
-				}
-				// Refunds Stripe never confirmed are looked up once a day too;
-				// the refund list does it for the order being read.
-				if clubID != "" {
 					if res, err := refundService.SweepRequested(ctx, clubID); err != nil {
 						log.Warn().Err(err).Msg("stripe refund sweep failed")
 					} else if res.Checked > 0 {
 						log.Info().Int("checked", res.Checked).Int("settled", res.Settled).
 							Int("failed", res.Failed).Int("errors", res.Errors).Msg("stripe refunds swept")
 					}
+					accountingSvc.RunAutomaticStripeBooking(ctx, clubID, stripeClient, trigger)
 				}
+				trigger = accounting.AutoBookingTriggerNightly
 				select {
 				case <-ctx.Done():
 					return
 				case <-ticker.C:
 				}
 			}
+		}()
+	}
+	if stripeBooker != nil {
+		autoBookingRuns.Add(1)
+		go func() {
+			defer autoBookingRuns.Done()
+			stripeBooker.Run(ctx)
 		}()
 	}
 
@@ -830,8 +842,9 @@ func main() {
 		log.Error().Err(err).Msg("server shutdown error")
 	}
 
-	// Let a running automatic booking run stop at its next item and write
-	// its summary row; the next boot run is the retry for whatever it left.
+	// Let a running automatic booking run (Vipps and bank, or Stripe) stop at
+	// its next item and write its summary row; the next boot run is the
+	// retry for whatever it left.
 	if !waitBounded(&autoBookingRuns, 30*time.Second) {
 		log.Warn().Msg("automatic booking run still running at shutdown; the next start retries it")
 	}

@@ -15,7 +15,8 @@ import (
 // made with the refund button is found by its request key, one made in the
 // Stripe Dashboard gets a row of its own. It writes nothing else. The refund
 // is booked, and its credit note issued, from the refund's balance
-// transaction by the Stripe booking pass (ACC-5).
+// transaction by the Stripe booking pass (ACC-5), which the handled event
+// kicks (the automatic Stripe run, BRY-570).
 
 // refundContext is the charge a refund event is about and the payment it
 // belongs to.
@@ -66,6 +67,13 @@ func (h *StripeWebhookHandler) onRefund(ctx context.Context, clubID string, evt 
 	}
 	var failed error
 	for _, r := range refunds {
+		if r.BalanceTransaction == "" && r.BryggeStatus() != payments.RefundFailed {
+			// Stripe sets it when the refund is created; without it the
+			// kicked run finds nothing to book and the nightly run is the
+			// safety net.
+			h.log.Debug().Str("refund_id", r.ID).Str("event_id", evt.ID).Str("status", r.Status).
+				Msg("webhook refund: refund has no balance transaction yet")
+		}
 		err := payments.UpsertProviderRefund(ctx, h.db, payments.ProviderRefund{
 			ClubID: clubID, Provider: stripe.ProviderName, AttemptID: rc.attemptID,
 			ProviderRefundID: r.ID, AmountOre: r.Amount, Currency: r.Currency,
@@ -83,5 +91,9 @@ func (h *StripeWebhookHandler) onRefund(ctx context.Context, clubID string, evt 
 	if _, err := membership.QueueJoinRefundNotices(ctx, h.db, clubID); err != nil {
 		h.log.Error().Err(err).Str("event_id", evt.ID).Msg("webhook refund: queueing the board's join refund notice failed")
 	}
-	return failed
+	if failed != nil {
+		return failed
+	}
+	h.kickBooking(clubID)
+	return nil
 }

@@ -20,8 +20,9 @@ import (
 // Card disputes (charge.dispute.* events). The webhook keeps payment_disputes
 // up to date and tells the treasurer about a new dispute; it writes nothing
 // else. The loss and its reversal are booked from the dispute's balance
-// transactions by the Stripe booking pass (ACC-4, ACC-5), and the order and
-// faktura are never touched.
+// transactions by the Stripe booking pass (ACC-4, ACC-5), which a
+// funds_withdrawn or funds_reinstated event kicks (the automatic Stripe run,
+// BRY-570), and the order and faktura are never touched.
 
 // disputeNoticeTimeout bounds the treasurer's email, which is sent while the
 // event is being answered.
@@ -91,6 +92,13 @@ func (h *StripeWebhookHandler) onDispute(ctx context.Context, clubID string, evt
 	}
 	if notify {
 		h.notifyTreasurer(ctx, rec)
+	}
+	// Kicked only for a dispute of one of our payments; a dispute Brygge
+	// cannot tie to an attempt is still booked from the balance, by the
+	// nightly run or a person's sync.
+	if dc.attemptID != "" &&
+		(evt.Type == stripe.EventChargeDisputeFundsWithdrawn || evt.Type == stripe.EventChargeDisputeFundsReinstated) {
+		h.kickBooking(clubID)
 	}
 	return nil
 }

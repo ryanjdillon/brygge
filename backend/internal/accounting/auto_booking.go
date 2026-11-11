@@ -28,10 +28,12 @@ import (
 // It never takes an actor from a request and never calls a person-only undo.
 
 // What started an automatic run. The run passes it on as the trigger of the
-// auto-assign audit rows it writes. BRY-570 adds a Stripe event trigger.
+// auto-assign audit rows it writes. AutoBookingTriggerStripeEvent is the
+// Stripe run a webhook kicked (StripeAutoBooker, BRY-570).
 const (
-	AutoBookingTriggerBoot    = "boot"
-	AutoBookingTriggerNightly = "nightly"
+	AutoBookingTriggerBoot        = "boot"
+	AutoBookingTriggerNightly     = "nightly"
+	AutoBookingTriggerStripeEvent = "stripe_event"
 )
 
 const (
@@ -49,12 +51,17 @@ const (
 	autoBookingAuditListCap = 20
 )
 
-// AutoBookingProviderVipps is the provider of the Vipps and bank run; the
-// Stripe run (BRY-570) reports as "stripe".
-const AutoBookingProviderVipps = "vipps"
+// The provider an automatic run reports as, to the observer and in its
+// summary row: the Vipps and bank run, and the Stripe run (BRY-570).
+const (
+	AutoBookingProviderVipps  = "vipps"
+	AutoBookingProviderStripe = "stripe"
+)
 
 // AutoBookingObserver is told what the automatic runs did, for the operator's
-// metrics (BRY-571). Calls are synchronous and must not block.
+// metrics (BRY-571). Calls are synchronous, may be made concurrently from
+// several goroutines (the Vipps run, the Stripe run and the Stripe booker
+// run independently), and must not block.
 type AutoBookingObserver interface {
 	// VippsReportSynced is called when every date of a run's Report API
 	// pull for the merchant answered (a report not finalised yet counts).

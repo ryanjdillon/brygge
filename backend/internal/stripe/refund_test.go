@@ -2,6 +2,7 @@ package stripe
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -232,6 +233,26 @@ func TestListRefundsByCharge(t *testing.T) {
 	q, _ := url.ParseQuery(f.recorded()[0].Query)
 	if q.Get("charge") != "ch_9" || q.Get("limit") != "100" || q.Get("payment_intent") != "" {
 		t.Errorf("list query = %v", q)
+	}
+}
+
+// A refund's balance transaction decodes whether Stripe sends it as an id,
+// expanded, or null (BRY-570), and so does a failed refund's.
+func TestRefundBalanceTransactionDecodes(t *testing.T) {
+	for raw, want := range map[string][2]ObjectID{
+		`{"id":"re_1","balance_transaction":"txn_1"}`:                                       {"txn_1", ""},
+		`{"id":"re_1","balance_transaction":{"id":"txn_2","object":"balance_transaction"}}`: {"txn_2", ""},
+		`{"id":"re_1","balance_transaction":null}`:                                          {"", ""},
+		`{"id":"re_1","balance_transaction":"txn_3","failure_balance_transaction":"txn_4"}`: {"txn_3", "txn_4"},
+		`{"id":"re_1","status":"pending"}`:                                                  {"", ""},
+	} {
+		var r Refund
+		if err := json.Unmarshal([]byte(raw), &r); err != nil {
+			t.Fatalf("%s: %v", raw, err)
+		}
+		if got := [2]ObjectID{r.BalanceTransaction, r.FailureBalanceTransaction}; got != want {
+			t.Errorf("%s decodes to %v, want %v", raw, got, want)
+		}
 	}
 }
 

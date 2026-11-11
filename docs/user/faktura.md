@@ -250,7 +250,7 @@ The **Refunder** button is on the payment in `Admin → Betalinger` and on the f
 3. **Reason.** Required. It is kept on the refund for the audit trail and is never shown to the member.
 4. **Krediter or Krev inn på nytt**, only when you refund all of a faktura's payment (below).
 
-The money is back on the card in 5–10 days. Brygge books nothing when you click: the refund is booked, with its credit note, when Stripe lists it (the nightly Stripe sync, or **Synk Stripe** in Tildel). Until then the payment shows the refund but the faktura looks unchanged.
+The money is back on the card in 5–10 days. Brygge books nothing when you click: the refund is booked, with its credit note, once Stripe reports it (see [What Brygge does with a refund](#what-brygge-does-with-a-refund) for when). Until then the payment shows the refund but the faktura looks unchanged.
 
 A refund made in the Stripe Dashboard instead is picked up the same way, and a refund of the whole payment is credited automatically. You don't need the button for it.
 
@@ -261,6 +261,8 @@ Every refund of a sale issues a **credit note** (kreditnota) for the refunded am
 - **Partial refund.** The faktura stays paid and gets the chip **Delvis refundert 90 kr**. Its credit notes are listed under the chip (**Kreditnota #N**, click for the PDF). Several partial refunds each make a credit note; when they add up to the whole faktura it counts as fully refunded.
 - **Full refund.** The chip reads **Refundert** and the faktura counts as credited: it is settled, never past due and never reminded. The payment in `Betalinger` stays in the list with the same chip, so you can see where the money went.
 - A refund's credit note reads **Kreditnota for refusjon av #N** in the list. It is never **Tilgode medlem**: the money went back to the card, so the club owes nothing and you can't link or void it by hand.
+
+**When.** With **Bokfør og avstem automatisk** on, a card refund and its credit note are booked, and the credit note emailed, within minutes of Stripe reporting the refund, whether you made it in Brygge or in the Stripe Dashboard. The same goes for card payments, disputes and Stripe payouts. With it off, they are booked at the next **Synk Stripe**, **Synkroniser** or bank upload.
 
 ### Krediter or Krev inn på nytt
 

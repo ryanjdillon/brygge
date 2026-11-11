@@ -23,9 +23,9 @@ type stripeSyncResponse struct {
 // (accounting.TrySyncAndBookStripeBalance). A failed ingest is 502; a
 // booking pass or payout sweep that fails after it is still 200, with the
 // failure in booking.error or payouts.error, and audited.
-// While another Stripe sync or booking for the club runs (the nightly job,
-// a payout webhook, a bank sync's booking pass) it answers 409 rather than
-// queueing behind it.
+// While another Stripe sync or booking for the club runs (the automatic
+// Stripe run, a payout webhook, a bank sync's booking pass) it answers 409
+// rather than queueing behind it.
 func (h *AccountingHandler) HandleStripeSync(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -40,7 +40,7 @@ func (h *AccountingHandler) HandleStripeSync(w http.ResponseWriter, r *http.Requ
 
 	res, booked, payouts, err := h.svc.TrySyncAndBookStripeBalance(ctx, h.stripe, claims.ClubID, claims.UserID)
 	if errors.Is(err, accounting.ErrStripeSyncBusy) {
-		Error(w, http.StatusConflict, "A Stripe sync is already running; try again shortly")
+		Error(w, http.StatusConflict, "A Stripe sync or the automatic Stripe booking is already running; try again shortly")
 		return
 	}
 	if err != nil {

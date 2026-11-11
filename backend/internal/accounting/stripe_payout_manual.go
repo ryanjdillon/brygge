@@ -124,16 +124,7 @@ var manualClearSlotWait = 5 * time.Second
 // acquireStripeSlotBriefly takes the club's Stripe slot, waiting at most
 // manualClearSlotWait; ErrStripeSyncBusy when it is still held.
 func (s *Service) acquireStripeSlotBriefly(ctx context.Context, clubID string) (func(), error) {
-	wait, cancel := context.WithTimeout(ctx, manualClearSlotWait)
-	defer cancel()
-	release, err := s.stripeSync.acquire(wait, clubID)
-	if err == nil {
-		return release, nil
-	}
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
-	return nil, ErrStripeSyncBusy
+	return s.acquireStripeSlotWithin(ctx, clubID, manualClearSlotWait)
 }
 
 // StripePayoutSummary is an uncleared payout as the clearing picker lists it.
