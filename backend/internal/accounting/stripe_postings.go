@@ -174,16 +174,29 @@ func (s *Service) TrySyncAndBookStripeBalance(ctx context.Context, src StripeBal
 	return synced, booked, payouts, nil
 }
 
+// stripeBookableSQL is the row set the Stripe booking pass takes up, over
+// an unaliased stripe_balance_transactions: a fee, a charge naming its
+// order, and a refund or dispute row, unbooked and in NOK. withReview adds
+// the rows held in review for a reason the pass settles itself
+// (stripeBookingReviewSQL); without it only `unbooked` rows count, which is
+// what WaitingFiscalYears asks.
+func stripeBookableSQL(withReview bool) string {
+	status := `status = 'unbooked'`
+	if withReview {
+		status = `(status = 'unbooked' OR ` + stripeBookingReviewSQL + `)`
+	}
+	return `journal_entry_id IS NULL AND currency = 'nok'
+	    AND ((reporting_category = 'fee' AND status = 'unbooked')
+	      OR (reporting_category = 'charge' AND order_id IS NOT NULL AND ` + status + `)
+	      OR (reporting_category IN ('refund', 'refund_failure', 'dispute', 'dispute_reversal')
+	          AND ` + status + `))`
+}
+
 func (s *Service) bookStripeBalance(ctx context.Context, clubID, actorID string) (*StripeBookResult, error) {
 	res := newStripeBookResult()
 	rows, err := s.db.Query(ctx,
 		`SELECT id FROM stripe_balance_transactions
-		  WHERE club_id = $1 AND journal_entry_id IS NULL AND currency = 'nok'
-		    AND ((reporting_category = 'fee' AND status = 'unbooked')
-		      OR (reporting_category = 'charge' AND order_id IS NOT NULL
-		          AND (status = 'unbooked' OR `+stripeBookingReviewSQL+`))
-		      OR (reporting_category IN ('refund', 'refund_failure', 'dispute', 'dispute_reversal')
-		          AND (status = 'unbooked' OR `+stripeBookingReviewSQL+`)))
+		  WHERE club_id = $1 AND `+stripeBookableSQL(true)+`
 		  ORDER BY created_at, id`,
 		clubID)
 	if err != nil {

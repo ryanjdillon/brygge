@@ -21,7 +21,7 @@ import (
 //
 // It is opt-in per club (clubs.bank_auto_assign), separate from the Vipps
 // switch. While it is off, the KID cascade's older name+amount step
-// (findInvoiceByCounterpartAndAmount) still runs; once it is on, that step
+// (findInvoiceByCounterpartAndAmountErr) still runs; once it is on, that step
 // is skipped and this rule replaces it. Each booking is audited
 // (bank_row.auto_assigned) and undone with UnassignBankRow.
 

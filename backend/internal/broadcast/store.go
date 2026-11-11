@@ -63,6 +63,11 @@ const (
 	KindMembershipCancelBoardNotice = "membership_cancel_board_notice"
 	KindMembershipCancelUndone      = "membership_cancel_undone"
 	KindMembershipEndRefused        = "membership_end_refused"
+	// KindAccountingFiscalYearWaiting tells the treasurer that payments wait
+	// for a fiscal year that is missing, closed or locked (BRY-575). The
+	// hourly sweep queues it, keyed by payload->>'ref' so each condition is
+	// told once (migration 000144); it hangs off no broadcast or faktura.
+	KindAccountingFiscalYearWaiting = "accounting_fiscal_year_waiting"
 )
 
 // Broadcast (parent) statuses.

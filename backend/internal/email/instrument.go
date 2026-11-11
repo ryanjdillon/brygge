@@ -45,7 +45,10 @@ const (
 	KindMembershipCancelBoard   Kind = "membership_cancel_board_notice"
 	KindMembershipCancelUndone  Kind = "membership_cancel_undone"
 	KindMembershipEndRefused    Kind = "membership_end_refused"
-	KindOther                   Kind = "other"
+	// KindFiscalYearWaiting tells the treasurer that payments wait for a
+	// fiscal year that is missing, closed or locked (BRY-575).
+	KindFiscalYearWaiting Kind = "fiscal_year_waiting"
+	KindOther             Kind = "other"
 )
 
 var allKinds = []Kind{
@@ -54,7 +57,7 @@ var allKinds = []Kind{
 	KindJoinConfirm, KindJoinAlreadyMember, KindJoinContactBoard,
 	KindMembershipWelcome, KindMembershipBoardNotice, KindMembershipJoinRefunded,
 	KindMembershipGrantWithheld, KindMembershipCancelReceipt, KindMembershipCancelBoard,
-	KindMembershipCancelUndone, KindMembershipEndRefused, KindOther,
+	KindMembershipCancelUndone, KindMembershipEndRefused, KindFiscalYearWaiting, KindOther,
 }
 
 const (

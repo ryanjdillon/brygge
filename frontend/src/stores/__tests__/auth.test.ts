@@ -54,10 +54,13 @@ describe('auth store', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response('', { status: 200 }),
     )
+    localStorage.setItem('brygge.loginRedirect', JSON.stringify({ path: '/admin', email: 'test@example.com', at: Date.now() }))
     await auth.logout()
 
     expect(auth.user).toBeNull()
     expect(auth.isAuthenticated).toBe(false)
+    // A page kept for a pending login link is not the next visitor's.
+    expect(localStorage.getItem('brygge.loginRedirect')).toBeNull()
   })
 
   it('hasRole returns true for matching role', async () => {

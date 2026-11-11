@@ -563,7 +563,10 @@ export async function guardRoute(to: RouteLocationNormalized) {
   await auth.ready
 
   if (to.meta.requiresAuth && !auth.isAuthenticated) {
-    return { path: '/login' }
+    // The page asked for is kept so the login can return to it (a link in
+    // an e-mail, BRY-575); LoginView follows it only when safeRedirect
+    // accepts it.
+    return { path: '/login', query: { redirect: to.fullPath } }
   }
 
   const roles = auth.user?.roles ?? []

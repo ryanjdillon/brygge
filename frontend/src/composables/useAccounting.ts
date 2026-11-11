@@ -41,7 +41,7 @@ export interface FiscalPeriod {
   year: number
   start_date: string
   end_date: string
-  status: 'open' | 'closed'
+  status: 'open' | 'closed' | 'locked'
   closed_by: string | null
   closed_at: string | null
   created_at: string

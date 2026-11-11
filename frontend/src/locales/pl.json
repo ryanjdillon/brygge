@@ -1193,7 +1193,8 @@
           "current_year": "Bieżący rok nie może być rokiem referencyjnym.",
           "opening_balance": "Rok ma bilans otwarcia i nie może być rokiem referencyjnym.",
           "period_closed": "Otwórz rok ponownie, zanim usuniesz oznaczenie referencyjne."
-        }
+        },
+        "locked": "Zablokowany"
       },
       "journal": {
         "title": "Journal",
@@ -1250,7 +1251,11 @@
         "voidStripeEntry": "Ten dokument zaksięgowano z transakcji Stripe i nie można go tu anulować. Użyj „Cofnij” przy transakcji w Bank i Vipps → Transakcje Stripe (karta Zaksięgowane); to także ponownie otwiera jej faktury.",
         "voidStripeEntryLink": "Przejdź do transakcji Stripe",
         "voidBankEntry": "Ten dokument zaksięgowano z wiersza bankowego lub wypłaty Stripe i nie można go tu anulować. Użyj „Cofnij” przy wierszu w Bank i Vipps → Tildel; wiersz wróci do kolejki, a faktura lub wypłata zostanie ponownie otwarta.",
-        "voidBankEntryLink": "Przejdź do Tildel"
+        "voidBankEntryLink": "Przejdź do Tildel",
+        "createPeriodConfirmTitle": "Utworzyć rok obrotowy {year}?",
+        "createPeriodConfirmBody": "Płatności z datą w {year} zostaną zaksięgowane w tym roku przy następnej synchronizacji. Zamknij stary rok dopiero, gdy nowy już istnieje.",
+        "reopenConfirmTitle": "Ponownie otworzyć rok obrotowy {year}?",
+        "reopenConfirmBody": "Rok znów przyjmuje nowe zapisy. Zamknij go ponownie, gdy oczekujące płatności zostaną zaksięgowane."
       },
       "vippsFallbackReclass": {
         "button": "Przeklasyfikuj przychody Vipps z konta 3900",

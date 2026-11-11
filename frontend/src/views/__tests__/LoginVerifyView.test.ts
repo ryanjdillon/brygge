@@ -77,6 +77,7 @@ async function mountAt(query: string) {
 describe('LoginVerifyView', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    localStorage.clear()
     client.GET.mockReset()
     client.POST.mockReset()
   })
@@ -137,6 +138,47 @@ describe('LoginVerifyView', () => {
     expect(posts(VERIFY)).toEqual([[VERIFY, { body: { token: 'tok-1' } }]])
     expect(posts(PEEK)).toHaveLength(1)
     expect(auth.checkSession).toHaveBeenCalled()
+    expect(replace).toHaveBeenCalledWith('/portal')
+  })
+
+  it('returns to the page the login was asked from, when LoginView kept one', async () => {
+    localStorage.setItem('brygge.loginRedirect', JSON.stringify({ path: '/admin/accounting/journal?openPeriod=2027', email: 'Medlem@Example.test', at: Date.now() }))
+    answer({ peek: [ok({ account: ACCOUNT })], verify: [ok({ status: 'logged_in' })] })
+    const { wrapper, router } = await mountAt('?token=tok-1')
+    const replace = vi.spyOn(router, 'replace')
+    signsIn(useAuthStore())
+
+    await wrapper.find('[data-testid="verify-button"]').trigger('click')
+    await flushPromises()
+
+    expect(replace).toHaveBeenCalledWith('/admin/accounting/journal?openPeriod=2027')
+    expect(localStorage.getItem('brygge.loginRedirect')).toBeNull()
+  })
+
+  it('ignores a path kept for another account, and clears it', async () => {
+    localStorage.setItem('brygge.loginRedirect', JSON.stringify({ path: '/admin', email: 'someone@example.test', at: Date.now() }))
+    answer({ peek: [ok({ account: ACCOUNT })], verify: [ok({ status: 'logged_in' })] })
+    const { wrapper, router } = await mountAt('?token=tok-1')
+    const replace = vi.spyOn(router, 'replace')
+    signsIn(useAuthStore())
+
+    await wrapper.find('[data-testid="verify-button"]').trigger('click')
+    await flushPromises()
+
+    expect(replace).toHaveBeenCalledWith('/portal')
+    expect(localStorage.getItem('brygge.loginRedirect')).toBeNull()
+  })
+
+  it('ignores a kept path that is not on this site', async () => {
+    localStorage.setItem('brygge.loginRedirect', JSON.stringify({ path: '//evil.example/x', email: ACCOUNT, at: Date.now() }))
+    answer({ peek: [ok({ account: ACCOUNT })], verify: [ok({ status: 'logged_in' })] })
+    const { wrapper, router } = await mountAt('?token=tok-1')
+    const replace = vi.spyOn(router, 'replace')
+    signsIn(useAuthStore())
+
+    await wrapper.find('[data-testid="verify-button"]').trigger('click')
+    await flushPromises()
+
     expect(replace).toHaveBeenCalledWith('/portal')
   })
 

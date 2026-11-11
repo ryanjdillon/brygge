@@ -377,6 +377,11 @@ func main() {
 	}
 	accountingSvc := accounting.NewService(db, auditService, log)
 	accountingSvc.SetDeliveryKick(deliveryWorker.Kick)
+	// Payments waiting for a missing, closed or locked fiscal year tell the
+	// treasurer (BRY-575). Registered whatever is configured, like the
+	// membership sender: without mail the rows fail with a note.
+	fiscalYearSender := handlers.NewFiscalYearWaitingSender(db, &cfg, emailClient, accountingSvc, log)
+	deliveryWorker.RegisterSender(broadcast.KindAccountingFiscalYearWaiting, fiscalYearSender)
 	if cfg.Features.Accounting {
 		invoiceHandler.SetLedger(accountingSvc)
 	}
@@ -642,6 +647,24 @@ func main() {
 					log.Info().Int("granted", res.Granted).Int("refund_notices", res.RefundNotices).
 						Int64("requeued", requeued).Msg("membership sweep")
 					deliveryWorker.Kick()
+				}
+				// Payments waiting for a missing, closed or locked fiscal
+				// year: the treasurer is told once per year and state
+				// (BRY-575). Before the session purge, whose error path
+				// skips the rest of the round.
+				if cfg.Features.Accounting {
+					queued, err := accountingSvc.NotifyAllWaitingFiscalYears(ctx, time.Now())
+					if err != nil {
+						log.Error().Err(err).Msg("fiscal year notice sweep failed")
+					}
+					requeuedFY, err := fiscalYearSender.RequeueUnaddressed(ctx)
+					if err != nil {
+						log.Error().Err(err).Msg("fiscal year notice requeue failed")
+					}
+					if queued > 0 || requeuedFY > 0 {
+						log.Info().Int("queued", queued).Int64("requeued", requeuedFY).Msg("fiscal year notices")
+						deliveryWorker.Kick()
+					}
 				}
 				n, err := sessionService.PurgeExpired(ctx)
 				if err != nil {

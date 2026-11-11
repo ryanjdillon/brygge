@@ -4,6 +4,7 @@ import { useTotpGateStore } from '@/stores/totpGate'
 import { i18n, setLocale, hasExplicitLocale } from '@/i18n'
 import { canViewAdmin } from '@/lib/adminAccess'
 import { isApplicantOnly } from '@/lib/applicantAccess'
+import { clearLoginRedirect } from '@/lib/loginRedirect'
 
 /**
  * loginErrorMessage is the message a login request refused with `status`
@@ -174,6 +175,8 @@ export const useAuthStore = defineStore('auth', () => {
       // ignore logout errors
     }
     user.value = null
+    // A page kept for a pending login link is not the next visitor's.
+    clearLoginRedirect()
   }
 
   function hasRole(role: string): boolean {

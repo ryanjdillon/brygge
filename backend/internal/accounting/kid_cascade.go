@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/brygge-klubb/brygge/internal/finance"
 )
 
@@ -43,13 +45,29 @@ func kidCascadeEligibleSQL(alias string) string {
 // exports carry the real KID outside the KID column), then "Fakturanummer
 // NN" with the amount equal to the total (a part payment of a multi-line
 // faktura must not land on it by number), then, with nameMatch, a unique
-// counterpart name + amount (findInvoiceByCounterpartAndAmount). Only
+// counterpart name + amount (findInvoiceByCounterpartAndAmountErr). Only
 // fakturas still owed and without a KID-booked row qualify; the booking
 // re-checks that under the faktura lock.
 func (s *Service) findCascadeInvoice(ctx context.Context, clubID string, row BankRow, nameMatch bool) string {
+	id, _ := s.findCascadeInvoiceErr(ctx, clubID, row, nameMatch)
+	return id
+}
+
+// findCascadeInvoiceErr is findCascadeInvoice that also reports the first
+// database error it met (BRY-575: WaitingFiscalYears must not read a failed
+// lookup as "nothing to book"). The lookups and their order are unchanged:
+// an error on one step still goes on to the next, and a faktura found later
+// is returned with it.
+func (s *Service) findCascadeInvoiceErr(ctx context.Context, clubID string, row BankRow, nameMatch bool) (string, error) {
 	var invoiceID string
+	var firstErr error
+	note := func(err error) {
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) && firstErr == nil {
+			firstErr = err
+		}
+	}
 	for _, cand := range kidMatchCandidates(row) {
-		_ = s.db.QueryRow(ctx,
+		note(s.db.QueryRow(ctx,
 			`SELECT i.id FROM invoices i
 			 WHERE i.club_id = $1 AND i.kid_number = $2
 			 AND `+finance.OwedByMemberSQL("i")+`
@@ -59,13 +77,13 @@ func (s *Service) findCascadeInvoice(ctx context.Context, clubID string, row Ban
 			 )
 			 LIMIT 1`,
 			clubID, cand,
-		).Scan(&invoiceID)
+		).Scan(&invoiceID))
 		if invoiceID != "" {
-			return invoiceID
+			return invoiceID, firstErr
 		}
 	}
 	if num := ExtractInvoiceNumberFromDescription(row.Description); num != "" {
-		_ = s.db.QueryRow(ctx,
+		note(s.db.QueryRow(ctx,
 			`SELECT i.id FROM invoices i
 			 WHERE i.club_id = $1 AND i.invoice_number::text = $2
 			   AND ABS(i.total_amount - $3) < 0.005
@@ -77,15 +95,17 @@ func (s *Service) findCascadeInvoice(ctx context.Context, clubID string, row Ban
 			   )
 			 LIMIT 1`,
 			clubID, num, row.Amount,
-		).Scan(&invoiceID)
+		).Scan(&invoiceID))
 		if invoiceID != "" {
-			return invoiceID
+			return invoiceID, firstErr
 		}
 	}
 	if nameMatch && row.Counterpart != "" {
-		return s.findInvoiceByCounterpartAndAmount(ctx, clubID, row.Counterpart, row.Amount)
+		id, err := s.findInvoiceByCounterpartAndAmountErr(ctx, clubID, row.Counterpart, row.Amount)
+		note(err)
+		return id, firstErr
 	}
-	return ""
+	return "", firstErr
 }
 
 // kidCascadeMatch is one bank row the cascade matched to a faktura.

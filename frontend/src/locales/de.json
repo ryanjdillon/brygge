@@ -1204,7 +1204,8 @@
           "current_year": "Das laufende Jahr kann kein Referenzjahr sein.",
           "opening_balance": "Das Jahr hat eine Eröffnungsbilanz und kann kein Referenzjahr sein.",
           "period_closed": "Öffnen Sie das Jahr wieder, bevor Sie die Referenzmarkierung entfernen."
-        }
+        },
+        "locked": "Gesperrt"
       },
       "journal": {
         "title": "Journal",
@@ -1276,7 +1277,11 @@
         "voidStripeEntry": "Dieser Beleg wurde aus einer Stripe-Transaktion gebucht und kann hier nicht storniert werden. Verwenden Sie „Rückgängig“ bei der Transaktion unter Bank & Vipps → Stripe-Transaktionen (Reiter Gebucht); dabei werden auch ihre Rechnungen wieder geöffnet.",
         "voidStripeEntryLink": "Zu den Stripe-Transaktionen",
         "voidBankEntry": "Dieser Beleg wurde aus einer Bankzeile oder einer Stripe-Auszahlung gebucht und kann hier nicht storniert werden. Verwenden Sie „Rückgängig“ bei der Zeile unter Bank & Vipps → Tildel; die Zeile kommt zurück in die Warteschlange und die Rechnung oder Auszahlung wird wieder geöffnet.",
-        "voidBankEntryLink": "Zu Tildel"
+        "voidBankEntryLink": "Zu Tildel",
+        "createPeriodConfirmTitle": "Geschäftsjahr {year} anlegen?",
+        "createPeriodConfirmBody": "Zahlungen mit Datum in {year} werden bei der nächsten Synchronisierung in diesem Jahr gebucht. Schließen Sie das alte Jahr erst, wenn das neue existiert.",
+        "reopenConfirmTitle": "Geschäftsjahr {year} wieder öffnen?",
+        "reopenConfirmBody": "Das Jahr nimmt wieder neue Buchungen an. Schließen Sie es wieder, sobald die wartenden Zahlungen gebucht sind."
       },
       "vippsFallbackReclass": {
         "button": "Vipps-Einnahmen auf 3900 umbuchen",

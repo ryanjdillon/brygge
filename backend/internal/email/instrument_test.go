@@ -133,6 +133,8 @@ func TestInstrument_CountsByKindAndResult(t *testing.T) {
 		{"membership_cancel_undone", "error"}:       0,
 		{"membership_end_refused", "ok"}:            0,
 		{"membership_end_refused", "error"}:         0,
+		{"fiscal_year_waiting", "ok"}:               0,
+		{"fiscal_year_waiting", "error"}:            0,
 	}
 	for k, v := range want {
 		if got[k] != v {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { ref, computed, watch, nextTick } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useConfirm, useConfirmStore } from '@/stores/confirm'
 import { useFreshTotp } from '@/composables/useFreshTotp'
@@ -44,6 +44,7 @@ import {
   type ResplitResult,
   type VippsBacklogResult,
   type VippsBacklogRelease,
+  type FiscalPeriod,
 } from '@/composables/useAccounting'
 import Select from '@/components/ui/form/Select.vue'
 import NumberInput from '@/components/ui/form/NumberInput.vue'
@@ -488,20 +489,36 @@ async function handleReleaseVippsCharge(item: VippsBacklogRelease) {
   })
 }
 
-function handleCreatePeriod() {
-  if (newYear.value == null) return
-  createPeriodMutation.mutate({ year: newYear.value }, {
+// Opening a fiscal year decides where payments dated in it are booked, so
+// both create buttons (and the e-mail's deep link) confirm the year first.
+async function handleCreatePeriod(yearArg?: number) {
+  const year = yearArg ?? newYear.value
+  if (year == null) return
+  const ok = await askConfirm({
+    title: t('admin.accounting.journal.createPeriodConfirmTitle', { year }),
+    body: t('admin.accounting.journal.createPeriodConfirmBody', { year }),
+    confirmLabel: t('admin.accounting.journal.createPeriod'),
+    cancelLabel: t('common.cancel'),
+  })
+  if (!ok) return
+  createPeriodMutation.mutate({ year }, {
     onSuccess: (period) => {
       selectedPeriodId.value = period.id
       showCreateYear.value = false
       newYear.value = nextYear.value
       handleSync()
     },
+    onError: (err) => {
+      syncMessage.value = `${t('common.error')}: ${(err as Error).message}`
+    },
   })
 }
 
-function handleClosePeriod() {
+// Closing and reopening are behind a fresh TOTP on the server, so the
+// step-up is asked for at click time.
+async function handleClosePeriod() {
   if (!selectedPeriodId.value) return
+  if (!(await ensureFreshTotp())) return
   syncMessage.value = ''
   closePeriodMutation.mutate(selectedPeriodId.value, {
     onError: (err) => {
@@ -510,10 +527,84 @@ function handleClosePeriod() {
   })
 }
 
-function handleReopenPeriod() {
-  if (!selectedPeriodId.value) return
-  reopenPeriodMutation.mutate(selectedPeriodId.value)
+async function handleReopenPeriod(period: FiscalPeriod | undefined = selectedPeriod.value) {
+  if (!period || period.status !== 'closed') return
+  if (!(await ensureFreshTotp())) return
+  const ok = await askConfirm({
+    title: t('admin.accounting.journal.reopenConfirmTitle', { year: period.year }),
+    body: t('admin.accounting.journal.reopenConfirmBody', { year: period.year }),
+    confirmLabel: t('admin.accounting.journal.reopenPeriod'),
+    cancelLabel: t('common.cancel'),
+    tone: 'warning',
+  })
+  if (!ok) return
+  syncMessage.value = ''
+  reopenPeriodMutation.mutate(period.id, {
+    onError: (err) => {
+      syncMessage.value = `${t('common.error')}: ${(err as Error).message}`
+    },
+  })
 }
+
+// The treasurer's e-mail about payments waiting for a fiscal year (BRY-575)
+// links here: ?openPeriod=<year> opens the create confirm for that year,
+// ?reopenPeriod=<id> the reopen of a closed period (step-up first), and
+// ?period=<id> only selects the period (a locked one cannot be reopened in
+// the app). Applied once the periods have loaded, so the default-year
+// watchers cannot overwrite it, then the query is dropped from the URL. A
+// user without the ledger role gets no dialog; the server is the gate.
+const route = useRoute()
+const router = useRouter()
+const DEEP_LINK_KEYS = ['openPeriod', 'reopenPeriod', 'period'] as const
+let deepLinkHandled = false
+
+function queryString(key: string): string {
+  const v = route.query[key]
+  return typeof v === 'string' ? v : ''
+}
+
+async function applyDeepLink(list: FiscalPeriod[]) {
+  await router.isReady()
+  const openYear = Number.parseInt(queryString('openPeriod'), 10)
+  const reopenId = queryString('reopenPeriod')
+  const periodId = queryString('period')
+  if (!queryString('openPeriod') && !reopenId && !periodId) return
+  try {
+    if (periodId) {
+      const p = list.find((x) => x.id === periodId)
+      if (p) selectedPeriodId.value = p.id
+    }
+    if (reopenId) {
+      const p = list.find((x) => x.id === reopenId)
+      if (p) {
+        selectedPeriodId.value = p.id
+        if (canEditPeriods && p.status === 'closed') await handleReopenPeriod(p)
+      }
+    }
+    if (Number.isInteger(openYear) && openYear >= 2000 && openYear <= 2100) {
+      const existing = list.find((x) => x.year === openYear)
+      if (existing) {
+        selectedPeriodId.value = existing.id
+      } else if (canEditPeriods) {
+        // After the nextYear watcher has run for the loaded periods.
+        await nextTick()
+        newYear.value = openYear
+        if (hasPeriods.value) showCreateYear.value = true
+        await handleCreatePeriod(openYear)
+      }
+    }
+  } finally {
+    const query = { ...route.query }
+    for (const k of DEEP_LINK_KEYS) delete query[k]
+    await router.replace({ query })
+  }
+}
+
+watch(periods, (val) => {
+  if (!val || deepLinkHandled) return
+  deepLinkHandled = true
+  void applyDeepLink(val)
+}, { immediate: true })
 
 // The toggle's 409 codes and the reason line each one shares.
 const REFERENCE_REFUSALS: Record<string, string> = {
@@ -603,9 +694,10 @@ function formatNOK(amount: number): string {
         </div>
         <button
           v-if="canEditPeriods"
-          class="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+          class="inline-flex min-h-11 items-center gap-1.5 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
           :disabled="createPeriodMutation.isPending.value"
-          @click="handleCreatePeriod"
+          data-testid="create-period-empty"
+          @click="handleCreatePeriod()"
         >
           <Plus class="h-4 w-4" />
           {{ t('admin.accounting.journal.createPeriod') }}
@@ -625,7 +717,7 @@ function formatNOK(amount: number): string {
             selectedPeriod.status === 'open' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800',
           ]"
         >
-          {{ selectedPeriod.status === 'open' ? t('admin.accounting.periods.open') : t('admin.accounting.periods.closed') }}
+          {{ t(`admin.accounting.periods.${selectedPeriod.status === 'locked' ? 'locked' : selectedPeriod.status === 'open' ? 'open' : 'closed'}`) }}
         </span>
         <span
           v-if="isReference"
@@ -637,7 +729,7 @@ function formatNOK(amount: number): string {
 
         <button
           v-if="canEditPeriods && selectedPeriod?.status === 'open'"
-          class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          class="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
           :disabled="closePeriodMutation.isPending.value"
           :title="t('admin.accounting.journal.closePeriodTooltip')"
           @click="handleClosePeriod"
@@ -647,10 +739,11 @@ function formatNOK(amount: number): string {
         </button>
         <button
           v-if="canEditPeriods && selectedPeriod?.status === 'closed'"
-          class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          class="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
           :disabled="reopenPeriodMutation.isPending.value"
           :title="t('admin.accounting.journal.reopenPeriodTooltip')"
-          @click="handleReopenPeriod"
+          data-testid="reopen-period"
+          @click="handleReopenPeriod()"
         >
           <Unlock class="h-4 w-4" />
           {{ t('admin.accounting.journal.reopenPeriod') }}
@@ -672,13 +765,14 @@ function formatNOK(amount: number): string {
           </div>
           <button
             :class="[
-              'inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium disabled:opacity-50',
+              'inline-flex min-h-11 items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium disabled:opacity-50',
               showCreateYear
                 ? 'bg-brand-600 text-white hover:bg-brand-700'
                 : 'border border-gray-300 text-gray-700 hover:bg-gray-50',
             ]"
             :title="t('admin.accounting.journal.createPeriodTooltip')"
             :disabled="createPeriodMutation.isPending.value"
+            data-testid="create-period"
             @click="showCreateYear ? handleCreatePeriod() : (showCreateYear = true)"
           >
             <Plus class="h-4 w-4" />

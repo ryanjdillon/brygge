@@ -1944,7 +1944,8 @@
           "current_year": "Inneværende år kan ikke være et referanseår.",
           "opening_balance": "Året har inngående balanse og kan ikke være et referanseår.",
           "period_closed": "Gjenåpne året før referansemerkingen fjernes."
-        }
+        },
+        "locked": "Låst"
       },
       "journal": {
         "title": "Bilagsjournal",
@@ -2024,7 +2025,11 @@
         "voidStripeEntry": "Bilaget er bokført fra en Stripe-transaksjon og kan ikke annulleres her. Bruk «Angre» på transaksjonen under Bank og Vipps → Stripe-transaksjoner (fanen Bokført), så åpnes fakturaene igjen.",
         "voidStripeEntryLink": "Gå til Stripe-transaksjonene",
         "voidBankEntry": "Bilaget er bokført fra en bankrad eller en Stripe-utbetaling og kan ikke annulleres her. Bruk «Angre» på raden under Bank og Vipps → Tildel, så legges raden tilbake i køen og fakturaen eller utbetalingen åpnes igjen.",
-        "voidBankEntryLink": "Gå til Tildel"
+        "voidBankEntryLink": "Gå til Tildel",
+        "createPeriodConfirmTitle": "Opprette regnskapsåret {year}?",
+        "createPeriodConfirmBody": "Betalinger datert i {year} bokføres i dette året ved neste synkronisering. Lukk det gamle året først når det nye finnes.",
+        "reopenConfirmTitle": "Gjenåpne regnskapsåret {year}?",
+        "reopenConfirmBody": "Året kan få nye bilag igjen. Lukk det igjen når betalingene som venter på det, er bokført."
       },
       "vippsFallbackReclass": {
         "button": "Reklassifiser Vipps-inntekter på 3900",

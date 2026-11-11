@@ -1948,7 +1948,8 @@
           "current_year": "The current year cannot be a reference year.",
           "opening_balance": "The year has an opening balance and cannot be a reference year.",
           "period_closed": "Reopen the year before removing the reference mark."
-        }
+        },
+        "locked": "Locked"
       },
       "journal": {
         "title": "Journal",
@@ -2028,7 +2029,11 @@
         "voidStripeEntry": "This entry was booked from a Stripe transaction and cannot be voided here. Use \"Undo\" on the transaction under Bank & Vipps → Stripe transactions (Booked tab), which also reopens its invoices.",
         "voidStripeEntryLink": "Go to the Stripe transactions",
         "voidBankEntry": "This entry was booked from a bank row or a Stripe payout and cannot be voided here. Use \"Undo\" on the row under Bank & Vipps → Tildel, which puts the row back in the queue and reopens the invoice or payout.",
-        "voidBankEntryLink": "Go to Tildel"
+        "voidBankEntryLink": "Go to Tildel",
+        "createPeriodConfirmTitle": "Create the fiscal year {year}?",
+        "createPeriodConfirmBody": "Payments dated in {year} are booked in this year at the next sync. Close the old year only once the new one exists.",
+        "reopenConfirmTitle": "Reopen the fiscal year {year}?",
+        "reopenConfirmBody": "The year takes new entries again. Close it again once the payments waiting for it are booked."
       },
       "vippsFallbackReclass": {
         "button": "Reclassify Vipps income on 3900",

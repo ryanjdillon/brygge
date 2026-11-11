@@ -5,6 +5,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { Loader2, LogIn, AlertTriangle } from 'lucide-vue-next'
 import { useApiClient, unwrap, ApiError } from '@/lib/apiClient'
 import { useAuthStore } from '@/stores/auth'
+import { takeLoginRedirect } from '@/lib/loginRedirect'
 
 // The page the login email links to. Opening it changes nothing: a mail
 // scanner that prefetches the link must not use the token up, so only the
@@ -116,7 +117,10 @@ async function openPortal() {
     state.value = 'session'
     return
   }
-  await router.replace('/portal')
+  // Back to the page the login was asked from (LoginView kept it for the
+  // address the link went to; another account's is ignored), else the
+  // portal; the guard still sends an applicant on to finish joining.
+  await router.replace(takeLoginRedirect(auth.user?.email) ?? '/portal')
 }
 
 async function retrySession() {

@@ -649,6 +649,14 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   handler trims it and caps it at 200 characters. `dev_masked.clubs` passes
   it through (public text). **The down** drops `dev_masked.clubs` first, then
   the column.
+- **Fiscal year waiting notice.** 000144 (BRY-575) widens
+  `deliveries_parent_by_kind` with an `accounting_%` branch (neither parent;
+  the definition re-adds 000138's in full) and adds the partial unique index
+  `idx_deliveries_fiscal_year_waiting_ref` on `(kind, payload->>'ref')` for
+  kind `accounting_fiscal_year_waiting`, so the hourly sweep queues each
+  waiting year or closing once. Widening only: every existing row passes.
+  **The down** deletes `accounting_%` deliveries, drops the index and restores
+  000138's CHECK.
 - `invoice_pdf_archive` (migration 000050) — preserves prior PDF bytes when
   `invoices.pdf_data` is regenerated, so Norwegian bokføringsloven §13's
   5-year retention requirement is satisfied.

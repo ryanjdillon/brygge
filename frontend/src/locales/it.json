@@ -1204,7 +1204,8 @@
           "current_year": "L’anno in corso non può essere un anno di riferimento.",
           "opening_balance": "L’anno ha un bilancio di apertura e non può essere un anno di riferimento.",
           "period_closed": "Riapri l’anno prima di rimuovere il contrassegno di riferimento."
-        }
+        },
+        "locked": "Bloccato"
       },
       "journal": {
         "title": "Journal",
@@ -1276,7 +1277,11 @@
         "voidStripeEntry": "Questa registrazione proviene da una transazione Stripe e non può essere annullata qui. Usa «Annulla» sulla transazione in Banca & Vipps → Transazioni Stripe (scheda Registrate), che riapre anche le sue fatture.",
         "voidStripeEntryLink": "Vai alle transazioni Stripe",
         "voidBankEntry": "Questa registrazione proviene da una riga bancaria o da un versamento Stripe e non può essere annullata qui. Usa «Annulla» sulla riga in Banca & Vipps → Tildel, che rimette la riga in coda e riapre la fattura o il versamento.",
-        "voidBankEntryLink": "Vai a Tildel"
+        "voidBankEntryLink": "Vai a Tildel",
+        "createPeriodConfirmTitle": "Creare l'esercizio {year}?",
+        "createPeriodConfirmBody": "I pagamenti datati {year} verranno registrati in questo esercizio alla prossima sincronizzazione. Chiudi il vecchio esercizio solo dopo aver creato il nuovo.",
+        "reopenConfirmTitle": "Riaprire l'esercizio {year}?",
+        "reopenConfirmBody": "L'esercizio accetta di nuovo registrazioni. Chiudilo di nuovo quando i pagamenti in attesa sono stati registrati."
       },
       "vippsFallbackReclass": {
         "button": "Riclassifica i ricavi Vipps dal conto 3900",

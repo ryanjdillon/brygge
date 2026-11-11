@@ -1204,7 +1204,8 @@
           "current_year": "L’année en cours ne peut pas être une année de référence.",
           "opening_balance": "L’année a un bilan d’ouverture et ne peut pas être une année de référence.",
           "period_closed": "Rouvrez l’année avant de retirer le marquage de référence."
-        }
+        },
+        "locked": "Verrouillé"
       },
       "journal": {
         "title": "Journal",
@@ -1275,7 +1276,11 @@
         "voidStripeEntry": "Cette écriture a été comptabilisée depuis une transaction Stripe et ne peut pas être annulée ici. Utilisez « Annuler » sur la transaction sous Banque & Vipps → Transactions Stripe (onglet Comptabilisées), ce qui rouvre aussi ses factures.",
         "voidStripeEntryLink": "Aller aux transactions Stripe",
         "voidBankEntry": "Cette écriture a été comptabilisée depuis une ligne bancaire ou un virement Stripe et ne peut pas être annulée ici. Utilisez « Annuler » sur la ligne sous Banque & Vipps → Tildel, ce qui remet la ligne dans la file et rouvre la facture ou le virement.",
-        "voidBankEntryLink": "Aller à Tildel"
+        "voidBankEntryLink": "Aller à Tildel",
+        "createPeriodConfirmTitle": "Créer l'exercice {year} ?",
+        "createPeriodConfirmBody": "Les paiements datés de {year} seront comptabilisés dans cet exercice lors de la prochaine synchronisation. Ne clôturez l'ancien exercice qu'une fois le nouveau créé.",
+        "reopenConfirmTitle": "Rouvrir l'exercice {year} ?",
+        "reopenConfirmBody": "L'exercice accepte à nouveau des écritures. Clôturez-le de nouveau une fois les paiements en attente comptabilisés."
       },
       "vippsFallbackReclass": {
         "button": "Reclasser les revenus Vipps du compte 3900",

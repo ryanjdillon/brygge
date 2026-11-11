@@ -1204,7 +1204,8 @@
           "current_year": "Het lopende jaar kan geen referentiejaar zijn.",
           "opening_balance": "Het jaar heeft een openingsbalans en kan geen referentiejaar zijn.",
           "period_closed": "Heropen het jaar voordat u de referentiemarkering verwijdert."
-        }
+        },
+        "locked": "Vergrendeld"
       },
       "journal": {
         "title": "Journal",
@@ -1276,7 +1277,11 @@
         "voidStripeEntry": "Deze boeking komt uit een Stripe-transactie en kan hier niet worden geannuleerd. Gebruik \"Ongedaan maken\" bij de transactie onder Bank & Vipps → Stripe-transacties (tabblad Geboekt); dat heropent ook de facturen.",
         "voidStripeEntryLink": "Naar de Stripe-transacties",
         "voidBankEntry": "Deze boeking komt uit een bankregel of een Stripe-uitbetaling en kan hier niet worden geannuleerd. Gebruik \"Ongedaan maken\" bij de regel onder Bank & Vipps → Tildel; de regel gaat terug in de wachtrij en de factuur of uitbetaling wordt heropend.",
-        "voidBankEntryLink": "Naar Tildel"
+        "voidBankEntryLink": "Naar Tildel",
+        "createPeriodConfirmTitle": "Boekjaar {year} aanmaken?",
+        "createPeriodConfirmBody": "Betalingen gedateerd in {year} worden bij de volgende synchronisatie in dit jaar geboekt. Sluit het oude jaar pas als het nieuwe bestaat.",
+        "reopenConfirmTitle": "Boekjaar {year} heropenen?",
+        "reopenConfirmBody": "Het jaar neemt weer nieuwe boekingen aan. Sluit het opnieuw zodra de wachtende betalingen geboekt zijn."
       },
       "vippsFallbackReclass": {
         "button": "Vipps-opbrengsten op 3900 herclassificeren",

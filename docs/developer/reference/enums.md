@@ -325,7 +325,7 @@ magic_link   invoice   invoice_reminder   credit_note   dispute   contact
 join_confirm   join_already_member   join_contact_board
 membership_welcome   membership_board_notice   membership_join_refunded
 membership_grant_withheld   membership_cancel_receipt   membership_cancel_board_notice
-membership_cancel_undone   membership_end_refused   other
+membership_cancel_undone   membership_end_refused   fiscal_year_waiting   other
 ```
 
 The `email.Kind` the sender passes; the vocabulary grows with it. `related_type` (also no CHECK) names the row a send is about, e.g. `invoice`.
@@ -345,6 +345,7 @@ broadcast   invoice_reminder   invoice_refund_document
 membership_welcome   membership_board_notice   membership_join_refunded
 membership_grant_withheld   membership_cancel_receipt
 membership_cancel_board_notice   membership_cancel_undone   membership_end_refused
+accounting_fiscal_year_waiting
 ```
 
 `invoice_refund_document` (BRY-446) delivers a document a card refund issued: the delivery worker renders its PDF and emails it when `email` is set (an empty `email` means PDF only, a guest with no address). The booking pass queues it in the transaction that issues the document.
@@ -352,6 +353,8 @@ membership_cancel_board_notice   membership_cancel_undone   membership_end_refus
 The `membership_*` kinds (BRY-630, migration 000138) have neither `broadcast_id` nor `invoice_id` (the `deliveries_parent_by_kind` CHECK); they name the member by `user_id`, except a `membership_grant_withheld` row for a join source with no user (BRY-631), which has none and is sent to the board naming no member. `membership_welcome` and `membership_board_notice` are queued by the grant in the transaction that settles the join payment; `membership_join_refunded` (a refunded join payment) and `membership_grant_withheld` (a paid join the integrity check withheld; `payload.reason`) are queued once per join source, keyed by `payload->>'ref'` (`order:<id>` or `invoice:<id>`; an expired join under review, BRY-631, is a `membership_grant_withheld` row with ref `join_expired:<source>`; unique index `idx_deliveries_membership_notice_ref` on `(kind, payload->>'ref')`). The sender (`handlers.MembershipNoticeSender`) resolves the recipient when it sends: the member's current address for the welcome, the board address (`boardNotificationAddress`) for the other three; the welcome row's `email` is informational and the board rows' is empty.
 
 The cancellation kinds (BRY-633, migration 000139) follow the same rules. `membership_cancel_receipt` (to the member: the written notice of the cancellation, with the end date and no refund) and `membership_cancel_board_notice` are queued by `POST /members/me/membership/cancel`; `membership_cancel_undone` by `POST …/undo`; `membership_end_refused` by the daily membership-end job when the member is the club's only active admin. Each is queued once per `payload->>'ref'` (`cancel:<user>:<cancelled_at>`, or `end_refused:<user>:<ends_on>`; unique index `idx_deliveries_membership_cancel_ref`), and `payload.ends_on` carries the end date the email states. The receipt goes to the member's current address, the other three to the board address.
+
+`accounting_fiscal_year_waiting` (BRY-575, migration 000144) tells the treasurer that payments wait for a fiscal year. Like the `membership_*` kinds it has neither parent (the CHECK's `accounting_%` branch), and `user_id` and `email` are empty: the sender resolves the address when it sends. The hourly sweep queues it once per `payload->>'ref'` (unique index `idx_deliveries_fiscal_year_waiting_ref`), and puts a `failed` row back to `pending` only when its error is exactly `accounting.ErrFiscalYearResolved` and the condition holds again; the payload is `ref`, `year`, `state` (`missing` \| `closed` \| `locked`) and, for a period, `period_id`. See invariants.md "A payment waiting for a fiscal year notifies the treasurer once, derived, never stored".
 
 ### `stripe_balance_transactions.reporting_category` (CHECK since migration 000117)
 

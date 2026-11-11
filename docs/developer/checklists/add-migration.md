@@ -95,6 +95,7 @@ Most migrations need matching Go changes:
 
 - **A per-club default inserted for every club.** A backfill derives a club's defaults from that club's own rows (PLAT-1), never inserts what the reference club happens to do. A rule the app already applied to every club may be ported as data, and then only for a club whose rows match it, so a club without such rows gets nothing: `000123_payment_filter_groups` creates the guest, motorhome and slipping groups only where the club has a price item the overview's old rules matched. Inventing a rule from one club's naming is not allowed. Say in the migration which case it is.
 
+- **Re-adding a CHECK from an old definition.** A widening CHECK like `deliveries_parent_by_kind` is redefined whole each time (000075, 000138, 000144): copy the latest definition, add your branch, and have the down delete the rows the narrower one rejects before restoring the previous definition (not the original). Check `grep -l <constraint> backend/migrations/*.up.sql` for the latest.
 - **Forgot the down.sql** — migration is irreversible in dev, painful to test
 - **Down deletes data the up created** — fine for new tables, dangerous for backfills. If the up backfilled an existing column, the down should restore to nil/zero, not silently re-derive
 - **Forgot the index** — sequential scans appear in slow query logs on first heavy use

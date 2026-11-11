@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore, loginErrorMessage } from '@/stores/auth'
 import { LogIn, Users, Fingerprint } from 'lucide-vue-next'
@@ -8,10 +8,20 @@ import Input from '@/components/ui/form/Input.vue'
 import FormField from '@/components/ui/form/FormField.vue'
 import { usePasskey, passkeysSupported, PasskeyError } from '@/composables/usePasskey'
 import { useJoinStatus } from '@/composables/useJoinStatus'
+import { safeRedirect, rememberLoginRedirect, clearLoginRedirect } from '@/lib/loginRedirect'
 
 const { t } = useI18n()
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
+
+// The page the guard sent the visitor here from (?redirect=), when it is a
+// same-origin path; the login returns there instead of the default.
+const redirectTo = computed(() => safeRedirect(route.query.redirect))
+function afterLogin(fallback: string) {
+  clearLoginRedirect()
+  router.push(redirectTo.value ?? fallback)
+}
 const passkey = usePasskey()
 const { open: joinOpen } = useJoinStatus()
 
@@ -27,8 +37,7 @@ async function signInWithPasskey() {
   passkeyBusy.value = true
   try {
     await passkey.login()
-    const redirect = auth.hasAdminRole ? '/admin' : '/portal'
-    router.push(redirect)
+    afterLogin(auth.hasAdminRole ? '/admin' : '/portal')
   } catch (e) {
     if (e instanceof DOMException && (e.name === 'NotAllowedError' || e.name === 'AbortError')) {
       // User dismissed the passkey prompt — not an error.
@@ -70,6 +79,9 @@ async function handleSubmit() {
   submitting.value = false
   if (ok) {
     magicLinkSent.value = true
+    // The link opens /login/verify, often in another tab: keep the page to
+    // return to for the account it was sent to (or clear a stale one).
+    rememberLoginRedirect(redirectTo.value, email.value)
   }
 }
 
@@ -84,8 +96,7 @@ async function handleDemoLogin(user: DemoUser) {
     })
     if (res.ok) {
       await auth.checkSession()
-      const redirect = user.roles.includes('admin') || user.roles.includes('board') ? '/admin' : '/portal'
-      router.push(redirect)
+      afterLogin(user.roles.includes('admin') || user.roles.includes('board') ? '/admin' : '/portal')
     }
   } catch {
     auth.loginError = 'Demo login failed'

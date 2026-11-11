@@ -30,7 +30,7 @@ func isBryggeKID(s string) bool {
 	return finance.ValidateKIDAny(s)
 }
 
-// findInvoiceByCounterpartAndAmount is the tertiary auto-match path
+// findInvoiceByCounterpartAndAmountErr is the tertiary auto-match path
 // for the bank-sync loop: when neither KID nor invoice-number caught
 // the row, look up the open unpaid invoice that belongs to the
 // member whose normalized full name equals the bank counterpart and
@@ -40,10 +40,13 @@ func isBryggeKID(s string) bool {
 //
 // It runs only for clubs that have not opted into bank auto-assign
 // (BRY-366); for those that have, AutoAssignBankDeposits replaces it.
-func (s *Service) findInvoiceByCounterpartAndAmount(ctx context.Context, clubID, counterpart string, amount float64) string {
+//
+// A failed query returns its error; findCascadeInvoice ignores it, as it
+// always did, and findCascadeInvoiceErr reports it (BRY-575).
+func (s *Service) findInvoiceByCounterpartAndAmountErr(ctx context.Context, clubID, counterpart string, amount float64) (string, error) {
 	needle := normalizeName(counterpart)
 	if needle == "" {
-		return ""
+		return "", nil
 	}
 	rows, err := s.db.Query(ctx,
 		`SELECT i.id, u.full_name
@@ -60,7 +63,7 @@ func (s *Service) findInvoiceByCounterpartAndAmount(ctx context.Context, clubID,
 		clubID, amount,
 	)
 	if err != nil {
-		return ""
+		return "", err
 	}
 	defer rows.Close()
 	var firstMatch string
@@ -78,13 +81,13 @@ func (s *Service) findInvoiceByCounterpartAndAmount(ctx context.Context, clubID,
 			firstMatch = id
 		}
 		if matches > 1 {
-			return "" // ambiguous — bail
+			return "", nil // ambiguous — bail
 		}
 	}
 	if matches == 1 {
-		return firstMatch
+		return firstMatch, rows.Err()
 	}
-	return ""
+	return "", rows.Err()
 }
 
 // BankSyncResult summarizes one full-scope bank sync run.
