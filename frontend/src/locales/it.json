@@ -1419,7 +1419,7 @@
       },
       "bankAutoAssignLabel": "Pagamenti bancari senza KID",
       "bankAutoAssign": "Registra automaticamente i pagamenti bancari univoci senza KID",
-      "bankAutoAssignHint": "Dopo ogni caricamento bancario e Synk bank, registra un pagamento senza KID solo se il nome del pagatore corrisponde esattamente a un socio con una sola fattura aperta dello stesso importo. Il resto rimane in Tildel. Ogni registrazione può essere annullata. Indipendente dall'impostazione Vipps.",
+      "bankAutoAssignHint": "Dopo ogni caricamento bancario e Synk bank, registra un pagamento senza KID solo se il nome del pagatore corrisponde esattamente a un socio con una sola fattura aperta dello stesso importo. Il resto rimane in Tildel. Ogni registrazione può essere annullata. Indipendente dall'impostazione Vipps. Con la contabilizzazione automatica attiva, la regola viene eseguita anche a ogni avvio e ogni notte.",
       "vippsPortalUrlLabel": "Indirizzo del portale Vipps",
       "vippsPortalUrlHint": "Incolla l'indirizzo che vedi dopo aver effettuato l'accesso a portal.vippsmobilepay.com, ad esempio https://portal.vippsmobilepay.com/123456/home. Il numero al suo interno appartiene al portale e non è il numero del commerciante (MSN). Mostrato come link nella pagina Pagamenti finché Vipps accetta pagamenti reali. Lascia vuoto per non mostrare alcun link.",
       "vippsPortalUrlInvalid": "Questo non è un indirizzo del portale Vipps. Deve iniziare con https://portal.vippsmobilepay.com/ e non può contenere nome utente, porta o #frammento.",
@@ -1451,7 +1451,10 @@
       "municipalityCodesMax": "Puoi impostare al massimo {max} comuni.",
       "municipalityCodesUnknown": "numero di comune sconosciuto",
       "municipalityCodesInvalid": "L’elenco non è stato salvato: ogni numero di comune deve avere quattro cifre e possono essere al massimo 20.",
-      "joinLocalUnset": "La residenza locale non può essere determinata finché non sono impostati i comuni"
+      "joinLocalUnset": "La residenza locale non può essere determinata finché non sono impostati i comuni",
+      "automaticBookingLabel": "Contabilizzazione automatica",
+      "automaticBooking": "Contabilizza e riconcilia automaticamente",
+      "automaticBookingHint": "Disattivato per impostazione predefinita. Quando l'interruttore è attivo, Brygge contabilizza da solo, come «Automatisk bokføring», i pagamenti che può abbinare con certezza: pagamenti Vipps con un ordine e versamenti Vipps (con regolamento per pagamento), oltre ai pagamenti con KID o con numero di fattura e importo corretto. I pagamenti che si potrebbero solo indovinare dal nome non vengono mai contabilizzati; le regole Vipps e bancarie univoche di questa pagina contabilizzano solo quando i relativi interruttori sono attivi. I trasferimenti tra i conti del club diventano bozze di registrazione da confermare. Viene eseguito a ogni avvio e ogni notte; una modifica vale dalla prossima esecuzione. Ciò che annulli non viene mai più contabilizzato automaticamente, e l'esercizio deve prima esistere."
     },
     "faktura": {
       "draft": {

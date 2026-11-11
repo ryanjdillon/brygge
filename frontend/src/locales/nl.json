@@ -1419,7 +1419,7 @@
       },
       "bankAutoAssignLabel": "Bankbetalingen zonder KID",
       "bankAutoAssign": "Eenduidige bankbetalingen zonder KID automatisch boeken",
-      "bankAutoAssignHint": "Boekt na elke bankupload en Synk bank een betaling zonder KID alleen als de naam van de betaler precies bij één lid past met precies één openstaande factuur van hetzelfde bedrag. De rest blijft in Tildel. Elke boeking kan ongedaan worden gemaakt. Los van de Vipps-instelling.",
+      "bankAutoAssignHint": "Boekt na elke bankupload en Synk bank een betaling zonder KID alleen als de naam van de betaler precies bij één lid past met precies één openstaande factuur van hetzelfde bedrag. De rest blijft in Tildel. Elke boeking kan ongedaan worden gemaakt. Los van de Vipps-instelling. Met automatisch boeken aan draait de regel ook bij elke start en elke nacht.",
       "vippsPortalUrlLabel": "Adres van het Vipps-portaal",
       "vippsPortalUrlHint": "Plak het adres dat u ziet nadat u bent ingelogd op portal.vippsmobilepay.com, bijvoorbeeld https://portal.vippsmobilepay.com/123456/home. Het nummer daarin hoort bij het portaal en is niet het verkopersnummer (MSN). Wordt als link getoond op de pagina Betalingen zolang Vipps echte betalingen accepteert. Laat leeg als er geen link moet komen.",
       "vippsPortalUrlInvalid": "Dit is geen adres van het Vipps-portaal. Het moet beginnen met https://portal.vippsmobilepay.com/ en mag geen gebruikersnaam, poort of #fragment bevatten.",
@@ -1451,7 +1451,10 @@
       "municipalityCodesMax": "Je kunt hoogstens {max} gemeenten instellen.",
       "municipalityCodesUnknown": "onbekend gemeentenummer",
       "municipalityCodesInvalid": "De lijst is niet opgeslagen: elk gemeentenummer moet vier cijfers hebben, en er mogen er hoogstens 20 zijn.",
-      "joinLocalUnset": "Lokale binding kan pas worden bepaald als er gemeenten zijn ingesteld"
+      "joinLocalUnset": "Lokale binding kan pas worden bepaald als er gemeenten zijn ingesteld",
+      "automaticBookingLabel": "Automatisch boeken",
+      "automaticBooking": "Automatisch boeken en afstemmen",
+      "automaticBookingHint": "Standaard uit. Als de schakelaar aan staat, boekt Brygge zelf, als “Automatisk bokføring”, betalingen die het met zekerheid kan koppelen: Vipps-betalingen met een bestelling en Vipps-uitbetalingen (met afrekening per betaling), en betalingen met KID of met factuurnummer en het juiste bedrag. Betalingen die alleen op naam te raden zijn, worden nooit geboekt; de eenduidige Vipps- en bankregels op deze pagina boeken alleen als hun eigen schakelaars aan staan. Overboekingen tussen de rekeningen van de club worden conceptboekingen die u zelf boekt. Het draait bij elke start en elke nacht; een wijziging geldt vanaf de volgende run. Wat u ongedaan maakt, wordt nooit meer automatisch geboekt, en het boekjaar moet eerst bestaan."
     },
     "faktura": {
       "draft": {

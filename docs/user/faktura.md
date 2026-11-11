@@ -534,7 +534,7 @@ Some bank rows only make sense together: a harbour-share buy-back paid out and t
 
 Brygge never pairs dismissed rows again, by **Synk bank** or by automatic booking.
 
-The transfer bilag Brygge makes is a **draft**: post it on the **Bilag** page. Until it is posted it counts nowhere, and a year that still holds drafts cannot be closed. When the club has automatic booking on (ACC-13; the switch comes with a later update), Brygge also pairs transfers by itself at every start and every night, as **Automatisk bokføring**. Those bilag are drafts too and wait for you to post them.
+The transfer bilag Brygge makes is a **draft**: post it on the **Bilag** page. Until it is posted it counts nowhere, and a year that still holds drafts cannot be closed. When the club has [automatic booking](#automatisk-bokføring) on, Brygge also pairs transfers by itself at every start and every night, as **Automatisk bokføring**. Those bilag are drafts too and wait for you to post them.
 
 Make only one bilag for the pair; don't also make a **Nytt bilag** per row, and don't book each row on its own to the other bank account: either books the transfer twice.
 
@@ -548,6 +548,29 @@ For Vipps payouts (the consolidated daily Utb. row in the bank statement), the r
 4. **Fallback** → CR 3900 Andre inntekter. (Previously this was 2900, which implied "we owe the payer money" — wrong for revenue.)
 
 Member resolution uses fuzzy normalization (æøå/diacritics, hyphens, case, whitespace) plus a full-name → first+last → unique-last-name cascade. Most recurring members resolve without operator intervention.
+
+### Automatisk bokføring
+
+Turn on **Bokfør og avstem automatisk** under **Admin → Økonomiinnstillinger → Automatisk bokføring** (on the **Faktura** tab, above **Betalingskonti**) and press **Lagre**. Saving asks for your two-factor code (or passkey). Only the treasurer and site admins can change it; it is off until someone turns it on.
+
+With it on, Brygge books by itself, without anyone pressing a sync button, the payments it can match exactly. It books only what an upload, **Synk Vipps** or **Synkroniser** would have booked:
+
+- Vipps payments that belong to an order (checkout), and the daily Vipps payouts once every payment in their settlement is booked (see [Vipps payouts clear by themselves](#vipps-payouts-clear-by-themselves)). Both only on the per-charge Vipps model; a club on the older model gets no Vipps booking from it;
+- bank payments with the faktura's KID (whatever the amount, as on a bank upload), or with its faktura number in the text and the same amount;
+- the unambiguous Vipps payments and bank payments without a KID, but only when their own switches are on ([Automatic Vipps booking](#automatic-vipps-booking-per-charge-tildel), [Automatic booking of bank payments without a KID](#automatic-booking-of-bank-payments-without-a-kid)). This switch does not turn those rules on: each still decides its own;
+- transfers between the club's own bank accounts, which it prepares as **draft** bilag for you to post (see [Transfers between the club's own accounts](#transfers-between-the-clubs-own-accounts)). A year that still holds drafts cannot be closed.
+
+A payment that only matches by the sender's name and amount is never booked by itself: that guess stays in **Tildel** for you, as before.
+
+**When it runs.** At every start of Brygge (which includes every update) and once a night. Each run first fetches the last days from Vipps, then books. Card payments and refunds are booked within minutes of Stripe reporting them. A change of the switch takes effect from the next run. Turning it off stops the booking from the next run on; Brygge still fetches the Vipps reports as before, and everything stays in **Tildel** for you.
+
+**How you see it.** What it booked carries the blue **Automatisk** badge in the Bilag list (see [Voided](#voided) for the badge), and the booker is **Automatisk bokføring**.
+
+**Angre is final.** You can undo any of these bookings with **Angre** (or by annulling the bilag), as for a booking you made. Once you have undone one, Brygge never books that payment by itself again; book it yourself in **Tildel**. One exception: a Vipps payout deposit you undid with **Angre innbetalingen** is cleared by itself again once you book a payment of that settlement again, because that is how you tell Brygge you are done (see [Angre on a payment in a settlement that is already cleared](#angre-on-a-payment-in-a-settlement-that-is-already-cleared)).
+
+**The year must exist.** It never creates a fiscal year. A payment dated in a year without a period, or in a closed or locked one, waits until you create or reopen the year, and Brygge emails the treasurer about it once (see [1. Fiscal period](#1-fiscal-period)). The first run after that books it.
+
+**Synk Vipps while it runs.** Only one Vipps booking runs at a time. If you press **Synk Vipps** while the automatic run is booking Vipps payments, you may get *En Vipps-bokføring pågår allerede* or *Bokføringen venter* (see **Bokføringen venter** below). Wait a minute and press it again. The automatic run waits in the same way for a sync you started.
 
 ### Automatic Vipps booking (per-charge Tildel)
 
@@ -567,7 +590,7 @@ Everything else stays in **Tildel**. The upload and Synk Vipps results list what
 
 ### Vipps payouts clear by themselves
 
-You do not need to clear the daily Vipps payout (the **Utb. … Vippsnr …** deposit in the bank statement) by hand. As soon as every payment in that settlement is booked or dismissed (dismiss only a payment Vipps left out of the payout), the next **Synkroniser**, **Synk Vipps**, Vipps upload, bank statement upload or **Bokfør Vipps-utkast** books the Vipps fee and the deposit, and the result shows how many payouts were cleared. A bank statement that brings the deposit after its payments were booked clears the payout on the upload itself. Payouts that stay open are listed with the reason:
+You do not need to clear the daily Vipps payout (the **Utb. … Vippsnr …** deposit in the bank statement) by hand. As soon as every payment in that settlement is booked or dismissed (dismiss only a payment Vipps left out of the payout), the next **Synkroniser**, **Synk Vipps**, Vipps upload, bank statement upload or **Bokfør Vipps-utkast**, and the [automatic run](#automatisk-bokføring) when the club has it on, books the Vipps fee and the deposit, and the result shows how many payouts were cleared. A bank statement that brings the deposit after its payments were booked clears the payout on the upload itself. Payouts that stay open are listed with the reason:
 
 - **Venter på belastninger** — some payments in the settlement are not booked: still in **Tildel**, or only a draft bilag (post it with **Bokfør Vipps-utkast**). Book or dismiss them and sync again.
 - **Ingen regnskapsår for <år>** — the deposit is dated in a year that has no fiscal period yet. Nothing is booked. Create the year on the **Bilag** page (**Opprett periode**); the next sync clears the settlement and dates the deposit entry on the day the money arrived. A payment in such a year is not listed with this reason in the upload and **Synk Vipps** results: it stays in **Tildel** and is counted as needing review (rendering its reason is tracked in BRY-579). A year that exists but is closed gives **regnskapsperioden er lukket** instead: reopen the period on the same page first. A locked period (**regnskapsperioden er låst**) cannot be reopened in the app.

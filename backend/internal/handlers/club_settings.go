@@ -560,11 +560,7 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		Error(w, http.StatusBadRequest, msg)
 		return
 	}
-	oldMunicipalityCodes, ok := h.checkMunicipalityCodes(ctx, w, claims.ClubID, req.MunicipalityCodes)
-	if !ok {
-		return
-	}
-	oldJoinPriceItem, ok := h.checkJoinPriceItem(ctx, w, claims.ClubID, req.JoinPriceItemID)
+	old, ok := h.checkAuditedSettings(ctx, w, claims.ClubID, &req)
 	if !ok {
 		return
 	}
@@ -666,7 +662,7 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	auditData, _ := json.Marshal(settingsAuditDetails(req, oldJoinPriceItem, oldMunicipalityCodes))
+	auditData, _ := json.Marshal(settingsAuditDetails(req, old))
 	if _, auditErr := h.db.Exec(ctx,
 		`INSERT INTO audit_log (club_id, actor_id, actor_ip, action, resource, resource_id, details)
 		 VALUES ($1, $2, '', $3, 'clubs', $5, $4)`,
@@ -677,83 +673,102 @@ func (h *ClubSettingsHandler) HandleUpdateFinancialSettings(w http.ResponseWrite
 	JSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
+// settingsOldValues are the stored values the audit row's value exceptions
+// show as "old", read before the UPDATE. All three are read in one SELECT
+// when the request names any of them; settingsAuditDetails writes an old/new
+// pair only for each field the request names.
+type settingsOldValues struct {
+	joinPriceItem     string
+	municipalityCodes []string
+	automaticBooking  bool
+}
+
 // settingsAuditDetails is the update_financial_settings audit payload: field
 // names only. The request carries a secret (the Anthropic key) and board
 // members' addresses; a value in the log outlives a rotation or an erasure.
-func settingsAuditDetails(req updateFinancialSettingsRequest, oldJoinPriceItem string, oldMunicipalityCodes []string) map[string]any {
+func settingsAuditDetails(req updateFinancialSettingsRequest, old settingsOldValues) map[string]any {
 	details := map[string]any{"fields": suppliedSettingFields(req)}
 	// An exception to names-only: the join price item is a catalogue id, not
 	// personal data or a secret, and which item joiners are charged is what a
 	// reviewer of this row needs to see ("" = joining closed).
 	if req.JoinPriceItemID != nil {
-		details["join_price_item_id"] = map[string]string{"old": oldJoinPriceItem, "new": *req.JoinPriceItemID}
+		details["join_price_item_id"] = map[string]string{"old": old.joinPriceItem, "new": *req.JoinPriceItemID}
 	}
-	// The other exception: municipality codes are public numbers, not
-	// personal data or a secret, and which ones count as local decides who
-	// gets the local terms, so a reviewer needs the before and after.
+	// Another: municipality codes are public numbers, not personal data or a
+	// secret, and which ones count as local decides who gets the local terms,
+	// so a reviewer needs the before and after.
 	if req.MunicipalityCodes != nil {
-		if oldMunicipalityCodes == nil {
-			oldMunicipalityCodes = []string{}
+		codes := old.municipalityCodes
+		if codes == nil {
+			codes = []string{}
 		}
-		details["municipality_codes"] = map[string][]string{"old": oldMunicipalityCodes, "new": *req.MunicipalityCodes}
+		details["municipality_codes"] = map[string][]string{"old": codes, "new": *req.MunicipalityCodes}
+	}
+	// And the automatic booking switch (ACC-13, BRY-568): it starts and stops
+	// unattended booking as the club's system actor, so who turned it on or
+	// off, and from what, belongs in the row. A boolean, not PII or a secret.
+	if req.AutomaticBooking != nil {
+		details["automatic_booking"] = map[string]bool{"old": old.automaticBooking, "new": *req.AutomaticBooking}
 	}
 	return details
 }
 
-// checkMunicipalityCodes validates a municipality_codes setting (normalising
-// it in place) and returns the club's current codes for the audit row. It
+// checkAuditedSettings validates the settings whose values the audit row
+// shows (normalising them in place) and reads their stored values before the
+// UPDATE, in one SELECT and only when the request names one of them. It
 // reports false having written the error response.
-func (h *ClubSettingsHandler) checkMunicipalityCodes(ctx context.Context, w http.ResponseWriter, clubID string, codes *[]string) ([]string, bool) {
-	if codes == nil {
-		return nil, true
+func (h *ClubSettingsHandler) checkAuditedSettings(ctx context.Context, w http.ResponseWriter, clubID string, req *updateFinancialSettingsRequest) (settingsOldValues, bool) {
+	var old settingsOldValues
+	if !checkMunicipalityCodes(w, req.MunicipalityCodes) || !h.checkJoinPriceItem(ctx, w, clubID, req.JoinPriceItemID) {
+		return old, false
 	}
-	if !normalizeMunicipalityCodes(codes) {
-		JSON(w, http.StatusBadRequest, map[string]string{
-			"error": fmt.Sprintf("municipality_codes must be at most %d four-digit municipality numbers", maxMunicipalityCodes),
-			"code":  codeInvalidMunicipalityCodes,
-		})
-		return nil, false
+	if req.MunicipalityCodes == nil && req.JoinPriceItemID == nil && req.AutomaticBooking == nil {
+		return old, true
 	}
-	var old []string
 	if err := h.db.QueryRow(ctx,
-		`SELECT municipality_codes FROM clubs WHERE id = $1`, clubID,
-	).Scan(&old); err != nil {
-		h.log.Error().Err(err).Msg("load municipality codes")
+		`SELECT municipality_codes, COALESCE(join_price_item_id::text, ''), automatic_booking
+		   FROM clubs WHERE id = $1`, clubID,
+	).Scan(&old.municipalityCodes, &old.joinPriceItem, &old.automaticBooking); err != nil {
+		h.log.Error().Err(err).Msg("load audited settings")
 		Error(w, http.StatusInternalServerError, "internal error")
-		return nil, false
+		return old, false
 	}
 	return old, true
 }
 
-// checkJoinPriceItem validates a join_price_item_id setting (trimming it in
-// place) and returns the club's current item, "" when unset, for the audit
-// row. It reports false having written the error response.
-func (h *ClubSettingsHandler) checkJoinPriceItem(ctx context.Context, w http.ResponseWriter, clubID string, id *string) (string, bool) {
+// checkMunicipalityCodes validates a municipality_codes setting, normalising
+// it in place. It reports false having written the error response.
+func checkMunicipalityCodes(w http.ResponseWriter, codes *[]string) bool {
+	if codes == nil || normalizeMunicipalityCodes(codes) {
+		return true
+	}
+	JSON(w, http.StatusBadRequest, map[string]string{
+		"error": fmt.Sprintf("municipality_codes must be at most %d four-digit municipality numbers", maxMunicipalityCodes),
+		"code":  codeInvalidMunicipalityCodes,
+	})
+	return false
+}
+
+// checkJoinPriceItem validates a join_price_item_id setting, trimming it in
+// place. It reports false having written the error response.
+func (h *ClubSettingsHandler) checkJoinPriceItem(ctx context.Context, w http.ResponseWriter, clubID string, id *string) bool {
 	if id == nil {
-		return "", true
+		return true
 	}
 	ok, err := validJoinPriceItem(ctx, h.db, clubID, id)
 	if err != nil {
 		h.log.Error().Err(err).Msg("validate join price item")
 		Error(w, http.StatusInternalServerError, "internal error")
-		return "", false
+		return false
 	}
 	if !ok {
 		JSON(w, http.StatusBadRequest, map[string]string{
 			"error": "join_price_item_id must be an active, flat price item of this club",
 			"code":  codeInvalidJoinPriceItem,
 		})
-		return "", false
+		return false
 	}
-	var old string
-	if err := h.db.QueryRow(ctx,
-		`SELECT COALESCE(join_price_item_id::text, '') FROM clubs WHERE id = $1`, clubID,
-	).Scan(&old); err != nil {
-		h.log.Error().Err(err).Msg("load join price item")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return "", false
-	}
-	return old, true
+	return true
 }
 
 // codeInvalidJoinPriceItem is the 400 code of a refused join price item.

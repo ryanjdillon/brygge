@@ -1419,7 +1419,7 @@
       },
       "bankAutoAssignLabel": "Bankzahlungen ohne KID",
       "bankAutoAssign": "Eindeutige Bankzahlungen ohne KID automatisch buchen",
-      "bankAutoAssignHint": "Bucht nach jedem Bank-Upload und Synk bank eine Zahlung ohne KID nur, wenn der Name des Zahlers genau einem Mitglied entspricht, das genau eine offene Rechnung über denselben Betrag hat. Alles andere bleibt in Tildel. Jede Buchung kann rückgängig gemacht werden. Unabhängig von der Vipps-Einstellung.",
+      "bankAutoAssignHint": "Bucht nach jedem Bank-Upload und Synk bank eine Zahlung ohne KID nur, wenn der Name des Zahlers genau einem Mitglied entspricht, das genau eine offene Rechnung über denselben Betrag hat. Alles andere bleibt in Tildel. Jede Buchung kann rückgängig gemacht werden. Unabhängig von der Vipps-Einstellung. Mit aktivierter automatischer Buchung läuft die Regel auch bei jedem Start und jede Nacht.",
       "vippsPortalUrlLabel": "Adresse des Vipps-Portals",
       "vippsPortalUrlHint": "Fügen Sie die Adresse ein, die Sie nach der Anmeldung bei portal.vippsmobilepay.com sehen, z. B. https://portal.vippsmobilepay.com/123456/home. Die Nummer darin gehört zum Portal und ist nicht die Händlernummer (MSN). Wird auf der Seite „Zahlungen“ als Link angezeigt, solange Vipps echte Zahlungen annimmt. Leer lassen, wenn kein Link angezeigt werden soll.",
       "vippsPortalUrlInvalid": "Das ist keine Adresse des Vipps-Portals. Sie muss mit https://portal.vippsmobilepay.com/ beginnen und darf keinen Benutzernamen, keinen Port und kein #Fragment enthalten.",
@@ -1451,7 +1451,10 @@
       "municipalityCodesMax": "Sie können höchstens {max} Gemeinden festlegen.",
       "municipalityCodesUnknown": "unbekannte Gemeindenummer",
       "municipalityCodesInvalid": "Die Liste wurde nicht gespeichert: Jede Gemeindenummer muss vier Ziffern haben, und es dürfen höchstens 20 sein.",
-      "joinLocalUnset": "Die lokale Zugehörigkeit kann erst bestimmt werden, wenn Gemeinden festgelegt sind"
+      "joinLocalUnset": "Die lokale Zugehörigkeit kann erst bestimmt werden, wenn Gemeinden festgelegt sind",
+      "automaticBookingLabel": "Automatische Buchung",
+      "automaticBooking": "Automatisch buchen und abstimmen",
+      "automaticBookingHint": "Standardmäßig aus. Wenn der Schalter an ist, bucht Brygge selbst als „Automatisk bokføring“ Zahlungen, die sicher zugeordnet werden können: Vipps-Zahlungen mit einer Bestellung und Vipps-Auszahlungen (mit Abrechnung pro Zahlung) sowie Zahlungen mit KID oder mit Rechnungsnummer und passendem Betrag. Zahlungen, die sich nur über den Namen erraten ließen, werden nie gebucht; die eindeutigen Vipps- und Bankregeln auf dieser Seite buchen nur, wenn ihre eigenen Schalter an sind. Überweisungen zwischen den Konten des Vereins werden Belegentwürfe, die Sie selbst buchen. Es läuft bei jedem Start und jede Nacht; eine Änderung gilt ab dem nächsten Lauf. Was Sie rückgängig machen, wird nie wieder automatisch gebucht, und das Geschäftsjahr muss zuerst angelegt sein."
     },
     "faktura": {
       "draft": {

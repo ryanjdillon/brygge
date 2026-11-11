@@ -2300,7 +2300,7 @@
       },
       "bankAutoAssignLabel": "Bank payments without KID",
       "bankAutoAssign": "Book unambiguous bank payments without KID automatically",
-      "bankAutoAssignHint": "After each bank upload and Synk bank, books a payment without KID only when the payer's name matches exactly one member who has exactly one open faktura for the same amount. Everything else stays in Tildel. Every booking can be undone. Separate from the Vipps setting.",
+      "bankAutoAssignHint": "After each bank upload and Synk bank, books a payment without KID only when the payer's name matches exactly one member who has exactly one open faktura for the same amount. Everything else stays in Tildel. Every booking can be undone. Separate from the Vipps setting. With automatic booking on, the rule also runs at every start and every night.",
       "vippsPortalUrlLabel": "Vipps portal address",
       "vippsPortalUrlHint": "Paste the address you see after logging in to portal.vippsmobilepay.com, e.g. https://portal.vippsmobilepay.com/123456/home. The number in it belongs to the portal; it is not the merchant serial number. Shown as a link on the Payments page while Vipps takes live payments. Leave empty for no link.",
       "vippsPortalUrlInvalid": "That is not a Vipps portal address. It must start with https://portal.vippsmobilepay.com/ and have no username, port or #fragment.",
@@ -2332,7 +2332,10 @@
       "municipalityCodesMax": "You can set at most {max} municipalities.",
       "municipalityCodesUnknown": "unknown municipality number",
       "municipalityCodesInvalid": "The list was not saved: each municipality number must have four digits, and there can be at most 20.",
-      "joinLocalUnset": "Local residency cannot be decided until municipalities are set"
+      "joinLocalUnset": "Local residency cannot be decided until municipalities are set",
+      "automaticBookingLabel": "Automatic booking",
+      "automaticBooking": "Book and reconcile automatically",
+      "automaticBookingHint": "Off by default. When the switch is on, Brygge itself books, as “Automatisk bokføring”, payments it can match with certainty: Vipps payments with an order and Vipps payouts (with settlement per payment), and payments with a KID or with the faktura number and the right amount. Payments that could only be guessed from the name are never booked; the unambiguous Vipps and bank rules on this page book only when their own switches are on. Transfers between the club's accounts become draft bilag for you to post. It runs at every start and every night, and a change takes effect from the next run. What you undo is never booked automatically again, and the fiscal year must exist first."
     },
     "bankAccounts": {
       "title": "Bank accounts",

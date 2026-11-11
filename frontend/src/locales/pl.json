@@ -1393,7 +1393,7 @@
       },
       "bankAutoAssignLabel": "Płatności bankowe bez KID",
       "bankAutoAssign": "Automatycznie księguj jednoznaczne płatności bankowe bez KID",
-      "bankAutoAssignHint": "Po każdym imporcie bankowym i Synk bank księguje płatność bez KID tylko wtedy, gdy nazwa płatnika pasuje dokładnie do jednego członka z dokładnie jedną otwartą fakturą na tę samą kwotę. Reszta pozostaje w Tildel. Każde księgowanie można cofnąć. Niezależne od ustawienia Vipps.",
+      "bankAutoAssignHint": "Po każdym imporcie bankowym i Synk bank księguje płatność bez KID tylko wtedy, gdy nazwa płatnika pasuje dokładnie do jednego członka z dokładnie jedną otwartą fakturą na tę samą kwotę. Reszta pozostaje w Tildel. Każde księgowanie można cofnąć. Niezależne od ustawienia Vipps. Przy włączonym automatycznym księgowaniu reguła działa też przy każdym uruchomieniu i co noc.",
       "vippsPortalUrlLabel": "Adres portalu Vipps",
       "vippsPortalUrlHint": "Wklej adres widoczny po zalogowaniu na portal.vippsmobilepay.com, np. https://portal.vippsmobilepay.com/123456/home. Numer w nim należy do portalu i nie jest numerem sprzedawcy (MSN). Wyświetlany jako link na stronie Płatności, dopóki Vipps przyjmuje prawdziwe płatności. Zostaw puste, jeśli link ma się nie pojawiać.",
       "vippsPortalUrlInvalid": "To nie jest adres portalu Vipps. Musi zaczynać się od https://portal.vippsmobilepay.com/ i nie może zawierać nazwy użytkownika, portu ani #fragmentu.",
@@ -1425,7 +1425,10 @@
       "municipalityCodesMax": "Możesz ustawić najwyżej {max} gmin.",
       "municipalityCodesUnknown": "nieznany numer gminy",
       "municipalityCodesInvalid": "Lista nie została zapisana: każdy numer gminy musi mieć cztery cyfry, a gmin może być najwyżej 20.",
-      "joinLocalUnset": "Nie można ustalić przynależności lokalnej, dopóki nie ustawiono gmin"
+      "joinLocalUnset": "Nie można ustalić przynależności lokalnej, dopóki nie ustawiono gmin",
+      "automaticBookingLabel": "Automatyczne księgowanie",
+      "automaticBooking": "Księguj i uzgadniaj automatycznie",
+      "automaticBookingHint": "Domyślnie wyłączone. Gdy przełącznik jest włączony, Brygge samo księguje, jako „Automatisk bokføring”, płatności, które może pewnie dopasować: płatności Vipps z zamówieniem i wypłaty Vipps (z rozliczeniem za każdą płatność) oraz płatności z KID lub z numerem faktury i właściwą kwotą. Płatności, które można by tylko odgadnąć po nazwisku, nigdy nie są księgowane; jednoznaczne reguły Vipps i bankowe na tej stronie księgują tylko wtedy, gdy ich własne przełączniki są włączone. Przelewy między kontami klubu stają się szkicami dokumentów do zaksięgowania przez Ciebie. Działa przy każdym uruchomieniu i co noc; zmiana obowiązuje od następnego przebiegu. To, co cofniesz, nigdy nie zostanie ponownie zaksięgowane automatycznie, a rok obrachunkowy musi najpierw istnieć."
     },
     "faktura": {
       "draft": {

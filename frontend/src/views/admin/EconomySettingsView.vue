@@ -10,6 +10,7 @@ import Tabs from '@/components/ui/Tabs.vue'
 import BankAccountsPanel from '@/components/admin/BankAccountsPanel.vue'
 import ExemptionsSettingsPanel from '@/components/admin/ExemptionsSettingsPanel.vue'
 import MunicipalityCodesSetting from '@/components/admin/MunicipalityCodesSetting.vue'
+import SiteSettingSwitch from '@/components/admin/SiteSettingSwitch.vue'
 
 const { t } = useI18n()
 const { ensureFreshTotp, totpAwareFetch } = useFreshTotp()
@@ -52,8 +53,12 @@ const vippsSaved = ref(false)
 // switch of its own, so turning on Vipps auto-assign never starts booking
 // bank payments.
 const bankAutoAssign = ref(false)
-const bankSaving = ref(false)
-const bankSaved = ref(false)
+
+// The master switch for the automatic booking run (ACC-13, BRY-554/568): with
+// it on, Brygge books at every start and every night what a person's sync
+// would, except name guesses. The per-rule switches above and below still
+// gate their own rules.
+const automaticBooking = ref(false)
 
 // The club's page in the Vipps portal, linked from the Payments page. Its
 // number is the portal's own, so the treasurer pastes the address; the server
@@ -167,6 +172,7 @@ async function load() {
     vippsAutoAssign.value = !!body.vipps_auto_assign
     vippsAutoAssignTieCategory.value = body.vipps_auto_assign_tie_category || ''
     bankAutoAssign.value = !!body.bank_auto_assign
+    automaticBooking.value = !!body.automatic_booking
     vippsPortalUrl.value = body.vipps_portal_url || ''
     applyJoinState(body)
     municipalityCodes.value = Array.isArray(body.municipality_codes) ? body.municipality_codes : []
@@ -233,30 +239,6 @@ async function saveVippsAccounts() {
     error.value = (e as Error).message
   } finally {
     vippsSaving.value = false
-  }
-}
-
-async function saveBankAutoAssign() {
-  if (!(await ensureFreshTotp())) return
-  bankSaving.value = true
-  bankSaved.value = false
-  error.value = null
-  try {
-    const res = await totpAwareFetch('/api/v1/admin/settings/site', {
-      method: 'PATCH',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bank_auto_assign: bankAutoAssign.value }),
-    })
-    if (!res.ok) {
-      const txt = await res.text().catch(() => '')
-      throw new Error(`${res.status} ${txt}`)
-    }
-    bankSaved.value = true
-  } catch (e) {
-    error.value = (e as Error).message
-  } finally {
-    bankSaving.value = false
   }
 }
 
@@ -555,6 +537,17 @@ const canEdit = can('money')
         @saved="municipalityCodes = $event"
       />
 
+      <SiteSettingSwitch
+        v-model="automaticBooking"
+        field="automatic_booking"
+        data-testid="automatic-booking"
+        :legend="t('admin.economySettings.automaticBookingLabel')"
+        :label="t('admin.economySettings.automaticBooking')"
+        :hint="t('admin.economySettings.automaticBookingHint')"
+        :ready="settingsLoaded"
+        @error="error = $event"
+      />
+
       <fieldset class="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-3">
         <legend class="px-1 text-xs font-semibold text-slate-700">
           {{ t('admin.economySettings.paymentAccountsLabel') }}
@@ -680,29 +673,16 @@ const canEdit = can('money')
         </p>
       </fieldset>
 
-      <fieldset class="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-3" data-testid="bank-auto-assign">
-        <legend class="px-1 text-xs font-semibold text-slate-700">
-          {{ t('admin.economySettings.bankAutoAssignLabel') }}
-        </legend>
-        <div class="flex flex-wrap items-center gap-3">
-          <label class="flex items-center gap-2 text-sm text-slate-700">
-            <input v-model="bankAutoAssign" type="checkbox" @change="bankSaved = false" />
-            {{ t('admin.economySettings.bankAutoAssign') }}
-          </label>
-          <button
-            type="button"
-            class="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
-            :disabled="bankSaving"
-            @click="saveBankAutoAssign"
-          >
-            {{ t('common.save') }}
-          </button>
-          <span v-if="bankSaved" class="text-sm font-medium text-green-600">
-            {{ t('common.saved') }}
-          </span>
-        </div>
-        <p class="text-xs text-slate-500">{{ t('admin.economySettings.bankAutoAssignHint') }}</p>
-      </fieldset>
+      <SiteSettingSwitch
+        v-model="bankAutoAssign"
+        field="bank_auto_assign"
+        data-testid="bank-auto-assign"
+        :legend="t('admin.economySettings.bankAutoAssignLabel')"
+        :label="t('admin.economySettings.bankAutoAssign')"
+        :hint="t('admin.economySettings.bankAutoAssignHint')"
+        :ready="settingsLoaded"
+        @error="error = $event"
+      />
 
       <ExemptionsSettingsPanel />
     </section>
