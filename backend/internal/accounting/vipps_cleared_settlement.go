@@ -322,9 +322,14 @@ func refuseVippsSettlementEntryTx(ctx context.Context, tx pgx.Tx, clubID, entryI
 // voided: unlinked, it is back in the Vipps queue, and the fakturas it settled
 // are reopened. Left linked it would read as booked for ever (no queue lists
 // it, its settlement could not clear) and keep those fakturas paid.
+//
+// Person-only (VoidLedgerEntry): the void is a person's undo, so the charge
+// is marked auto_declined_at and the order reconcile does not book it again
+// (ACC-13(b)); a person books it in Tildel.
 func releaseVoidedChargeTx(ctx context.Context, tx pgx.Tx, clubID, rowID, entryID string, fakturas []string) error {
 	tag, err := tx.Exec(ctx,
-		`UPDATE vipps_import_rows SET journal_entry_id = NULL, invoice_id = NULL, auto_assign_rule = NULL
+		`UPDATE vipps_import_rows
+		    SET journal_entry_id = NULL, invoice_id = NULL, auto_assign_rule = NULL, auto_declined_at = now()
 		  WHERE id = $1 AND club_id = $2 AND journal_entry_id = $3`,
 		rowID, clubID, entryID)
 	if err != nil {

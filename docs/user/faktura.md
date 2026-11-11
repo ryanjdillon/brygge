@@ -482,7 +482,7 @@ Some members pay by plain transfer, without the KID. Turn on **Bokfør entydige 
 
 It never books a payment that mentions a KID or a faktura number (the normal matching handles those), a payment from the club's own accounts, two payments for the same faktura, a row that seems to belong with another row (**Mogleg par**), an imported faktura from the old system, or a payment in a closed year. Everything else stays in **Tildel**.
 
-The upload and **Synk bank** results list what was booked, and each line has **Angre**, which puts the payment back in Tildel and reopens the faktura. The setting is separate from the Vipps one and is off until you turn it on. Until then, Brygge keeps using its older rule that books a payment whose sender has the same full name as one member with one open faktura of that amount.
+The upload and **Synk bank** results list what was booked, and each line has **Angre**, which puts the payment back in Tildel and reopens the faktura. Once you have undone a booking, Brygge never books that payment by itself again: it waits in Tildel until you book it yourself, and the results count it as undone by a person. This goes for every booking Brygge makes by itself (KID payments, transfers between the club's accounts, mapping rules, Vipps payouts too). The setting is separate from the Vipps one and is off until you turn it on. Until then, Brygge keeps using its older rule that books a payment whose sender has the same full name as one member with one open faktura of that amount.
 
 ### Teaching Brygge who a payer is (Hugs betalaren)
 
@@ -523,6 +523,15 @@ Some bank rows only make sense together: a harbour-share buy-back paid out and t
 - **Angre** on either row unbooks both.
 - The two rows must be on the same bank account and in the same fiscal year, and must not net to zero (that is a transfer between the club's own accounts: use **Synk bank** or dismiss them).
 
+### Transfers between the club's own accounts
+
+**Synk bank** pairs a transfer between two of the club's bank accounts by itself (the row going out of one account and the row coming into the other, same day and amount) and books one bilag for both. If you press **Angre** on such a transfer, both rows go back to **Tildel** and **Synk bank** no longer pairs them: an undo is final for the automatic booking. Tildel cannot pair the two rows again by hand (**Lag bilag** offers no bank accounts). To book the transfer yourself:
+
+1. On the **Bilag** page, make one **Nytt bilag** for the pair, on the transfer date: debit the account the money went into, credit the account it came from, the transfer amount. The bilag must be in an open period. Write the two rows' date, amount and bank text in its description, so the bilag can be traced to them (a dismissal in Tildel has no note of its own).
+2. In **Tildel**, dismiss both rows with **Avvis** and the reason **Intern overføring**.
+
+Make only one bilag for the pair; don't also make a **Nytt bilag** per row, and don't book each row on its own to the other bank account: either books the transfer twice.
+
 ### Vipps reconciliation cascade
 
 For Vipps payouts (the consolidated daily Utb. row in the bank statement), the reconciliation books a bilag per payer using this cascade (DIL-367). Vipps bilags are posted as soon as they are created, so they count in the reports immediately (BRY-339):
@@ -543,7 +552,7 @@ Turn on **Bokfør entydige Vipps-betalinger automatisk** under **Admin → Økon
 
 If an amount fits several categories (one night at a guest berth or a motorhome spot at the same price, for example), choose which category wins under **Når et beløp passer flere priskategorier**, or leave it for review. Prices for members only are booked automatically only when the payer is a known member.
 
-Everything else stays in **Tildel**. The upload and Synk Vipps results list what was booked, and each line has **Angre**, which puts the payment back in Tildel and reopens the faktura.
+Everything else stays in **Tildel**. The upload and Synk Vipps results list what was booked, and each line has **Angre**, which puts the payment back in Tildel and reopens the faktura. Once you have undone a payment (with **Angre**, or by annulling its bilag in the journal), Brygge never books it by itself again, also not a payment it booked from a checkout order: book it yourself in Tildel.
 
 **Bokføringen venter.** Only one Vipps booking runs at a time. If another is still running when you upload or sync, Brygge waits up to ten seconds for it. Then:
 
@@ -559,6 +568,7 @@ You do not need to clear the daily Vipps payout (the **Utb. … Vippsnr …** de
 - **Ingen bankinnbetaling** — the bank statement with that deposit is not uploaded yet, or the deposit text has no Utb./Vippsnr reference.
 - **Bare en foreløpig «Overførsel»** — the deposit is in the bank only as a provisional row (see below). Export that day again and upload it.
 - **Ikke importert** — the bank deposit names a settlement whose Vipps export is not uploaded yet.
+- **Innbetalingen ble angret av en person** — you undid this deposit's clearing (**Angre innbetalingen**, below), so Brygge leaves it. Book a payment of the settlement again and the next sync clears it, or clear it yourself with **Utlign utbetaling** on the deposit in Tildel.
 - **Oppgjøret går ikke i null på Vipps-kontoen** — the booked payments, the Vipps fee and the deposit do not add up, so nothing is booked and the deposit stays open. There is nothing to press in the app for it yet. Two causes: a payment was dismissed although Vipps paid it out (the dismissal cannot be undone in the app yet: an operator undismisses it in the database, and BRY-573 tracks an in-app undo), or the settlement holds a refund or reversal made in the Vipps portal (booking such rows is tracked in BRY-574). Dismiss a Vipps payment only when Vipps left it out of the payout.
 
 ### Angre on a payment in a settlement that is already cleared
@@ -573,7 +583,7 @@ The message has an **Angre innbetalingen** button. After you confirm, it:
 - puts the bank deposit **Utb. … Vippsnr …** back in **Tildel**,
 - keeps the Vipps fee bilag as it is.
 
-Then the Angre you started runs again. Book the payment again (to the right faktura or account). The next sync clears the payout again once every payment in the settlement is booked, with a new bank bilag and no second fee.
+Then the Angre you started runs again. Book the payment again (to the right faktura or account). Because you undid the deposit, Brygge does not clear it by itself again until you book a payment of that settlement: booking it again is what tells Brygge you are done. The next sync then clears the payout again once every payment in the settlement is booked, with a new bank bilag and no second fee. If you do not book a payment again (you dismissed it as refunded, for example), nothing clears the deposit by itself: clear it with **Utlign utbetaling** on the deposit in Tildel.
 
 ## Reference
 

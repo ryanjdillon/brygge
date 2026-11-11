@@ -188,7 +188,9 @@ func (h *AccountingHandler) HandleCreateVippsChargeBilag(w http.ResponseWriter, 
 // the charge returns to the Tildel queue and a faktura it settled reopens.
 // With released_from_backlog the charge must be a 1500-parked draft the Vipps
 // backlog run refused (BRY-392), in an open period, and the audit row says
-// so. The settled-faktura test on such drafts runs either way.
+// so. The settled-faktura test on such drafts runs either way. Either way the
+// charge is declined for the automatic passes (ACC-13(b)): it waits for a
+// person's booking. UnassignVippsCharge is person-only.
 func (h *AccountingHandler) HandleUnassignVippsCharge(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)

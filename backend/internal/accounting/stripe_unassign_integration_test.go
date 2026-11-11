@@ -403,8 +403,10 @@ func TestVoidLedgerEntryRefusesStripeEntries(t *testing.T) {
 
 // A payout's members are unassigned only once the payout clearing is
 // undone from its bank deposit (UnassignBankRow, which the ledger refusal
-// does not touch: the clearing entry is sourced to the bank row). The held
-// member then keeps the payout waiting.
+// does not touch: the clearing entry is sourced to the bank row). The undone
+// deposit is declined for the sweep (ACC-13(b), BRY-565), so the sweep skips
+// the payout as declined first; with the decline lifted, the held member
+// keeps the payout waiting.
 func TestUnassignStripeMemberAfterBankUnassign(t *testing.T) {
 	f := newStripeFixture(t)
 	ctx := context.Background()
@@ -439,9 +441,24 @@ func TestUnassignStripeMemberAfterBankUnassign(t *testing.T) {
 	if _, err := f.unassign(charge); err != nil {
 		t.Fatalf("unassign after the bank unassign: %v", err)
 	}
+	// The deposit's undo was a person's (ACC-13(b)): the sweep leaves the
+	// payout to a person, before it would wait on the held charge.
 	res := f.sweep(t)
+	if sweepCounts(res) != [4]int{0, 0, 1, 0} || res.DeclinedSkipped != 1 {
+		t.Errorf("sweep = %+v, want the payout skipped as declined", res)
+	}
+	// Lift the decline as a person's booking of the deposit would (the
+	// test only needs the readiness verdict): the held charge keeps the
+	// payout waiting, and nothing is booked.
+	if _, err := f.club.Pool.Exec(ctx, `UPDATE bank_import_rows SET auto_declined_at = NULL WHERE id = $1`, row); err != nil {
+		t.Fatal(err)
+	}
+	res = f.sweep(t)
 	if sweepCounts(res) != [4]int{0, 1, 0, 0} {
-		t.Errorf("sweep = %+v, want the payout waiting on the held charge", res)
+		t.Errorf("sweep without the decline = %+v, want the payout waiting on the held charge", res)
+	}
+	if got := bankRowEntry(t, f.club, row); got != "" {
+		t.Errorf("the waiting payout's deposit was booked: %q", got)
 	}
 	if b := f.accountBalance(t, "1580"); b != 0 {
 		t.Errorf("1580 nets %v, want 0 with everything undone", b)

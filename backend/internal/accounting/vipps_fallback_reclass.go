@@ -606,6 +606,9 @@ func (s *Service) applyFallbackReclassOne(ctx context.Context, clubID, actor str
 		it.Outcome = FallbackOutcomeReclassified
 		it.NewEntryNumber = out.newNumber
 		it.ReversalEntryNumber = out.reversalNumber
+		// A person's booking of a charge in the settlement: lift a decline
+		// from its payout deposit (ACC-11), after the commit.
+		s.liftSettlementDepositDecline(ctx, clubID, c.rowID)
 	}
 }
 

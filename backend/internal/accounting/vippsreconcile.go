@@ -355,15 +355,16 @@ var ErrVippsRowAlreadyBooked = errors.New( //nolint:staticcheck // ST1005: a use
 // entry (BRY-339). The caller is responsible for passing the final line set.
 // If periodOverride is empty, the period is auto-resolved from the bank row's
 // date (and auto-created as calendar-year if missing): it is a person's
-// confirm, so it may open the year (periodMayCreate). Bank sync's automatic
-// pass calls reconcileVippsConfirm with periodExistingOnly instead.
+// confirm, so it may open the year, and it books a deposit or charge a
+// person's undo declined (lifting the decline). Bank sync's automatic pass
+// calls reconcileVippsConfirm with automaticBooking instead.
 //
 // The preview may be stale or edited, so every faktura a line settles is
 // locked and re-checked inside the booking transaction, as a manual assign
 // does (lockManual): a faktura voided, credited, paid or booked since the
 // preview is refused with nothing booked.
 func (s *Service) ReconcileVippsConfirm(ctx context.Context, clubID, bankRowID, periodOverride, createdBy string, lines []VippsReconcileLine) (string, error) {
-	return s.reconcileVippsConfirm(ctx, clubID, bankRowID, periodOverride, createdBy, lines, true, periodMayCreate)
+	return s.reconcileVippsConfirm(ctx, clubID, bankRowID, periodOverride, createdBy, lines, true, personBooking)
 }
 
 // reconcileVippsConfirm is ReconcileVippsConfirm with posting optional.
@@ -371,12 +372,16 @@ func (s *Service) ReconcileVippsConfirm(ctx context.Context, clubID, bankRowID, 
 // posting a pre-existing backlog is a supervised step (BRY-341), not a side
 // effect of reclassifying it.
 //
-// policy says whether the booking may open the bank row's fiscal year:
+// mode.policy says whether the booking may open the bank row's fiscal year:
 // periodMayCreate for a person's confirm and the supervised resync,
 // periodExistingOnly for bank sync, which then gets *noFiscalYearError for a
 // year that does not exist and *periodNotOpenError for one closed or locked,
-// with nothing booked (BRY-578).
-func (s *Service) reconcileVippsConfirm(ctx context.Context, clubID, bankRowID, periodOverride, createdBy string, lines []VippsReconcileLine, post bool, policy periodPolicy) (string, error) { //nolint:gocognit,cyclop // re-checks and posts each previewed match in one transaction; split tracked in BRY-424
+// with nothing booked (BRY-578). mode.auto (bank sync, automaticBooking)
+// refuses a deposit or charge a person declined: the guarded links add
+// auto_declined_at IS NULL, and a link lost to a decline is errAutoDeclined.
+// Every link lifts the decline in the same statement (the transaction rolls
+// it back with the entry).
+func (s *Service) reconcileVippsConfirm(ctx context.Context, clubID, bankRowID, periodOverride, createdBy string, lines []VippsReconcileLine, post bool, mode bookingMode) (string, error) { //nolint:gocognit,cyclop // re-checks and posts each previewed match in one transaction; split tracked in BRY-424
 	if len(lines) == 0 {
 		return "", fmt.Errorf("at least one line is required")
 	}
@@ -424,16 +429,20 @@ func (s *Service) reconcileVippsConfirm(ctx context.Context, clubID, bankRowID, 
 		bankDate    time.Time
 		description string
 		existing    *string
+		declined    bool
 	)
 	if err := tx.QueryRow(ctx,
-		`SELECT row_date, description, journal_entry_id
+		`SELECT row_date, description, journal_entry_id, auto_declined_at IS NOT NULL
 		 FROM bank_import_rows WHERE id = $1 AND club_id = $2`,
 		bankRowID, clubID,
-	).Scan(&bankDate, &description, &existing); err != nil {
+	).Scan(&bankDate, &description, &existing, &declined); err != nil {
 		return "", fmt.Errorf("loading bank row: %w", err)
 	}
 	if existing != nil {
 		return "", fmt.Errorf("bank row already linked to journal entry")
+	}
+	if mode.auto && declined {
+		return "", errAutoDeclined
 	}
 
 	// Fakturas before the period and the entry. An imported faktura is
@@ -471,7 +480,7 @@ func (s *Service) reconcileVippsConfirm(ctx context.Context, clubID, bankRowID, 
 
 	// On tx, which holds the faktura locks (BRY-433).
 	var periodID string
-	if policy == periodMayCreate {
+	if mode.policy == periodMayCreate {
 		var periodStatus string
 		periodID, periodStatus, err = resolvePeriodIn(ctx, tx, clubID, bankDate, periodOverride)
 		if err != nil {
@@ -501,15 +510,26 @@ func (s *Service) reconcileVippsConfirm(ctx context.Context, clubID, bankRowID, 
 		return "", fmt.Errorf("creating journal entry: %w", err)
 	}
 
+	guard := ""
+	if mode.auto {
+		guard = ` AND auto_declined_at IS NULL`
+	}
 	tag, err := tx.Exec(ctx,
-		`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true
-		  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL`,
+		`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true, auto_declined_at = NULL
+		  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL`+guard,
 		entry.ID, bankRowID, clubID,
 	)
 	if err != nil {
 		return "", fmt.Errorf("linking bank row: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
+		if mode.auto {
+			if d, derr := bankRowDeclinedIn(ctx, tx, clubID, []string{bankRowID}); derr != nil {
+				return "", derr
+			} else if d {
+				return "", errAutoDeclined
+			}
+		}
 		return "", fmt.Errorf("bank row is already booked")
 	}
 
@@ -524,14 +544,26 @@ func (s *Service) reconcileVippsConfirm(ctx context.Context, clubID, bankRowID, 
 			invoiceID = &l.LinkedInvoiceID
 		}
 		tag, err := tx.Exec(ctx,
-			`UPDATE vipps_import_rows SET journal_entry_id = $1, invoice_id = $4::uuid
-			  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL`,
+			`UPDATE vipps_import_rows SET journal_entry_id = $1, invoice_id = $4::uuid, auto_declined_at = NULL
+			  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL`+guard,
 			entry.ID, l.VippsRowID, clubID, invoiceID,
 		)
 		if err != nil {
 			return "", fmt.Errorf("linking vipps row: %w", err)
 		}
 		if tag.RowsAffected() != 1 {
+			if mode.auto {
+				var d bool
+				if derr := tx.QueryRow(ctx,
+					`SELECT EXISTS (SELECT 1 FROM vipps_import_rows
+					                 WHERE id::text = $1 AND club_id = $2 AND journal_entry_id IS NULL AND auto_declined_at IS NOT NULL)`,
+					l.VippsRowID, clubID,
+				).Scan(&d); derr != nil {
+					return "", fmt.Errorf("reading the charge's decline: %w", derr)
+				} else if d {
+					return "", errAutoDeclined
+				}
+			}
 			return "", ErrVippsRowAlreadyBooked
 		}
 	}

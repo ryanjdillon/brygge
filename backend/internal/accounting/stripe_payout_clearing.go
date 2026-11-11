@@ -74,6 +74,11 @@ type StripePayoutSweepResult struct {
 	Skipped []StripePayoutSweepItem `json:"skipped"`
 	// Failed payouts were ready but posting failed; the next run retries.
 	Failed []StripePayoutSweepItem `json:"failed"`
+	// DeclinedSkipped counts the deposits skipped because a person undid
+	// their clearing (auto_declined_at, ACC-13(b)); they are in Skipped with
+	// stripeReasonDeclined and wait for a person's Avstem mot
+	// Stripe-utbetaling.
+	DeclinedSkipped int `json:"declined_skipped"`
 	// Error is set when the sweep itself could not run.
 	Error string `json:"error,omitempty"`
 
@@ -145,6 +150,9 @@ func (s *Service) clearStripePayouts(ctx context.Context, clubID, actorID string
 			continue
 		case stripePlanSkipped:
 			res.Skipped = append(res.Skipped, item)
+			if pm.declined {
+				res.DeclinedSkipped++
+			}
 			continue
 		}
 		out, err := s.clearStripePayout(ctx, clubID, actorID, pm.payout.id, pm.row.id, automaticStripeClear)
@@ -163,6 +171,9 @@ func (s *Service) clearStripePayouts(ctx context.Context, clubID, actorID string
 		case out.state == stripePlanSkipped:
 			item.Reason = out.reason
 			res.Skipped = append(res.Skipped, item)
+			if out.code == stripeClearDeclined {
+				res.DeclinedSkipped++
+			}
 		default:
 			// Another clearing (or a person) took the row or the payout
 			// first; nothing new was posted, and the next sweep reports
@@ -171,8 +182,11 @@ func (s *Service) clearStripePayouts(ctx context.Context, clubID, actorID string
 	}
 	for _, r := range plan.orphans {
 		res.Skipped = append(res.Skipped, StripePayoutSweepItem{
-			Amount: oreToKr(r.cents), BankRowID: r.id, BankDate: r.date.Format("2006-01-02"), Reason: stripeReasonNoPayout,
+			Amount: oreToKr(r.cents), BankRowID: r.id, BankDate: r.date.Format("2006-01-02"), Reason: r.orphanReason(),
 		})
+		if r.declined {
+			res.DeclinedSkipped++
+		}
 	}
 	return res, nil
 }
@@ -207,7 +221,7 @@ func (s *Service) stripePayoutRowReasons(ctx context.Context, clubID string, pay
 		}
 	}
 	for _, r := range plan.orphans {
-		out[r.id] = stripeRowStatus{reason: stripeReasonNoPayout, byHand: true}
+		out[r.id] = stripeRowStatus{reason: r.orphanReason(), byHand: true}
 	}
 	return out, nil
 }
@@ -234,6 +248,18 @@ type stripeDeposit struct {
 	id    string
 	date  time.Time
 	cents int64
+	// declined: a person undid the deposit's clearing (auto_declined_at,
+	// ACC-13(b)). It still takes part in matching, so ambiguity is judged on
+	// every deposit, but the sweep never clears it: only a person does.
+	declined bool
+}
+
+// orphanReason is what the sweep says of a deposit no payout matches.
+func (d stripeDeposit) orphanReason() string {
+	if d.declined {
+		return stripeReasonDeclined
+	}
+	return stripeReasonNoPayout
 }
 
 // stripePayoutMatch is one payout with what the plan decided for it.
@@ -245,6 +271,9 @@ type stripePayoutMatch struct {
 	rowIDs []string
 	state  int
 	reason string
+	// declined: the one matching deposit is declined, so the payout is
+	// skipped with stripeReasonDeclined.
+	declined bool
 }
 
 func (m *stripePayoutMatch) item() StripePayoutSweepItem {
@@ -319,6 +348,11 @@ func matchStripePayouts(cands []stripePayoutCand, deposits []stripeDeposit) *str
 			pm.state, pm.reason = stripePlanSkipped, stripeReasonManyRows
 		case len(rowsOf[pi]) == 1 && len(payoutsOf[rowsOf[pi][0]]) > 1:
 			pm.state, pm.reason = stripePlanSkipped, stripeReasonManyPayouts
+		case len(rowsOf[pi]) == 1 && deposits[rowsOf[pi][0]].declined:
+			// A person undid this pair's clearing: the sweep leaves it to a
+			// person (ClearStripePayoutManually), not to "no deposit".
+			pm.row = &deposits[rowsOf[pi][0]]
+			pm.state, pm.reason, pm.declined = stripePlanSkipped, stripeReasonDeclined, true
 		case len(rowsOf[pi]) == 1:
 			pm.row = &deposits[rowsOf[pi][0]]
 			pm.state = stripePlanReady
@@ -407,7 +441,8 @@ func stripeDepositEligibleSQL() string {
 func loadStripeDeposits(ctx context.Context, q dbtx, clubID string, payouts providerPayouts) ([]stripeDeposit, error) {
 	rows, err := q.Query(ctx,
 		`SELECT bir.id, bir.row_date, round(bir.amount * 100)::bigint,
-		        COALESCE(bir.description, ''), COALESCE(bir.counterpart, '')
+		        COALESCE(bir.description, ''), COALESCE(bir.counterpart, ''),
+		        bir.auto_declined_at IS NOT NULL
 		   FROM bank_import_rows bir
 		  WHERE bir.club_id = $1 AND `+stripeDepositEligibleSQL()+`
 		  ORDER BY bir.row_date, bir.id`,
@@ -420,7 +455,7 @@ func loadStripeDeposits(ctx context.Context, q dbtx, clubID string, payouts prov
 	for rows.Next() {
 		var d stripeDeposit
 		var desc, counterpart string
-		if err := rows.Scan(&d.id, &d.date, &d.cents, &desc, &counterpart); err != nil {
+		if err := rows.Scan(&d.id, &d.date, &d.cents, &desc, &counterpart, &d.declined); err != nil {
 			return nil, fmt.Errorf("scanning stripe deposit: %w", err)
 		}
 		if payouts.stripeOnly(desc, counterpart, d.cents) {
@@ -591,7 +626,10 @@ func plural(n int, one, many string) string {
 type stripeClearOpts struct {
 	// requireAutomatic refuses a manual payout and a deposit outside the
 	// arrival window. Stripe cannot list what a manual payout paid out, so
-	// nothing but a person proves the clearing account holds it.
+	// nothing but a person proves the clearing account holds it. It also
+	// refuses a deposit a person declined (auto_declined_at, ACC-13(b)),
+	// under the row lock and in the guarded link; a person's manual clearing
+	// books it and lifts the decline.
 	requireAutomatic bool
 	// requireNetSum wants the members listed and adding up to the payout.
 	// A person may clear one that does not (funds of a failed payout
@@ -636,6 +674,9 @@ const (
 	stripeClearRowNotFound     = "bank_row_not_found"
 	stripeClearPayoutNotFound  = "payout_not_found"
 	stripeClearRaced           = "raced"
+	// stripeClearDeclined: the sweep found the deposit declined by a
+	// person's undo (skipped, never raced).
+	stripeClearDeclined = "declined"
 )
 
 // stripeVerdict is what stripePayoutReadiness decided.
@@ -804,7 +845,7 @@ func (s *Service) clearStripePayout(ctx context.Context, clubID, actorID, payout
 	if err != nil {
 		return stripeClearOutcome{}, fmt.Errorf("creating journal entry: %w", err)
 	}
-	if lost, err := linkStripePayoutTx(ctx, tx, clubID, entry.ID, bankRowID, payoutRowID, opts.autoMatched); err != nil || lost {
+	if lost, err := linkStripePayoutTx(ctx, tx, clubID, entry.ID, bankRowID, payoutRowID, opts); err != nil || lost {
 		return racedOutcome(stripeClearRaced), err
 	}
 	if err := postJournalEntryTx(ctx, tx, clubID, entry.ID, actorID); errors.Is(err, ErrPeriodClosed) {
@@ -859,6 +900,11 @@ func lockStripeClearPairTx(ctx context.Context, tx pgx.Tx, clubID, payoutRowID, 
 	switch {
 	case !row.eligible:
 		return row, lockedStripePair{stripeClearOutcome: racedOutcome(StripeClearBankRowNotEligible)}, nil
+	case opts.requireAutomatic && row.declined:
+		// Read under the row lock, so a person's undo that landed after the
+		// plan is seen here.
+		return row, lockedStripePair{stripeClearOutcome: stripeClearOutcome{
+			state: stripePlanSkipped, reason: stripeReasonDeclined, code: stripeClearDeclined, payoutID: p.payoutID}}, nil
 	case opts.requireAutomatic && (!p.automatic || !inStripePayoutWindow(row.date, p.arrival)):
 		return row, lockedStripePair{stripeClearOutcome: racedOutcome(stripeClearNotMatched)}, nil
 	case row.cents != p.amountOre:
@@ -876,6 +922,8 @@ type lockedStripeDeposit struct {
 	// eligible: incoming, unbooked, undismissed, not refund-paired, not
 	// provisional and not a Vipps settlement.
 	eligible bool
+	// declined: a person undid the deposit's clearing (auto_declined_at).
+	declined bool
 }
 
 // lockStripeDepositTx locks the bank row; found is false for a row that is
@@ -884,13 +932,14 @@ func lockStripeDepositTx(ctx context.Context, tx pgx.Tx, clubID, bankRowID strin
 	err = tx.QueryRow(ctx,
 		`SELECT bir.row_date, round(bir.amount * 100)::bigint, bi.bank_account_code,
 		        COALESCE(bir.description, ''), COALESCE(bir.counterpart, ''),
-		        COALESCE((`+stripeDepositEligibleSQL()+`), false)
+		        COALESCE((`+stripeDepositEligibleSQL()+`), false),
+		        bir.auto_declined_at IS NOT NULL
 		   FROM bank_import_rows bir
 		   JOIN bank_imports bi ON bi.id = bir.bank_import_id
 		  WHERE bir.id = $1 AND bir.club_id = $2
 		  FOR UPDATE OF bir`,
 		bankRowID, clubID,
-	).Scan(&d.date, &d.cents, &d.bankAccount, &d.description, &d.counterpart, &d.eligible)
+	).Scan(&d.date, &d.cents, &d.bankAccount, &d.description, &d.counterpart, &d.eligible, &d.declined)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return d, false, nil
 	}
@@ -934,11 +983,17 @@ func lockStripePayoutTx(ctx context.Context, tx pgx.Tx, clubID, payoutRowID stri
 // marked booked rather than left unbooked for ever. It is not a member and
 // never blocks a clearing; a payout ingested without it is cleared the
 // same.
-func linkStripePayoutTx(ctx context.Context, tx pgx.Tx, clubID, entryID, bankRowID, payoutRowID string, autoMatched bool) (raced bool, err error) {
-	tag, err := tx.Exec(ctx,
-		`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = $4
-		  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL AND dismissed_at IS NULL`,
-		entryID, bankRowID, clubID, autoMatched)
+//
+// The bank row link lifts a person's decline (the transaction rolls it back
+// with the entry); under opts.requireAutomatic (the sweep) it refuses a
+// declined row instead, as lockStripeClearPairTx already did under the lock.
+func linkStripePayoutTx(ctx context.Context, tx pgx.Tx, clubID, entryID, bankRowID, payoutRowID string, opts stripeClearOpts) (raced bool, err error) {
+	linkSQL := `UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = $4, auto_declined_at = NULL
+		  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL AND dismissed_at IS NULL`
+	if opts.requireAutomatic {
+		linkSQL += ` AND auto_declined_at IS NULL`
+	}
+	tag, err := tx.Exec(ctx, linkSQL, entryID, bankRowID, clubID, opts.autoMatched)
 	if err != nil {
 		return false, fmt.Errorf("linking bank row: %w", err)
 	}

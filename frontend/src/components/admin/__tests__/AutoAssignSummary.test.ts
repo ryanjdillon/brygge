@@ -129,4 +129,16 @@ describe('AutoAssignSummary', () => {
     expect(wrapper.find('[data-testid="cleared-settlement-refusal"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('admin.bankImports.autoAssignUndone')
   })
+
+  it('says how many payments wait because a person undid them', () => {
+    const wrapper = mountWithPlugins(AutoAssignSummary, {
+      props: { source: 'bank', result: { ...bankResult, declined_skipped: 1 } },
+    })
+    expect(wrapper.find('[data-testid="bank-auto-assign-declined"]').text()).toContain('admin.bankImports.declinedNotice')
+  })
+
+  it('shows no declined line when nothing was undone', () => {
+    const wrapper = mountWithPlugins(AutoAssignSummary, { props: { source: 'vipps', result: vippsResult } })
+    expect(wrapper.find('[data-testid="vipps-auto-assign-declined"]').exists()).toBe(false)
+  })
 })

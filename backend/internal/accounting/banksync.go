@@ -96,13 +96,20 @@ type BankSyncResult struct {
 	// KIDSkippedSettled counts rows the KID cascade matched to a faktura
 	// that turned out to be settled once it was locked (most likely a
 	// double payment); they stay in Tildel.
-	KIDSkippedSettled int      `json:"kid_skipped_settled"`
-	VippsReconciled   int      `json:"vipps_reconciled"`
-	VippsUnbalanced   int      `json:"vipps_unbalanced"`
-	TransfersLinked   int      `json:"transfers_linked"`
-	PaymentsLinked    int      `json:"payments_linked"`
-	DraftsReleased    int      `json:"drafts_released"`
-	ClosedPeriods     []string `json:"closed_periods"`
+	KIDSkippedSettled int `json:"kid_skipped_settled"`
+	VippsReconciled   int `json:"vipps_reconciled"`
+	VippsUnbalanced   int `json:"vipps_unbalanced"`
+	// LegacyVippsDeclined counts the legacy Vipps deposits (pass 2) a
+	// person's undo took out of the automatic passes (auto_declined_at,
+	// ACC-13(b)). The per-charge sweep, bank auto-assign and the Stripe sweep
+	// report their own declined_skipped in VippsPayouts, AutoAssign and
+	// StripePayouts; the KID cascade and transfer pairing leave declined rows
+	// out without a count.
+	LegacyVippsDeclined int      `json:"legacy_vipps_declined"`
+	TransfersLinked     int      `json:"transfers_linked"`
+	PaymentsLinked      int      `json:"payments_linked"`
+	DraftsReleased      int      `json:"drafts_released"`
+	ClosedPeriods       []string `json:"closed_periods"`
 	// MissingPeriods lists the years (e.g. "2027") of payments the sync left
 	// unbooked because no fiscal period exists for them: the KID cascade,
 	// the legacy Vipps pass, transfer pairing, bank auto-assign and the
@@ -205,6 +212,7 @@ func (s *Service) BankSync(ctx context.Context, clubID, createdBy string) (*Bank
 	}
 	res.VippsReconciled = vipps.matched
 	res.VippsUnbalanced = vipps.unbalanced
+	res.LegacyVippsDeclined = vipps.declined
 	addYears(closedYears, vipps.closedYears)
 	addYears(missingYears, vipps.missingYears)
 
@@ -679,6 +687,8 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string, 
 // vippsSyncResult is what syncVippsReconciliations booked and left.
 type vippsSyncResult struct {
 	matched, unbalanced int
+	// declined counts deposits a person's undo took out of the pass.
+	declined int
 	// closedYears and missingYears are the years of deposits left because
 	// their fiscal period is closed or locked, or does not exist; the pass
 	// never opens one (BRY-578).
@@ -687,7 +697,9 @@ type vippsSyncResult struct {
 
 // syncVippsReconciliations is bank sync's legacy Vipps pass (pass 2): every
 // unbooked "Utb. N Vippsnr M" deposit whose settlement previews balanced is
-// confirmed as one bilag, into an existing open period only.
+// confirmed as one bilag, into an existing open period only. A deposit a
+// person's undo declined is skipped and counted (also when the decline lands
+// while the pass previews: the confirm's guarded link refuses it).
 func (s *Service) syncVippsReconciliations(ctx context.Context, clubID, createdBy string) (vippsSyncResult, error) {
 	var res vippsSyncResult
 	// Clubs on the per-charge model own Vipps payout reconciliation through the
@@ -702,7 +714,7 @@ func (s *Service) syncVippsReconciliations(ctx context.Context, clubID, createdB
 	}
 
 	rows, qerr := s.db.Query(ctx,
-		`SELECT id, row_date FROM bank_import_rows
+		`SELECT id, row_date, auto_declined_at IS NOT NULL FROM bank_import_rows
 		 WHERE club_id = $1
 		   AND journal_entry_id IS NULL
 		   AND description ~* '^utb\.\s*[0-9]+\s+vippsnr\s+[0-9]+'
@@ -715,13 +727,14 @@ func (s *Service) syncVippsReconciliations(ctx context.Context, clubID, createdB
 	defer rows.Close()
 
 	type candidate struct {
-		id   string
-		date time.Time
+		id       string
+		date     time.Time
+		declined bool
 	}
 	var cands []candidate
 	for rows.Next() {
 		var c candidate
-		if err := rows.Scan(&c.id, &c.date); err == nil {
+		if err := rows.Scan(&c.id, &c.date, &c.declined); err == nil {
 			cands = append(cands, c)
 		}
 	}
@@ -730,6 +743,10 @@ func (s *Service) syncVippsReconciliations(ctx context.Context, clubID, createdB
 	closedYears := map[int]bool{}
 	missingYears := map[int]bool{}
 	for _, c := range cands {
+		if c.declined {
+			res.declined++
+			continue
+		}
 		preview, perr := s.ReconcileVippsPreview(ctx, clubID, c.id)
 		if perr != nil {
 			continue
@@ -748,10 +765,13 @@ func (s *Service) syncVippsReconciliations(ctx context.Context, clubID, createdB
 			closedYears[preview.PeriodYear] = true
 			continue
 		}
-		_, cerr := s.reconcileVippsConfirm(ctx, clubID, c.id, "", createdBy, preview.Lines, true, periodExistingOnly)
+		_, cerr := s.reconcileVippsConfirm(ctx, clubID, c.id, "", createdBy, preview.Lines, true, automaticBooking)
 		switch {
 		case cerr == nil:
 			res.matched++
+		case errors.Is(cerr, errAutoDeclined):
+			// A person undid the deposit or a charge while the pass previewed.
+			res.declined++
 		case errors.Is(cerr, errNoFiscalPeriod):
 			// The period was deleted after the preview.
 			missingYears[c.date.Year()] = true

@@ -385,6 +385,11 @@ func (s *Service) VoidJournalEntry(ctx context.Context, clubID, entryID, voidedB
 // settled. The checks read the entry under the
 // lock the void takes. Internal paths (the unassigns, faktura reversal)
 // call voidJournalEntryTx or VoidJournalEntry directly.
+//
+// Person-only (ACC-13(b)): a released charge is marked auto_declined_at, so
+// no automatic pass books it again until a person does. Its caller is the
+// ledger's void (HandleVoidJournalEntry); an automatic pass must never call it
+// (BRY-567).
 func (s *Service) VoidLedgerEntry(ctx context.Context, clubID, entryID, voidedBy string) (*JournalEntry, error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {

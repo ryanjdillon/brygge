@@ -25,12 +25,18 @@ type VippsPayoutSweepResult struct {
 	// Skipped settlements cannot be cleared from what is imported: a bank
 	// deposit naming a settlement that was never imported or already cleared
 	// by another deposit, several settlements sharing a booking date, an
-	// imported payout with no usable bank deposit carrying its reference, or
-	// a deposit dated in a year with no fiscal year (the sweep never opens one).
+	// imported payout with no usable bank deposit carrying its reference, a
+	// deposit dated in a year with no fiscal year (the sweep never opens one),
+	// or a deposit whose clearing a person undid (counted in DeclinedSkipped).
 	Skipped []VippsPayoutSweepItem `json:"skipped"`
 	// Failed settlements were ready but posting refused (amount mismatch,
 	// closed period, a concurrent clear); the next sweep retries them.
 	Failed []VippsPayoutSweepItem `json:"failed"`
+	// DeclinedSkipped counts the deposits skipped because a person undid
+	// their clearing ("Angre innbetalingen", auto_declined_at, ACC-13(b)).
+	// The sweep clears one again after a person books a charge of its
+	// settlement, or a person clears it by hand (ClearVippsPayout).
+	DeclinedSkipped int `json:"declined_skipped"`
 	// Error is set when the sweep itself could not run; the lists above are
 	// then whatever it got through before stopping.
 	Error string `json:"error,omitempty"`
@@ -86,7 +92,10 @@ func newVippsPayoutSweepResult() *VippsPayoutSweepResult {
 // deposit are reported as skipped so the treasurer can see why they stay
 // open. Already-linked deposits are never candidates, so re-running is a
 // no-op. The sweep never opens a fiscal year: a deposit dated in a year the
-// treasurer has not created is skipped until it exists. Clubs on the legacy
+// treasurer has not created is skipped until it exists. A deposit a person
+// declined (auto_declined_at: its clearing was undone) is skipped with
+// declinedDepositReason, and its payout is not reported as having no deposit.
+// Clubs on the legacy
 // single-bilag model get an empty result: their payouts are matched by
 // syncVippsReconciliations instead.
 //
@@ -122,8 +131,19 @@ func (s *Service) ClearReadyVippsPayouts(ctx context.Context, clubID, actor stri
 		}
 		seen[d.key()] = true
 		item := VippsPayoutSweepItem{SettlementNumber: d.settlement, MSN: d.msn, BankRowID: d.id}
-		r, err := s.clearVippsPayout(ctx, clubID, d.id, actor, periodExistingOnly)
+		if d.declined {
+			item.Reason = declinedDepositReason
+			res.Skipped = append(res.Skipped, item)
+			res.DeclinedSkipped++
+			continue
+		}
+		r, err := s.clearVippsPayout(ctx, clubID, d.id, actor, automaticBooking)
 		switch {
+		case errors.Is(err, errAutoDeclined):
+			// A person undid the clearing while the sweep waited.
+			item.Reason = declinedDepositReason
+			res.Skipped = append(res.Skipped, item)
+			res.DeclinedSkipped++
 		case err != nil:
 			reason, skip := payoutSweepReason(err)
 			item.Reason = reason
@@ -244,6 +264,10 @@ func (s *Service) payoutsWithoutOpenDeposit(ctx context.Context, clubID string, 
 type vippsPayoutDeposit struct {
 	id, settlement, msn string
 	booked, dismissed   bool
+	// declined: a person undid the deposit's clearing (auto_declined_at).
+	// It still names its settlement, so the payout is not reported as having
+	// no deposit.
+	declined bool
 }
 
 func (d vippsPayoutDeposit) key() string { return d.msn + "/" + d.settlement }
@@ -253,7 +277,8 @@ func (d vippsPayoutDeposit) key() string { return d.msn + "/" + d.settlement }
 // VippsSettlementPattern; imported values never become part of a SQL regex.
 func (s *Service) vippsPayoutDeposits(ctx context.Context, clubID string) ([]vippsPayoutDeposit, error) {
 	rows, err := s.db.Query(ctx,
-		`SELECT id, description, journal_entry_id IS NOT NULL, dismissed_at IS NOT NULL
+		`SELECT id, description, journal_entry_id IS NOT NULL, dismissed_at IS NOT NULL,
+		        auto_declined_at IS NOT NULL
 		   FROM bank_import_rows
 		  WHERE club_id = $1
 		    AND description ~* 'utb\.\s*[0-9]+\s+vippsnr\s+[0-9]+'
@@ -269,7 +294,7 @@ func (s *Service) vippsPayoutDeposits(ctx context.Context, clubID string) ([]vip
 	for rows.Next() {
 		var d vippsPayoutDeposit
 		var desc string
-		if err := rows.Scan(&d.id, &desc, &d.booked, &d.dismissed); err != nil {
+		if err := rows.Scan(&d.id, &desc, &d.booked, &d.dismissed, &d.declined); err != nil {
 			return nil, fmt.Errorf("scanning vipps payout deposit: %w", err)
 		}
 		m := VippsSettlementPattern.FindStringSubmatch(desc)
@@ -306,6 +331,8 @@ func noFiscalYearReason(err error) string {
 // the cause is logged by the caller.
 func payoutSweepReason(err error) (reason string, skip bool) {
 	switch {
+	case errors.Is(err, errAutoDeclined):
+		return declinedDepositReason, true
 	case errors.Is(err, ErrReferencePeriod):
 		return "oppgjøret hører til et referanseår: før beløpet i inngående balanse, og bokfør innbetalingen med et bilag", true
 	case errors.Is(err, ErrVippsSettlementNotImported):

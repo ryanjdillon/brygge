@@ -447,7 +447,7 @@ func TestLegacyVippsConfirmNeverCreatesFiscalPeriodInSync(t *testing.T) {
 		}
 		tctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 		defer cancel()
-		_, err = f.svc.reconcileVippsConfirm(tctx, f.club.ID, f.bankRow, "", f.club.Treasurer.ID, preview.Lines, true, periodExistingOnly)
+		_, err = f.svc.reconcileVippsConfirm(tctx, f.club.ID, f.bankRow, "", f.club.Treasurer.ID, preview.Lines, true, automaticBooking)
 		if !errors.Is(err, errNoFiscalPeriod) {
 			t.Fatalf("no year: err = %v, want errNoFiscalPeriod", err)
 		}
@@ -455,7 +455,7 @@ func TestLegacyVippsConfirmNeverCreatesFiscalPeriodInSync(t *testing.T) {
 			t.Fatalf("existing-only confirm opened a year or paid the faktura")
 		}
 		p := f.createYear(t, "open")
-		entryID, err := f.svc.reconcileVippsConfirm(tctx, f.club.ID, f.bankRow, "", f.club.Treasurer.ID, preview.Lines, true, periodExistingOnly)
+		entryID, err := f.svc.reconcileVippsConfirm(tctx, f.club.ID, f.bankRow, "", f.club.Treasurer.ID, preview.Lines, true, automaticBooking)
 		if err != nil {
 			t.Fatalf("with the year: %v", err)
 		}

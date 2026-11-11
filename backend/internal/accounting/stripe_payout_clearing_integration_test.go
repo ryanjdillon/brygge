@@ -488,8 +488,9 @@ func TestMatchStripePayoutWindow(t *testing.T) {
 }
 
 // Unassigning a cleared deposit voids the clearing and releases the payout
-// and its payout row, so the next sweep clears it again with a new entry
-// and the clearing account still nets to zero.
+// and its payout row. The undo is a person's, so the sweep leaves the deposit
+// (declined, ACC-13(b)); a person's manual clearing books it again with a new
+// entry and the clearing account still nets to zero.
 func TestStripePayoutReclearsAfterUnassign(t *testing.T) {
 	f := newStripeFixture(t)
 	ctx := context.Background()
@@ -521,10 +522,17 @@ func TestStripePayoutReclearsAfterUnassign(t *testing.T) {
 	}
 
 	second := f.sweep(t)
-	if sweepCounts(second) != [4]int{1, 0, 0, 0} || second.Cleared[0].EntryID == first.Cleared[0].EntryID {
-		t.Fatalf("second sweep = %+v, want cleared again with a new entry", second)
+	if sweepCounts(second) != [4]int{0, 0, 1, 0} || second.Skipped[0].Reason != stripeReasonDeclined {
+		t.Fatalf("second sweep = %+v, want the undone deposit skipped as declined", second)
 	}
-	if got := bankRowEntry(t, f.club, row); got != second.Cleared[0].EntryID {
+	manual, err := f.svc.ClearStripePayoutManually(ctx, f.club.ID, f.club.Treasurer.ID, po, row)
+	if err != nil {
+		t.Fatalf("manual clearing: %v", err)
+	}
+	if manual.JournalEntryID == "" || manual.JournalEntryID == first.Cleared[0].EntryID {
+		t.Fatalf("manual clearing = %+v, want a new entry", manual)
+	}
+	if got := bankRowEntry(t, f.club, row); got != manual.JournalEntryID {
 		t.Errorf("bank row entry = %q, want the new one", got)
 	}
 	if b := f.accountBalance(t, "1580"); !floatNear(b, 0, 0.001) {

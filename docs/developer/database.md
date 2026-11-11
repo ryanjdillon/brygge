@@ -534,8 +534,10 @@ in `backend/migrations/` for the source of truth. The high-level shape:
   switch for unattended booking; it is read and written by the
   `/admin/settings/site` GET and PATCH like the other club switches.
   `vipps_import_rows.auto_declined_at` and `bank_import_rows.auto_declined_at`
-  (TIMESTAMPTZ, nullable) are for a person's undo taking a row out of every
-  automatic pass; **only the columns exist so far**, nothing sets or reads them yet.
+  (TIMESTAMPTZ, nullable) record a person's undo taking a row out of every
+  automatic pass. Since BRY-565 a person's undo sets them and every automatic
+  pass reads them; a booking clears them (see invariants.md "A person's undo is
+  final for the automatic passes").
   All four new columns are passed through the `dev_masked` views raw (none is
   PII). **The down** drops the four `dev_masked` views (the repeatable file
   rebuilds them), the trigger and function, both `auto_declined_at` columns,

@@ -27,6 +27,9 @@ import (
 
 // Reasons a deposit is left in Tildel, besides the decideMemberInvoice ones.
 const (
+	// reasonDeclined: a person undid the row's booking (auto_declined_at,
+	// ACC-13(b)); it waits for a person. Checked first.
+	reasonDeclined              = "declined"
 	reasonNoPeriod              = "no_period"
 	reasonPeriodClosed          = "period_closed"
 	reasonHasReference          = "has_reference"
@@ -65,6 +68,8 @@ type bankDeposit struct {
 	importID, periodStatus                string
 	date                                  time.Time
 	cents                                 int64
+	// declined: a person undid the row's booking (auto_declined_at).
+	declined bool
 }
 
 // bankDepositDecision is a deposit the rule would book.
@@ -138,8 +143,16 @@ func (s *Service) AutoAssignBankDeposits(ctx context.Context, clubID, actorID st
 		return res, nil
 	}
 	if actorID == "" && !opts.DryRun {
-		// Posting needs a real user; there is no unattended bank sync.
-		res.ByReason[reasonNoActor] = len(rows)
+		// Posting needs a real user; there is no unattended bank sync. A row
+		// a person declined is counted as that, whoever runs the rule.
+		for _, r := range rows {
+			if r.declined {
+				res.ByReason[reasonDeclined]++
+				res.DeclinedSkipped++
+			} else {
+				res.ByReason[reasonNoActor]++
+			}
+		}
 		return res, nil
 	}
 
@@ -162,6 +175,12 @@ func (s *Service) AutoAssignBankDeposits(ctx context.Context, clubID, actorID st
 			override = opts.PeriodOverride
 		}
 		entryID, _, err := s.assignBankRowToInvoice(ctx, clubID, actorID, d.row.id, d.invoiceID, assignOpts{auto: true, periodOverride: override})
+		if errors.Is(err, errAutoDeclined) {
+			// A person undid the row while the rule decided: not a failure.
+			res.ByReason[reasonDeclined]++
+			res.DeclinedSkipped++
+			continue
+		}
 		if err != nil {
 			s.log.Warn().Err(err).Str("bank_row_id", d.row.id).Msg("bank auto-assign: booking failed; row stays in Tildel")
 			res.ByReason[reasonBookingFailed]++
@@ -213,7 +232,9 @@ func (d bankDepositDecision) item(entryID string) AutoAssignItem {
 // provisional (partnerEligibleSQL and providerPayouts), without one of our
 // KIDs and not a bounced transfer. A row dated in a reference year, or one an
 // import override would post into one, is not a candidate (BRY-418). Each carries the status of the fiscal
-// period it would post to, or "" when none exists.
+// period it would post to, or "" when none exists, and whether a person
+// declined it (auto_declined_at): such a row is read, not filtered out, so
+// the rule can count it as declined.
 func (s *Service) loadBankDeposits(ctx context.Context, clubID string, opts BankAutoAssignOpts) ([]bankDeposit, error) {
 	payouts, err := loadProviderPayouts(ctx, s.db, clubID)
 	if err != nil {
@@ -223,7 +244,8 @@ func (s *Service) loadBankDeposits(ctx context.Context, clubID string, opts Bank
 		`SELECT bir.id, bir.row_date, round(bir.amount * 100)::bigint,
 		        COALESCE(bir.kid_number, ''), COALESCE(bir.reference, ''), COALESCE(bir.description, ''),
 		        COALESCE(bir.counterpart, ''), COALESCE(bir.from_account, ''), COALESCE(bir.to_account, ''),
-		        bi.bank_account_code, bir.bank_import_id::text, COALESCE(fp.status::text, '')
+		        bi.bank_account_code, bir.bank_import_id::text, COALESCE(fp.status::text, ''),
+		        bir.auto_declined_at IS NOT NULL
 		   FROM bank_import_rows bir
 		   JOIN bank_imports bi ON bi.id = bir.bank_import_id
 		   LEFT JOIN LATERAL (
@@ -248,7 +270,7 @@ func (s *Service) loadBankDeposits(ctx context.Context, clubID string, opts Bank
 	for rows.Next() {
 		var r bankDeposit
 		if err := rows.Scan(&r.id, &r.date, &r.cents, &r.kid, &r.reference, &r.desc,
-			&r.counterpart, &r.fromAccount, &r.toAccount, &r.bankAcct, &r.importID, &r.periodStatus); err != nil {
+			&r.counterpart, &r.fromAccount, &r.toAccount, &r.bankAcct, &r.importID, &r.periodStatus, &r.declined); err != nil {
 			return nil, fmt.Errorf("scanning deposit: %w", err)
 		}
 		// A row carrying one of our KIDs belongs to the KID cascade, and a
@@ -287,8 +309,11 @@ func (s *Service) decideBankDeposits(ctx context.Context, clubID string, rows []
 		}
 		if reason != "" {
 			byReason[reason]++
-			if reason == reasonNoPeriod {
+			switch reason {
+			case reasonNoPeriod:
 				res.addNoPeriodYear(r.date.Year())
+			case reasonDeclined:
+				res.DeclinedSkipped++
 			}
 			continue
 		}
@@ -337,6 +362,10 @@ func (s *Service) decideBankDeposits(ctx context.Context, clubID string, rows []
 // decideBankDeposit runs the per-row checks. It returns the decision, or the
 // reason the row stays in Tildel.
 func (s *Service) decideBankDeposit(ctx context.Context, clubID string, cands []memberCand, sc partnerScoring, r bankDeposit) (bankDepositDecision, string, error) {
+	// A person undid this row's booking: whatever else holds, it is theirs.
+	if r.declined {
+		return bankDepositDecision{}, reasonDeclined, nil
+	}
 	// The row-only checks come first, so a row that could never be
 	// auto-booked counts as that rather than as a period problem.
 	if ExtractKIDFromDescription(r.desc) != "" || ExtractInvoiceNumberFromDescription(r.desc) != "" ||

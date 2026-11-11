@@ -23,6 +23,10 @@ type VippsOrderReconcileResult struct {
 	Repaired       int           `json:"repaired"`
 	Booked         int           `json:"booked"`
 	SkippedDetails []SkippedItem `json:"skipped_details"`
+	// DeclinedSkipped counts the order-linked charges a person's undo took
+	// out of the automatic passes (auto_declined_at, ACC-13(b)), e.g. one
+	// whose bilag a person voided in the ledger. They wait for a person.
+	DeclinedSkipped int `json:"declined_skipped"`
 }
 
 // assignVippsChargeToOrder books one belastning against the checkout order its
@@ -39,7 +43,8 @@ type VippsOrderReconcileResult struct {
 // Its only caller is AutoReconcileOrderCharges, an automatic pass, so it books
 // into an existing open period (periodExistingOnly) and never opens a fiscal
 // year: a charge dated in a year the treasurer has not created stays unbooked
-// (*noFiscalYearError).
+// (*noFiscalYearError). For the same reason it always guards: a charge a
+// person declined is errAutoDeclined, up front or from the guarded mark.
 func (s *Service) assignVippsChargeToOrder(ctx context.Context, clubID, vippsRowID, createdBy string) (res *VippsChargePostResult, found bool, err error) {
 	b, err := s.loadVippsBelastning(ctx, clubID, vippsRowID)
 	if err != nil {
@@ -50,6 +55,9 @@ func (s *Service) assignVippsChargeToOrder(ctx context.Context, clubID, vippsRow
 	}
 	if b.dismissedAt != nil {
 		return nil, true, fmt.Errorf("charge is dismissed")
+	}
+	if b.declined {
+		return nil, true, errAutoDeclined
 	}
 
 	tx, err := s.db.Begin(ctx)
@@ -84,7 +92,7 @@ func (s *Service) assignVippsChargeToOrder(ctx context.Context, clubID, vippsRow
 	}
 
 	desc := fmt.Sprintf("Vipps innbetaling ordre %s", b.orderRef)
-	entryID, err := postVippsChargeSplitTx(ctx, tx, clubID, createdBy, desc, b, credits, periodExistingOnly)
+	entryID, err := postVippsChargeSplitTx(ctx, tx, clubID, createdBy, desc, b, credits, automaticBooking)
 	if errors.Is(err, errChargeRaced) {
 		return &VippsChargePostResult{EntryID: entryID, AlreadyReconciled: true}, true, nil
 	}
@@ -139,8 +147,10 @@ func orderReceivableRefusal(orderRef string, err error) error {
 // AutoReconcileOrderCharges first repairs Report API rows imported before the
 // funds entries were classified (RepairVippsReportRows), then books every
 // unbooked, non-dismissed charge whose merchant reference names a checkout
-// order. Charges that cannot be booked are reported, not swallowed. A
-// cancelled ctx stops it with the partial result and the context's error.
+// order. Charges that cannot be booked are reported, not swallowed. A charge a
+// person's undo declined (auto_declined_at, ACC-13(b)) is skipped and counted
+// in DeclinedSkipped. A cancelled ctx stops it with the partial result and the
+// context's error.
 //
 // It never takes the club's Vipps booking slot: a request books through
 // BookVippsQueue, which holds the slot around the three Vipps booking passes.
@@ -155,7 +165,7 @@ func (s *Service) AutoReconcileOrderCharges(ctx context.Context, clubID, created
 	res.SkippedDetails = append(res.SkippedDetails, repairSkipped...)
 
 	rows, err := s.db.Query(ctx,
-		`SELECT r.id, r.order_id
+		`SELECT r.id, r.order_id, r.auto_declined_at IS NOT NULL
 		   FROM vipps_import_rows r
 		  WHERE r.club_id = $1 AND r.row_type = 'belastning'
 		    AND r.journal_entry_id IS NULL AND r.dismissed_at IS NULL
@@ -168,11 +178,14 @@ func (s *Service) AutoReconcileOrderCharges(ctx context.Context, clubID, created
 	if err != nil {
 		return nil, fmt.Errorf("listing order-linked charges: %w", err)
 	}
-	type charge struct{ id, ref string }
+	type charge struct {
+		id, ref  string
+		declined bool
+	}
 	var charges []charge
 	for rows.Next() {
 		var c charge
-		if err := rows.Scan(&c.id, &c.ref); err != nil {
+		if err := rows.Scan(&c.id, &c.ref, &c.declined); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("scanning order-linked charge: %w", err)
 		}
@@ -189,7 +202,15 @@ func (s *Service) AutoReconcileOrderCharges(ctx context.Context, clubID, created
 		if err := ctx.Err(); err != nil {
 			return res, err
 		}
+		if c.declined {
+			res.DeclinedSkipped++
+			continue
+		}
 		r, _, err := s.assignVippsChargeToOrder(ctx, clubID, c.id, createdBy)
+		if errors.Is(err, errAutoDeclined) {
+			res.DeclinedSkipped++
+			continue
+		}
 		if err != nil {
 			res.SkippedDetails = append(res.SkippedDetails, SkippedItem{Ref: "ordre " + c.ref, Reason: err.Error()})
 			continue

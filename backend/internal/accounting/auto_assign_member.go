@@ -45,11 +45,15 @@ type AutoAssignItem struct {
 // AutoAssignResult summarises one auto-assign run over Vipps charges or bank
 // deposits.
 type AutoAssignResult struct {
-	Source         string           `json:"source"`
-	Enabled        bool             `json:"enabled"`
-	Assigned       []AutoAssignItem `json:"assigned"`
-	NeedsReview    int              `json:"needs_review"`
-	SkippedDetails []SkippedItem    `json:"skipped_details"`
+	Source      string           `json:"source"`
+	Enabled     bool             `json:"enabled"`
+	Assigned    []AutoAssignItem `json:"assigned"`
+	NeedsReview int              `json:"needs_review"`
+	// DeclinedSkipped counts the payments a person's undo took out of the
+	// automatic rules (auto_declined_at, ACC-13(b)); they are in NeedsReview
+	// too, and for bank also in ByReason as "declined".
+	DeclinedSkipped int           `json:"declined_skipped"`
+	SkippedDetails  []SkippedItem `json:"skipped_details"`
 	// ByReason counts the payments left for a human, by why (bank only).
 	ByReason map[string]int `json:"by_reason,omitempty"`
 	// Error is set when the run itself failed; what it booked before

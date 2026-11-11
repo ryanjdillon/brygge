@@ -592,6 +592,8 @@ func (h *AccountingHandler) HandleVoidJournalEntry(w http.ResponseWriter, r *htt
 	}
 
 	entryID := chi.URLParam(r, "entryID")
+	// A person's void: a Vipps charge it releases is declined for the
+	// automatic passes (ACC-13(b)). VoidLedgerEntry is person-only.
 	reversal, err := h.svc.VoidLedgerEntry(r.Context(), claims.ClubID, entryID, claims.UserID)
 	if err != nil {
 		// Refusals are expected outcomes, not server faults.
@@ -1079,6 +1081,7 @@ func (h *AccountingHandler) importBankStatement(w http.ResponseWriter, r *http.R
 				"stripe_booked":          stripeBookedCount(result.StripeBooking),
 				"stripe_payouts_cleared": stripePayoutsClearedCount(result.StripePayouts),
 				"vipps_payouts_cleared":  vippsPayoutsClearedCount(result.VippsPayouts),
+				"declined_skipped":       declinedSkippedCount(result.AutoAssign, result.VippsPayouts, result.StripePayouts),
 				"booking_deferred":       result.BookingDeferred,
 			})
 	}
@@ -2556,10 +2559,11 @@ func (h *AccountingHandler) HandleResyncVipps(w http.ResponseWriter, r *http.Req
 		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
 			"accounting.vipps_resynced", "vipps", "",
 			map[string]any{
-				"scanned":  result.Scanned,
-				"resynced": result.Resynced,
-				"skipped":  result.Skipped,
-				"failed":   len(result.Failed),
+				"scanned":          result.Scanned,
+				"resynced":         result.Resynced,
+				"skipped":          result.Skipped,
+				"failed":           len(result.Failed),
+				"declined_skipped": vippsBookingDeclinedCount(result.Orders, result.AutoAssign, result.Payouts),
 			})
 	}
 	JSON(w, http.StatusOK, result)
@@ -2591,7 +2595,9 @@ func (h *AccountingHandler) HandleBankSync(w http.ResponseWriter, r *http.Reques
 				"auto_assigned":          autoAssignedCount(result.AutoAssign),
 				"stripe_booked":          stripeBookedCount(result.StripeBooking),
 				"stripe_payouts_cleared": stripePayoutsClearedCount(result.StripePayouts),
-				"booking_deferred":       result.BookingDeferred,
+				"declined_skipped": result.LegacyVippsDeclined +
+					declinedSkippedCount(result.AutoAssign, result.VippsPayouts, result.StripePayouts),
+				"booking_deferred": result.BookingDeferred,
 			})
 	}
 	JSON(w, http.StatusOK, result)
@@ -2622,6 +2628,34 @@ func vippsPayoutsClearedCount(r *accounting.VippsPayoutSweepResult) int {
 		return 0
 	}
 	return len(r.Cleared)
+}
+
+// declinedSkippedCount is how many rows the automatic passes of an import or
+// sync left alone because a person's undo declined them (auto_declined_at,
+// ACC-13(b)), for its audit summary. Nil results count 0.
+func declinedSkippedCount(auto *accounting.AutoAssignResult, vipps *accounting.VippsPayoutSweepResult, stripe *accounting.StripePayoutSweepResult) int {
+	n := 0
+	if auto != nil {
+		n += auto.DeclinedSkipped
+	}
+	if vipps != nil {
+		n += vipps.DeclinedSkipped
+	}
+	if stripe != nil {
+		n += stripe.DeclinedSkipped
+	}
+	return n
+}
+
+// vippsBookingDeclinedCount is how many rows a Vipps booking tail (order
+// reconcile, auto-assign, payout sweep) left because a person's undo declined
+// them (ACC-13(b)), for the audit summary of the upload or sync that ran it.
+func vippsBookingDeclinedCount(orders *accounting.VippsOrderReconcileResult, auto *accounting.AutoAssignResult, payouts *accounting.VippsPayoutSweepResult) int {
+	n := declinedSkippedCount(auto, payouts, nil)
+	if orders != nil {
+		n += orders.DeclinedSkipped
+	}
+	return n
 }
 
 // autoAssignedCount is how many payments an auto-assign run booked, for the
@@ -2784,6 +2818,7 @@ func (h *AccountingHandler) HandleImportVippsSettlement(w http.ResponseWriter, r
 				"rows_total":       len(rows),
 				"imported":         result.Imported,
 				"skipped_dup":      result.SkippedDup,
+				"declined_skipped": vippsBookingDeclinedCount(booked.Orders, booked.AutoAssign, booked.Payouts),
 				"booking_deferred": bookingDeferred,
 			})
 	}

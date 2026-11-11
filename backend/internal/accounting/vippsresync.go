@@ -146,7 +146,9 @@ func (s *Service) ResyncVippsBilags(ctx context.Context, clubID, createdBy strin
 			res.Skipped++
 			continue
 		}
-		if _, err := s.reconcileVippsConfirm(ctx, clubID, c.bankRowID, "", createdBy, preview.Lines, false, periodMayCreate); err != nil {
+		// Supervised: it rebooks drafts it detached itself, never a row a
+		// person declined (a declined row is unbooked, so it is no candidate).
+		if _, err := s.reconcileVippsConfirm(ctx, clubID, c.bankRowID, "", createdBy, preview.Lines, false, personBooking); err != nil {
 			res.Failed = append(res.Failed, c.bankRowID)
 			continue
 		}

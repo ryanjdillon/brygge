@@ -6,6 +6,7 @@ import { useFreshTotp } from '@/composables/useFreshTotp'
 import { unassignBankRow, unassignVippsCharge, type AutoAssignResult } from '@/composables/useBankImports'
 import { asClearedSettlementRefusal, type ClearedSettlementRefusal } from '@/composables/useClearedSettlement'
 import ClearedSettlementRefusalNote from '@/components/admin/ClearedSettlementRefusal.vue'
+import DeclinedNotice from '@/components/admin/DeclinedNotice.vue'
 
 // Shows what an import or sync booked without review — Vipps charges
 // (BRY-340) or KID-less bank deposits (BRY-366) — and lets the treasurer
@@ -82,6 +83,7 @@ function targetLabel(rule: string, target: string) {
         </li>
       </ul>
     </template>
+    <DeclinedNotice :count="props.result.declined_skipped" :testid="`${props.source}-auto-assign-declined`" />
     <p v-if="props.result.error" class="mt-1 text-red-700">{{ props.result.error }}</p>
     <p v-if="error" class="mt-1 text-red-700">{{ error }}</p>
     <ClearedSettlementRefusalNote v-if="cleared" :refusal="cleared.refusal" @undone="undoAgain" />

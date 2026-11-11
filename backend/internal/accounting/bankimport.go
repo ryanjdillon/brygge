@@ -309,16 +309,21 @@ func (r *ImportResult) rowError(rowID string, row BankRow, reason string) {
 type ReimportResult struct {
 	ImportResult
 	Deleted       int64 // unmatched/non-dismissed rows removed before re-parse
-	SkippedBooked int   // parsed rows skipped because a booked row already represents them
+	SkippedBooked int   // parsed rows skipped because a kept row (booked, dismissed or declined) already represents them
 }
 
 // ReimportBankRows re-parses a corrected upload for an existing import and
-// replaces ONLY its unmatched, non-dismissed, non-refund-paired rows. Matched
+// replaces ONLY its unmatched, non-dismissed, non-refund-paired rows that no
+// person's undo declined (a declined row carries that decision, ACC-13(b):
+// re-inserted from the file it would lose it and be booked again). Matched
 // rows carry a booked bilag + payment and are never touched. A parsed row that
-// a surviving BOOKED row already represents — keyed on (date, amount, arkivref
-// found in EITHER reference or kid_number, so an originally mis-parsed match is
-// still recognised) — is skipped, so a re-import can never duplicate an
-// already-matched payment. Fresh rows go through the normal insert + auto-match
+// a surviving kept row (booked, or unbooked but dismissed or declined by a
+// person) already represents — keyed on (date, amount, arkivref found in
+// EITHER reference or kid_number, so an originally mis-parsed match is still
+// recognised) — is skipped, so a re-import can never duplicate an
+// already-matched payment, nor put an undecided twin next to a row a person
+// dismissed or declined (a twin with another hash would be booked by the
+// automatic passes the declined row is kept out of). Fresh rows go through the normal insert + auto-match
 // cascade.
 func (s *Service) ReimportBankRows(ctx context.Context, clubID, importID, periodOverride string, rows []BankRow) (ReimportResult, error) {
 	var res ReimportResult
@@ -331,7 +336,8 @@ func (s *Service) ReimportBankRows(ctx context.Context, clubID, importID, period
 		  WHERE bank_import_id = $1
 		    AND journal_entry_id IS NULL
 		    AND dismissed_at IS NULL
-		    AND refund_paired_with IS NULL`,
+		    AND refund_paired_with IS NULL
+		    AND auto_declined_at IS NULL`,
 		importID,
 	)
 	if err != nil {
@@ -339,7 +345,7 @@ func (s *Service) ReimportBankRows(ctx context.Context, clubID, importID, period
 	}
 	res.Deleted = tag.RowsAffected()
 
-	fresh, skipped, err := s.skipRowsAlreadyBooked(ctx, clubID, rows)
+	fresh, skipped, err := s.skipRowsAlreadyBooked(ctx, clubID, "", rows)
 	if err != nil {
 		return res, err
 	}
@@ -353,29 +359,43 @@ func (s *Service) ReimportBankRows(ctx context.Context, clubID, importID, period
 	return res, nil
 }
 
-// skipRowsAlreadyBooked drops any parsed row that a surviving matched row
-// already represents — same booking (row_date + amount + arkivref/KID) with a
-// journal entry attached. It returns the rows safe to re-insert plus the number
-// skipped. This is what stops a re-import from duplicating a booked payment when
-// the file's date range overlaps transactions that were previously mis-parsed
-// and separately booked.
-func (s *Service) skipRowsAlreadyBooked(ctx context.Context, clubID string, rows []BankRow) ([]BankRow, int, error) {
+// skipRowsAlreadyBooked drops any parsed row that a surviving row the reimport
+// keeps already represents — same booking (row_date + amount + arkivref/KID)
+// with a journal entry attached, or unbooked but dismissed or declined
+// (auto_declined_at) by a person. It returns the rows safe to re-insert plus
+// the number skipped. This is what stops a re-import from duplicating a booked
+// payment when the file's date range overlaps transactions that were
+// previously mis-parsed and separately booked, and from adding an unmarked
+// twin of a dismissed or declined row when the corrected file changes its
+// hash. Rows without an arkivref are not matched: amount and date alone are no
+// evidence of the same booking. A "-" counts as no arkivref, on either side.
+// A kept row's kid_number is compared only when that row has no arkivref of
+// its own (the mis-parse case); a kept row with a real arkivref is matched on
+// it alone, so another booking whose KID happens to equal this row's arkivref
+// is not mistaken for it. bankAccountCode, when set (the account reimport),
+// limits the kept rows to that bank account; "" means any.
+func (s *Service) skipRowsAlreadyBooked(ctx context.Context, clubID, bankAccountCode string, rows []BankRow) ([]BankRow, int, error) {
 	var fresh []BankRow
 	skipped := 0
 	for _, row := range rows {
 		ref := strings.TrimSpace(row.Reference)
-		if ref != "" {
+		if ref != "" && ref != "-" {
 			var booked bool
 			if err := s.db.QueryRow(ctx,
 				`SELECT EXISTS (
 				    SELECT 1 FROM bank_import_rows bir
+				      JOIN bank_imports bi ON bi.id = bir.bank_import_id
 				     WHERE bir.club_id = $1
-				       AND bir.journal_entry_id IS NOT NULL
+				       AND (bir.journal_entry_id IS NOT NULL
+				            OR bir.dismissed_at IS NOT NULL
+				            OR bir.auto_declined_at IS NOT NULL)
 				       AND bir.row_date = $2
 				       AND bir.amount = $3
-				       AND ($4 = bir.reference OR $4 = bir.kid_number)
+				       AND ($4 = bir.reference
+				            OR (COALESCE(NULLIF(btrim(bir.reference), '-'), '') = '' AND $4 = bir.kid_number))
+				       AND ($5 = '' OR bi.bank_account_code = $5)
 				 )`,
-				clubID, row.Date, row.Amount, ref,
+				clubID, row.Date, row.Amount, ref, bankAccountCode,
 			).Scan(&booked); err != nil {
 				return nil, 0, fmt.Errorf("checking booked duplicate: %w", err)
 			}
@@ -393,7 +413,8 @@ func (s *Service) skipRowsAlreadyBooked(ctx context.Context, clubID string, rows
 // It clears the account's unmatched ghost rows *only within the date range the
 // CSV actually covers* — rows outside that window are left alone (this file
 // doesn't re-provide them), and booked rows (bilag + payment) are never touched
-// regardless. It then imports the supplied rows into targetImportID; a booked
+// regardless, nor are dismissed, refund-paired or declined rows (a person's
+// undo, ACC-13(b), which a re-inserted row would lose). It then imports the supplied rows into targetImportID; a booked
 // transaction that reappears in the file is skipped so no payment is
 // duplicated. Use for a periodic "import everything since Jan 1 for this
 // account" cleanup pass. See BRY-222.
@@ -421,6 +442,7 @@ func (s *Service) ReimportAccountBankRows(ctx context.Context, clubID, bankAccou
 		  WHERE journal_entry_id IS NULL
 		    AND dismissed_at IS NULL
 		    AND refund_paired_with IS NULL
+		    AND auto_declined_at IS NULL
 		    AND row_date BETWEEN $3 AND $4
 		    AND bank_import_id IN (
 		      SELECT id FROM bank_imports WHERE club_id = $1 AND bank_account_code = $2
@@ -435,7 +457,7 @@ func (s *Service) ReimportAccountBankRows(ctx context.Context, clubID, bankAccou
 		return res, err
 	}
 
-	fresh, skipped, err := s.skipRowsAlreadyBooked(ctx, clubID, rows)
+	fresh, skipped, err := s.skipRowsAlreadyBooked(ctx, clubID, bankAccountCode, rows)
 	if err != nil {
 		return res, err
 	}
@@ -770,7 +792,9 @@ func inferOwnAccountNumber(rows []BankRow) string {
 // fiscal period (BRY-578): a pair dated in a year with no period is left
 // unpaired and its year returned in missingYears; one in a closed or locked
 // period is left and its year returned in skippedClosedYears. An import's
-// period override is loaded, never created.
+// period override is loaded, never created. A row a person's undo declined
+// (auto_declined_at, ACC-13(b): an undone transfer marks both rows) is never
+// paired, in the candidate query or in the guarded link.
 func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID, periodOverride, createdBy string) (matched int, skippedClosedYears, missingYears []int, _ error) {
 	rows, err := s.db.Query(ctx,
 		`WITH this_import AS (
@@ -785,6 +809,7 @@ func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID
 		   AND r2.row_date  = r1.row_date
 		   AND r2.amount    = -r1.amount
 		   AND r2.journal_entry_id IS NULL
+		   AND r2.auto_declined_at IS NULL
 		   AND r2.id <> r1.id
 		 JOIN bank_imports bi2 ON bi2.id = r2.bank_import_id
 		   AND bi2.bank_account_code <> ti.bank_account_code
@@ -795,6 +820,7 @@ func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID
 		 WHERE r1.bank_import_id = $1
 		   AND r1.club_id        = $2
 		   AND r1.journal_entry_id IS NULL
+		   AND r1.auto_declined_at IS NULL
 		   AND NOT `+referenceDateSQL("r1.club_id", "r1.row_date")+`
 		   AND NOT `+referenceDateSQL("r2.club_id", "r2.row_date"),
 		importID, clubID,
@@ -871,12 +897,13 @@ func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID
 		}
 		tag, err := s.db.Exec(ctx,
 			`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true
-			  WHERE id = ANY($2::uuid[]) AND club_id = $3 AND journal_entry_id IS NULL`,
+			  WHERE id = ANY($2::uuid[]) AND club_id = $3 AND journal_entry_id IS NULL AND auto_declined_at IS NULL`,
 			entry.ID, []string{p.r1ID, p.r2ID}, clubID,
 		)
 		if err != nil || tag.RowsAffected() != 2 {
-			// One side was booked concurrently: a transfer needs both rows,
-			// so release whichever row this call did link and drop the draft.
+			// One side was booked concurrently, or a person declined it: a
+			// transfer needs both rows, so release whichever row this call did
+			// link and drop the draft.
 			s.log.Warn().Err(err).Str("bank_row_id", p.r1ID).Msg("intra-bank transfer: could not link both rows; draft discarded")
 			_, _ = s.db.Exec(ctx,
 				`UPDATE bank_import_rows SET journal_entry_id = NULL, auto_matched = false
@@ -993,8 +1020,9 @@ func (s *Service) MatchBankRow(ctx context.Context, clubID, periodID, rowID, deb
 		return fmt.Errorf("creating journal entry: %w", err)
 	}
 
+	// A person's booking: it lifts a decline (auto_declined_at).
 	tag, err := s.db.Exec(ctx,
-		`UPDATE bank_import_rows SET journal_entry_id = $1
+		`UPDATE bank_import_rows SET journal_entry_id = $1, auto_declined_at = NULL
 		  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL`,
 		entry.ID, rowID, clubID,
 	)

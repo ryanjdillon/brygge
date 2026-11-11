@@ -608,6 +608,10 @@ type unassignReq struct {
 	Confirm bool `json:"confirm"`
 }
 
+// HandleUnassign is a person's Angre of a bank row booking (including "Angre
+// innbetalingen" on a Vipps payout deposit): every row it releases is declined
+// for the automatic passes (ACC-13(b)) until a person books it.
+// UnassignBankRowReported is person-only.
 func (h *BankRowsHandler) HandleUnassign(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)

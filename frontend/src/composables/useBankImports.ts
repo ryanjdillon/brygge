@@ -147,6 +147,9 @@ export interface AutoAssignResult {
   enabled: boolean
   assigned: AutoAssignItem[]
   needs_review: number
+  // Payments a person had undone, which the rule never books again
+  // (ACC-13(b), BRY-565); also counted in needs_review (bank: by_reason.declined).
+  declined_skipped?: number
   // Bank only: deposits left in Tildel, counted by reason.
   by_reason?: Record<string, number>
   // Set when the run itself failed; what it booked first is still listed.
@@ -167,8 +170,18 @@ export interface VippsPayoutSweepResult {
   waiting: VippsPayoutSweepItem[]
   skipped: VippsPayoutSweepItem[]
   failed: VippsPayoutSweepItem[]
+  // Deposits a person undid ("Angre innbetalingen"); also in skipped (BRY-565).
+  declined_skipped?: number
   // Set when the sweep itself could not run; the lists hold what it got through.
   error?: string
+}
+
+// The order-linked Vipps charges a booking tail booked (BRY-337).
+export interface VippsOrderReconcileResult {
+  repaired: number
+  booked: number
+  // Order charges a person had undone (a voided bilag); they wait in Tildel.
+  declined_skipped?: number
 }
 
 export interface VippsImportResult {
@@ -178,6 +191,7 @@ export interface VippsImportResult {
   rows_total: number
   imported: number
   skipped_dup: number
+  orders?: VippsOrderReconcileResult | null
   auto_assign?: AutoAssignResult | null
   payouts?: VippsPayoutSweepResult | null
   // The Vipps booking slot stayed busy: the rows are imported, the booking waits.
@@ -390,6 +404,8 @@ export interface BankSyncResult {
   kid_skipped_settled?: number
   vipps_reconciled: number
   vipps_unbalanced: number
+  // Legacy Vipps deposits (pass 2) a person had undone (BRY-565).
+  legacy_vipps_declined?: number
   transfers_linked: number
   closed_periods: string[]
   // Years with no fiscal period: no sync pass opens one, so those payments
@@ -417,6 +433,7 @@ export interface VippsResyncResult {
   resynced: number
   skipped: number
   failed: string[]
+  orders?: VippsOrderReconcileResult | null
   auto_assign?: AutoAssignResult | null
   payouts?: VippsPayoutSweepResult | null
 }
@@ -463,6 +480,8 @@ export interface StripePayoutSweepResult {
   waiting: StripePayoutSweepItem[]
   skipped: StripePayoutSweepItem[]
   failed: StripePayoutSweepItem[]
+  // Deposits a person undid; also in skipped (BRY-565).
+  declined_skipped?: number
   error?: string
 }
 

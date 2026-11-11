@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { VippsPayoutSweepResult } from '@/composables/useBankImports'
+import DeclinedNotice from '@/components/admin/DeclinedNotice.vue'
 
 // Shows the Vipps payouts a sync cleared on its own (BRY-340) and why the
 // rest stay open: charges still in Tildel, no matching bank deposit, or a
@@ -23,6 +24,7 @@ const open = computed(() => [...props.result.skipped, ...props.result.failed])
         failed: props.result.failed.length,
       }) }}
     </p>
+    <DeclinedNotice :count="props.result.declined_skipped" testid="vipps-payout-sweep-declined" />
     <p v-if="props.result.error" class="text-red-700" data-testid="vipps-payout-sweep-error">
       {{ props.result.error }}
     </p>

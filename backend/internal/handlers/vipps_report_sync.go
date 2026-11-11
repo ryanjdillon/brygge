@@ -70,6 +70,7 @@ func (h *AccountingHandler) HandleVippsReportSync(w http.ResponseWriter, r *http
 				"ledger_id":        res.LedgerID,
 				"imported":         res.Imported,
 				"skipped_dup":      res.SkippedDup,
+				"declined_skipped": vippsBookingDeclinedCount(res.Orders, res.AutoAssign, res.Payouts),
 				"booking_deferred": res.BookingDeferred,
 			})
 	}

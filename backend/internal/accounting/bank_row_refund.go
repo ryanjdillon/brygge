@@ -272,10 +272,11 @@ func (s *Service) PairRefund( //nolint:cyclop // validate, lock and post a refun
 		return "", "", fmt.Errorf("post outbound journal: %w", err)
 	}
 
-	// Mark both rows with their journal entries and cross-link them.
+	// Mark both rows with their journal entries and cross-link them. Both
+	// entries are posted already, so the link lifts a decline at once.
 	if _, err := s.db.Exec(ctx,
 		`UPDATE bank_import_rows
-		    SET journal_entry_id = $1, refund_paired_with = $2
+		    SET journal_entry_id = $1, refund_paired_with = $2, auto_declined_at = NULL
 		  WHERE id = $3 AND club_id = $4`,
 		inboundEntry.ID, outboundRowID, inboundRowID, clubID,
 	); err != nil {
@@ -283,7 +284,7 @@ func (s *Service) PairRefund( //nolint:cyclop // validate, lock and post a refun
 	}
 	if _, err := s.db.Exec(ctx,
 		`UPDATE bank_import_rows
-		    SET journal_entry_id = $1, refund_paired_with = $2
+		    SET journal_entry_id = $1, refund_paired_with = $2, auto_declined_at = NULL
 		  WHERE id = $3 AND club_id = $4`,
 		outboundEntry.ID, inboundRowID, outboundRowID, clubID,
 	); err != nil {

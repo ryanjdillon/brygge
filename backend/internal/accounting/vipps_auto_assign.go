@@ -70,7 +70,11 @@ func (s *Service) vippsAutoAssignConfig(ctx context.Context, clubID string) (vip
 // rules above) and reports what it booked and how many charges still need a
 // human. Charges naming a checkout order are left to
 // AutoReconcileOrderCharges. Idempotent: booked charges leave the queue. A
-// cancelled ctx stops it with the partial result and the context's error.
+// charge a person's undo declined (auto_declined_at, ACC-13(b)) is skipped
+// and counted in DeclinedSkipped (and NeedsReview: it waits for a person),
+// also when the decline lands while the pass decides (errAutoDeclined from
+// the guarded mark). A cancelled ctx stops it with the partial result and the
+// context's error.
 //
 // It never takes the club's Vipps booking slot: a request books through
 // BookVippsQueue, which holds the slot around the three Vipps booking passes.
@@ -84,7 +88,8 @@ func (s *Service) AutoAssignVippsCharges(ctx context.Context, clubID, createdBy 
 
 	rows, err := s.db.Query(ctx,
 		`SELECT r.id, r.amount, COALESCE(r.booking_date, r.tx_at::date),
-		        COALESCE(r.customer_name, ''), COALESCE(r.message, '')
+		        COALESCE(r.customer_name, ''), COALESCE(r.message, ''),
+		        r.auto_declined_at IS NOT NULL
 		   FROM vipps_import_rows r
 		  WHERE r.club_id = $1 AND r.row_type = 'belastning' AND r.amount > 0
 		    AND r.journal_entry_id IS NULL AND r.dismissed_at IS NULL
@@ -104,15 +109,22 @@ func (s *Service) AutoAssignVippsCharges(ctx context.Context, clubID, createdBy 
 		date                  string
 	}
 	var queue []charge
+	declined := 0
 	for rows.Next() {
 		var c charge
 		// Neither booking_date nor tx_at may be set; such a row cannot be
 		// dated, so it is reported instead of failing the scan and aborting
 		// the pass.
 		var d *time.Time
-		if err := rows.Scan(&c.id, &c.amount, &d, &c.customer, &c.message); err != nil {
+		var isDeclined bool
+		if err := rows.Scan(&c.id, &c.amount, &d, &c.customer, &c.message, &isDeclined); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("scanning queued charge: %w", err)
+		}
+		// A person undid this charge's booking: it waits for a person.
+		if isDeclined {
+			declined++
+			continue
 		}
 		if d == nil {
 			res.SkippedDetails = append(res.SkippedDetails, SkippedItem{Ref: fmt.Sprintf("vipps-rad %s %.2f kr", c.id, c.amount), Reason: "mangler dato"})
@@ -128,6 +140,8 @@ func (s *Service) AutoAssignVippsCharges(ctx context.Context, clubID, createdBy 
 		return nil, err
 	}
 
+	res.NeedsReview += declined
+	res.DeclinedSkipped = declined
 	if !cfg.enabled {
 		res.NeedsReview += len(queue)
 		return res, nil
@@ -143,6 +157,12 @@ func (s *Service) AutoAssignVippsCharges(ctx context.Context, clubID, createdBy 
 		if errors.Is(err, errChargeBookedConcurrently) {
 			// Someone else booked it while this pass decided: it is neither
 			// this pass's booking nor a charge still waiting for a human.
+			continue
+		}
+		if errors.Is(err, errAutoDeclined) {
+			// A person undid it while this pass decided.
+			res.DeclinedSkipped++
+			res.NeedsReview++
 			continue
 		}
 		if err != nil {
@@ -299,17 +319,18 @@ var errChargeBookedConcurrently = errors.New("charge was booked concurrently")
 // person's, in Tildel). Only the automatic pass reaches it, so it books into
 // an existing open period and never opens a fiscal year: a charge dated in a
 // year the treasurer has not created stays unbooked (*noFiscalYearError) and
-// is booked in its own year once it exists.
+// is booked in its own year once it exists. A charge a person declined is
+// errAutoDeclined, up front or from the guarded mark.
 func (s *Service) bookVippsChargeDecision(ctx context.Context, clubID, createdBy, rowID string, d *vippsChargeDecision) (entryID string, alreadyReconciled bool, err error) {
 	switch d.Rule {
 	case autoAssignRuleMemberInvoice:
-		r, err := s.assignVippsChargeToInvoice(ctx, clubID, rowID, d.InvoiceID, createdBy, periodExistingOnly)
+		r, err := s.assignVippsChargeToInvoice(ctx, clubID, rowID, d.InvoiceID, createdBy, automaticBooking)
 		if err != nil {
 			return "", false, err
 		}
 		entryID, alreadyReconciled = r.EntryID, r.AlreadyReconciled
 	case autoAssignRulePriceItem:
-		r, err := s.createVippsChargeBilag(ctx, clubID, rowID, d.Account, "auto: "+d.Label, createdBy, periodExistingOnly)
+		r, err := s.createVippsChargeBilag(ctx, clubID, rowID, d.Account, "auto: "+d.Label, createdBy, automaticBooking)
 		if err != nil {
 			return "", false, err
 		}
@@ -386,6 +407,12 @@ var ErrVippsChargeInSettlement = errors.New( //nolint:staticcheck // ST1005: a u
 // receivableChargeSettledFaktura. A posted booking whose settlement is already
 // cleared against the bank deposit is refused with
 // *ChargeInClearedSettlementError (see vipps_cleared_settlement.go).
+//
+// Person-only (ACC-13(b)): the released charge is marked auto_declined_at, so
+// no automatic pass books it again until a person does. Its callers are the
+// Tildel Angre (HandleUnassignVippsCharge) and ReleaseVippsBacklogCharge; an
+// automatic pass must never call it (BRY-567), or it would decline rows no
+// person undid.
 func (s *Service) UnassignVippsCharge(ctx context.Context, clubID, actorID, rowID string) (priorEntryID, priorInvoiceID string, err error) { //nolint:gocognit,cyclop // reverses each posting kind inside one transaction; split tracked in BRY-424
 	if err := s.refuseReferenceVippsCharge(ctx, clubID, rowID); err != nil {
 		return "", "", err
@@ -521,9 +548,10 @@ func (s *Service) UnassignVippsCharge(ctx context.Context, clubID, actorID, rowI
 		}
 	}
 
+	// A person's undo is final for the automatic passes (ACC-13(b)).
 	if _, err := tx.Exec(ctx,
 		`UPDATE vipps_import_rows
-		    SET journal_entry_id = NULL, invoice_id = NULL, auto_assign_rule = NULL
+		    SET journal_entry_id = NULL, invoice_id = NULL, auto_assign_rule = NULL, auto_declined_at = now()
 		  WHERE id = $1 AND club_id = $2`,
 		rowID, clubID,
 	); err != nil {

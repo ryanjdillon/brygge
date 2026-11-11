@@ -81,7 +81,14 @@ func TestLedgerVoidOfAnOrderChargeReleasesItAndReopensTheFaktura(t *testing.T) {
 	if err != nil || res.Ready || res.UnreconciledCharges != 1 {
 		t.Fatalf("clear with the released charge = %+v (err %v), want it to wait", res, err)
 	}
-	f.bookOrderCharge(t, s.charges[0])
+	// The void was a person's undo (ACC-13(b)): the order reconcile leaves
+	// the charge, and a person books it in Tildel.
+	if _, _, err := f.svc.assignVippsChargeToOrder(ctx, f.club.ID, s.charges[0], f.club.Treasurer.ID); !errors.Is(err, errAutoDeclined) {
+		t.Fatalf("order reconcile after the void: err = %v, want errAutoDeclined", err)
+	}
+	if _, err := f.svc.AssignVippsChargeToInvoice(ctx, f.club.ID, s.charges[0], inv.ID, f.club.Treasurer.ID); err != nil {
+		t.Fatalf("book the charge by hand: %v", err)
+	}
 	if !f.invoicePaid(t, inv.ID) {
 		t.Errorf("rebooking the order charge did not settle its faktura")
 	}

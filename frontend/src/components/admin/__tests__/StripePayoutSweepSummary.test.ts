@@ -37,4 +37,9 @@ describe('StripePayoutSweepSummary', () => {
     })
     expect(wrapper.find('[data-testid="stripe-payout-sweep-error"]').text()).toContain('Stripe-utbetalinger feilet')
   })
+
+  it('says how many deposits wait because a person undid their clearing', () => {
+    const wrapper = mountWithPlugins(StripePayoutSweepSummary, { props: { result: { ...empty, declined_skipped: 2 } } })
+    expect(wrapper.find('[data-testid="stripe-payout-sweep-declined"]').exists()).toBe(true)
+  })
 })

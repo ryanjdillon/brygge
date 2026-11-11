@@ -53,6 +53,7 @@ import StripeBookSummary from '@/components/admin/StripeBookSummary.vue'
 import StripeReviewList from '@/components/admin/StripeReviewList.vue'
 import BankImportProvisionalNotices from '@/components/admin/BankImportProvisionalNotices.vue'
 import BookingDeferredNotice from '@/components/admin/BookingDeferredNotice.vue'
+import DeclinedNotice from '@/components/admin/DeclinedNotice.vue'
 import { ApiError } from '@/lib/errors'
 import { useConfirm } from '@/stores/confirm'
 import { useCan } from '@/composables/useCan'
@@ -620,6 +621,7 @@ const filterMonthValue = computed<number>({
       <p v-if="syncResult.provisional_ambiguous?.length" class="mt-1 text-yellow-800">
         {{ t('admin.bankImports.provisionalAmbiguousNotice', { count: syncResult.provisional_ambiguous.length }) }}
       </p>
+      <DeclinedNotice :count="syncResult.legacy_vipps_declined" testid="bank-sync-legacy-vipps-declined" />
       <AutoAssignSummary v-if="syncResult.auto_assign" source="bank" :result="syncResult.auto_assign" />
       <VippsPayoutSweepSummary v-if="syncResult.vipps_payouts" :result="syncResult.vipps_payouts" />
       <BookingDeferredNotice v-if="syncResult.booking_deferred" />
@@ -633,6 +635,7 @@ const filterMonthValue = computed<number>({
         skipped: vippsResyncResult.skipped,
         failed: vippsResyncResult.failed?.length ?? 0,
       }) }}
+      <DeclinedNotice :count="vippsResyncResult.orders?.declined_skipped" testid="vipps-resync-orders-declined" />
       <AutoAssignSummary v-if="vippsResyncResult.auto_assign" source="vipps" :result="vippsResyncResult.auto_assign" />
       <VippsPayoutSweepSummary v-if="vippsResyncResult.payouts" :result="vippsResyncResult.payouts" />
     </div>
@@ -877,6 +880,7 @@ const filterMonthValue = computed<number>({
           <span class="font-medium">{{ vippsResult.filename }}</span>
           — {{ t('admin.bankImports.imported') }}: {{ vippsResult.imported }}
           · {{ t('admin.bankImports.skipped') }}: {{ vippsResult.skipped_dup }}
+          <DeclinedNotice :count="vippsResult.orders?.declined_skipped" testid="vipps-import-orders-declined" />
           <AutoAssignSummary v-if="vippsResult.auto_assign" source="vipps" :result="vippsResult.auto_assign" />
           <VippsPayoutSweepSummary v-if="vippsResult.payouts" :result="vippsResult.payouts" />
           <BookingDeferredNotice v-if="vippsResult.booking_deferred" />

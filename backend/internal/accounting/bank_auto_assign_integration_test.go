@@ -151,7 +151,8 @@ func TestBankAutoAssignBooksUniqueMemberDeposit(t *testing.T) {
 		t.Errorf("rerun = %+v, want a no-op", again)
 	}
 
-	// Unassign reopens the faktura; the next sync books it again.
+	// Unassign reopens the faktura; a person's undo is final for the rule
+	// (ACC-13(b), BRY-565), so the next sync leaves the row declined.
 	if _, _, err := f.svc.UnassignBankRow(ctx, f.club.ID, f.club.Treasurer.ID, row); err != nil {
 		t.Fatalf("unassign: %v", err)
 	}
@@ -162,8 +163,8 @@ func TestBankAutoAssignBooksUniqueMemberDeposit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bank sync: %v", err)
 	}
-	if synced.AutoAssign == nil || len(synced.AutoAssign.Assigned) != 1 || !f.paid(t, inv.ID) {
-		t.Errorf("sync auto-assign = %+v, want the deposit booked again", synced.AutoAssign)
+	if synced.AutoAssign == nil || len(synced.AutoAssign.Assigned) != 0 || synced.AutoAssign.ByReason[reasonDeclined] != 1 || f.paid(t, inv.ID) {
+		t.Errorf("sync auto-assign = %+v, want the undone deposit left as declined", synced.AutoAssign)
 	}
 }
 

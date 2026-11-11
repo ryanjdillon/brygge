@@ -188,7 +188,7 @@ func TestPostVippsChargeTxRaceLeavesNoDraft(t *testing.T) {
 		t.Fatalf("begin: %v", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	got, err := postVippsChargeTx(ctx, tx, f.club.ID, f.club.Treasurer.ID, receivablesAccountCode, "Synthetic race", stale, periodMayCreate)
+	got, err := postVippsChargeTx(ctx, tx, f.club.ID, f.club.Treasurer.ID, receivablesAccountCode, "Synthetic race", stale, personBooking)
 	if !errors.Is(err, errChargeRaced) {
 		t.Fatalf("err = %v, want errChargeRaced", err)
 	}

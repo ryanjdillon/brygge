@@ -226,7 +226,8 @@ func rebookVippsChargeTx(ctx context.Context, tx pgx.Tx, clubID, actorID, rowID 
 		description = fmt.Sprintf("Vipps innbetaling: %s", b.customerName)
 	}
 	// A supervised, person-driven rebook: it may open the year of its date.
-	p := vippsChargePosting(clubID, actorID, clearing, description, b, credits, periodMayCreate)
+	// Its callers lift the settlement deposit's decline after their commit.
+	p := vippsChargePosting(clubID, actorID, clearing, description, b, credits, personBooking)
 	p.date = entryDate
 	entryID, err := postChargeTx(ctx, tx, p)
 	if err != nil {

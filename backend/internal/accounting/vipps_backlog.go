@@ -210,7 +210,7 @@ func (s *Service) PostVippsDraftBacklog(ctx context.Context, clubID, periodID, a
 		}
 
 		if apply {
-			if err := s.PostJournalEntry(ctx, clubID, d.id, actor); err != nil {
+			if err := s.postBacklogDraft(ctx, clubID, actor, d); err != nil {
 				res.Refused = append(res.Refused, SkippedItem{Ref: ref, Reason: "posting: " + err.Error()})
 				continue
 			}
@@ -234,6 +234,19 @@ func (s *Service) PostVippsDraftBacklog(ctx context.Context, clubID, periodID, a
 		res.Payouts, res.BookingDeferred = s.sweepVippsPayoutsInSlot(ctx, clubID, actor)
 	}
 	return res, nil
+}
+
+// postBacklogDraft posts one leftover draft. The apply is a person's
+// supervised step: posting a charge's draft books the charge, so a decline on
+// its settlement's payout deposit is lifted (ACC-11) before the apply's sweep.
+func (s *Service) postBacklogDraft(ctx context.Context, clubID, actor string, d backlogDraft) error {
+	if err := s.PostJournalEntry(ctx, clubID, d.id, actor); err != nil {
+		return err
+	}
+	if d.sourceTable == "vipps_import_rows" {
+		s.liftSettlementDepositDecline(ctx, clubID, d.sourceID)
+	}
+	return nil
 }
 
 // backlogPeriodYear returns the year of an open fiscal period; a backlog is
@@ -964,6 +977,9 @@ func (s *Service) applyBacklogReclass(ctx context.Context, clubID, actor string,
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit rebooking: %w", err)
 	}
+	// A person's supervised booking of the charge: lift a decline from its
+	// settlement's payout deposit (ACC-11), in its own transaction.
+	s.liftSettlementDepositDecline(ctx, clubID, r.rowID)
 	if rb.InvoiceID != "" {
 		// Best-effort, as in AssignVippsChargeToInvoice: the ledger is right.
 		if err := s.linkInvoicePayment(ctx, clubID, rb.InvoiceID, rb.Date); err != nil {

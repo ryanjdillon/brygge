@@ -361,7 +361,7 @@ func TestUnassignLegacySettlementReopensEveryFaktura(t *testing.T) {
 			}
 			confirm := func(row string) {
 				t.Helper()
-				if _, err := f.svc.reconcileVippsConfirm(ctx, c.ID, row, "", c.Treasurer.ID, lines, post, periodMayCreate); err != nil {
+				if _, err := f.svc.reconcileVippsConfirm(ctx, c.ID, row, "", c.Treasurer.ID, lines, post, personBooking); err != nil {
 					t.Fatalf("confirm: %v", err)
 				}
 			}

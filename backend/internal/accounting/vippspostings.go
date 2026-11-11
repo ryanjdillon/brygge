@@ -94,6 +94,9 @@ type vippsBelastning struct {
 	orderRef     string // merchant reference (chk-…) on ePayment charges
 	entryID      *string
 	dismissedAt  *time.Time
+	// declined is true when a person's undo took the charge out of the
+	// automatic passes (auto_declined_at, ACC-13(b)).
+	declined bool
 }
 
 // loadVippsBelastning reads one belastning row and validates it is an
@@ -111,11 +114,12 @@ func loadVippsBelastningIn(ctx context.Context, q dbtx, clubID, rowID string) (*
 		`SELECT id, row_type, amount,
 		        COALESCE(booking_date, tx_at::date),
 		        COALESCE(customer_name, ''), COALESCE(message, ''),
-		        COALESCE(order_id, ''), journal_entry_id, dismissed_at
+		        COALESCE(order_id, ''), journal_entry_id, dismissed_at,
+		        auto_declined_at IS NOT NULL
 		   FROM vipps_import_rows
 		  WHERE id = $1 AND club_id = $2`,
 		rowID, clubID,
-	).Scan(&b.id, &rowType, &b.amount, &b.date, &b.customerName, &b.message, &b.orderRef, &b.entryID, &b.dismissedAt)
+	).Scan(&b.id, &rowType, &b.amount, &b.date, &b.customerName, &b.message, &b.orderRef, &b.entryID, &b.dismissedAt, &b.declined)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("vipps charge not found")
 	}
@@ -172,26 +176,27 @@ func (s *Service) DismissVippsCharge(ctx context.Context, clubID, userID, rowID,
 // postVippsCharge books one belastning as DR clearing / CR <creditAccount>,
 // marks the row reconciled, and returns the entry. The guarded mark makes the
 // operation safe against a concurrent second booking of the same charge.
-// policy is periodExistingOnly for an automatic pass, which never opens a
-// fiscal year, and periodMayCreate for a person's booking.
-func (s *Service) postVippsCharge(ctx context.Context, clubID, createdBy, creditAccount, description string, b *vippsBelastning, policy periodPolicy) (string, error) {
+// mode is automaticBooking for an automatic pass, which never opens a fiscal
+// year and never books a charge a person declined (errAutoDeclined), and
+// personBooking for a person's booking.
+func (s *Service) postVippsCharge(ctx context.Context, clubID, createdBy, creditAccount, description string, b *vippsBelastning, mode bookingMode) (string, error) {
 	return s.postVippsChargeSplit(ctx, clubID, createdBy, description, b, []CreateJournalLineInput{
 		{AccountCode: creditAccount, Debit: 0, Credit: b.amount, Description: description},
-	}, policy)
+	}, mode)
 }
 
 // postVippsChargeSplit is postVippsCharge with the credit side given as lines,
 // for a charge that pays several things at once (a checkout order settling
 // fakturas plus catalog lines). The credits must sum to the charge amount.
-func (s *Service) postVippsChargeSplit(ctx context.Context, clubID, createdBy, description string, b *vippsBelastning, credits []CreateJournalLineInput, policy periodPolicy) (string, error) {
+func (s *Service) postVippsChargeSplit(ctx context.Context, clubID, createdBy, description string, b *vippsBelastning, credits []CreateJournalLineInput, mode bookingMode) (string, error) {
 	clearing, _, err := s.vippsAccounts(ctx, clubID)
 	if err != nil {
 		return "", err
 	}
-	p := vippsChargePosting(clubID, createdBy, clearing, description, b, credits, policy)
+	p := vippsChargePosting(clubID, createdBy, clearing, description, b, credits, mode)
 
 	var periodID string
-	if policy == periodMayCreate {
+	if mode.policy == periodMayCreate {
 		var periodStatus string
 		periodID, periodStatus, err = s.resolvePeriod(ctx, clubID, b.date, "")
 		if err != nil {
@@ -217,30 +222,44 @@ func (s *Service) postVippsChargeSplit(ctx context.Context, clubID, createdBy, d
 		return "", fmt.Errorf("marking charge reconciled: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		// Lost a race: the row was booked concurrently. Drop the draft we
-		// just created and report the winning entry instead.
+		// Lost a race: the row was booked concurrently, or (an automatic
+		// pass) a person declined it. Drop the draft we just created and
+		// report the winning entry, or the decline, instead.
 		_, _ = s.db.Exec(ctx,
 			`DELETE FROM journal_entries WHERE id = $1 AND club_id = $2 AND status = 'draft'`,
 			entry.ID, clubID,
 		)
-		var existing string
-		if err := s.db.QueryRow(ctx, p.winnerSQL, b.id, clubID).Scan(&existing); err != nil {
-			return "", fmt.Errorf("charge already reconciled but reading winner failed: %w", err)
-		}
-		return existing, errChargeRaced
+		return lostChargeMark(ctx, s.db, p)
 	}
 	if err := s.PostJournalEntry(ctx, clubID, entry.ID, createdBy); err != nil {
+		// The mark did not touch auto_declined_at, so the unwind leaves a
+		// person's decline as it was.
 		s.unwindVippsPosting(ctx, clubID, entry.ID, []string{b.id})
 		return "", fmt.Errorf("posting journal entry: %w", err)
+	}
+	// Booked and posted: the row is no longer declined. Logged on failure,
+	// the booking stands; an automatic pass never reaches a booked row.
+	if _, err := s.db.Exec(ctx, p.liftSQL, b.id, clubID, entry.ID); err != nil {
+		s.log.Warn().Err(err).Str("vipps_row_id", b.id).Msg("vipps charge booked; lifting its decline failed")
 	}
 	return entry.ID, nil
 }
 
-// vippsChargePosting is the chargePosting of one belastning. The policy has no
-// default here: each caller states whether the booking may open a fiscal year.
-func vippsChargePosting(clubID, createdBy, clearing, description string, b *vippsBelastning, credits []CreateJournalLineInput, policy periodPolicy) *chargePosting {
+// vippsChargePosting is the chargePosting of one belastning. The mode has no
+// default here: each caller states whether the booking may open a fiscal year
+// and whether it is an automatic pass, whose guarded mark refuses a charge a
+// person declined (auto_declined_at). The mark never touches the marker; the
+// lift after a successful post clears it (a person's booking of a declined
+// charge), so a pool-backed post that fails and unwinds keeps it.
+func vippsChargePosting(clubID, createdBy, clearing, description string, b *vippsBelastning, credits []CreateJournalLineInput, mode bookingMode) *chargePosting {
+	markSQL := `UPDATE vipps_import_rows SET journal_entry_id = $1
+		  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL`
+	if mode.auto {
+		markSQL += ` AND auto_declined_at IS NULL`
+	}
 	return &chargePosting{
-		periodPolicy: policy,
+		periodPolicy: mode.policy,
+		auto:         mode.auto,
 		clubID:       clubID,
 		createdBy:    createdBy,
 		source:       "vipps",
@@ -251,29 +270,31 @@ func vippsChargePosting(clubID, createdBy, clearing, description string, b *vipp
 		amount:       b.amount,
 		description:  description,
 		credits:      credits,
-		markSQL: `UPDATE vipps_import_rows SET journal_entry_id = $1
-		  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL`,
-		winnerSQL: `SELECT journal_entry_id FROM vipps_import_rows WHERE id = $1 AND club_id = $2`,
+		markSQL:      markSQL,
+		winnerSQL:    `SELECT journal_entry_id FROM vipps_import_rows WHERE id = $1 AND club_id = $2`,
+		declinedSQL:  `SELECT auto_declined_at IS NOT NULL FROM vipps_import_rows WHERE id = $1 AND club_id = $2`,
+		liftSQL: `UPDATE vipps_import_rows SET auto_declined_at = NULL
+		  WHERE id = $1 AND club_id = $2 AND journal_entry_id = $3 AND auto_declined_at IS NOT NULL`,
 		savepoint: "vipps_charge",
 	}
 }
 
 // postVippsChargeTx is postVippsCharge inside the caller's transaction, for
 // a booking that holds the faktura lock.
-func postVippsChargeTx(ctx context.Context, tx pgx.Tx, clubID, createdBy, creditAccount, description string, b *vippsBelastning, policy periodPolicy) (string, error) {
+func postVippsChargeTx(ctx context.Context, tx pgx.Tx, clubID, createdBy, creditAccount, description string, b *vippsBelastning, mode bookingMode) (string, error) {
 	return postVippsChargeSplitTx(ctx, tx, clubID, createdBy, description, b, []CreateJournalLineInput{
 		{AccountCode: creditAccount, Debit: 0, Credit: b.amount, Description: description},
-	}, policy)
+	}, mode)
 }
 
 // postVippsChargeSplitTx is postVippsChargeSplit inside the caller's
 // transaction (postChargeTx).
-func postVippsChargeSplitTx(ctx context.Context, tx pgx.Tx, clubID, createdBy, description string, b *vippsBelastning, credits []CreateJournalLineInput, policy periodPolicy) (string, error) {
+func postVippsChargeSplitTx(ctx context.Context, tx pgx.Tx, clubID, createdBy, description string, b *vippsBelastning, credits []CreateJournalLineInput, mode bookingMode) (string, error) {
 	clearing, _, err := vippsAccountsIn(ctx, tx, clubID)
 	if err != nil {
 		return "", err
 	}
-	return postChargeTx(ctx, tx, vippsChargePosting(clubID, createdBy, clearing, description, b, credits, policy))
+	return postChargeTx(ctx, tx, vippsChargePosting(clubID, createdBy, clearing, description, b, credits, mode))
 }
 
 // unwindVippsPosting undoes a charge posting whose PostJournalEntry failed: it
@@ -334,16 +355,23 @@ var errChargeRaced = fmt.Errorf("vipps charge booked concurrently")
 // invoice: DR clearing / CR 1500, marks the charge reconciled, and back-links
 // invoices.payment_id so the faktura reads as paid. Idempotent per charge.
 // This is a person's booking in Tildel: a missing fiscal year for the charge's
-// date is created, as it always was. The automatic passes use
-// assignVippsChargeToInvoice with auto set.
+// date is created, as it always was, a charge a person's undo declined is
+// booked (and so no longer declined), and the decline is lifted from the
+// settlement's payout deposit (ACC-11). The automatic passes use
+// assignVippsChargeToInvoice with automaticBooking.
 func (s *Service) AssignVippsChargeToInvoice(ctx context.Context, clubID, vippsRowID, invoiceID, createdBy string) (*VippsChargePostResult, error) {
-	return s.assignVippsChargeToInvoice(ctx, clubID, vippsRowID, invoiceID, createdBy, periodMayCreate)
+	res, err := s.assignVippsChargeToInvoice(ctx, clubID, vippsRowID, invoiceID, createdBy, personBooking)
+	if err == nil && !res.AlreadyReconciled {
+		s.liftSettlementDepositDecline(ctx, clubID, vippsRowID)
+	}
+	return res, err
 }
 
-// assignVippsChargeToInvoice is AssignVippsChargeToInvoice with the period
-// policy chosen by the caller; periodExistingOnly refuses to open a fiscal year
-// or to book into a period that is not open.
-func (s *Service) assignVippsChargeToInvoice(ctx context.Context, clubID, vippsRowID, invoiceID, createdBy string, policy periodPolicy) (*VippsChargePostResult, error) {
+// assignVippsChargeToInvoice is AssignVippsChargeToInvoice with the booking
+// mode chosen by the caller; automaticBooking refuses to open a fiscal year,
+// to book into a period that is not open, and to book a charge a person
+// declined (errAutoDeclined).
+func (s *Service) assignVippsChargeToInvoice(ctx context.Context, clubID, vippsRowID, invoiceID, createdBy string, mode bookingMode) (*VippsChargePostResult, error) {
 	b, err := s.loadVippsBelastning(ctx, clubID, vippsRowID)
 	if err != nil {
 		return nil, err
@@ -353,6 +381,9 @@ func (s *Service) assignVippsChargeToInvoice(ctx context.Context, clubID, vippsR
 	}
 	if b.dismissedAt != nil {
 		return nil, fmt.Errorf("charge is dismissed — un-dismiss it before assigning")
+	}
+	if mode.auto && b.declined {
+		return nil, errAutoDeclined
 	}
 
 	// Lock the faktura across the posting, as the bank assigns do
@@ -375,7 +406,7 @@ func (s *Service) assignVippsChargeToInvoice(ctx context.Context, clubID, vippsR
 	}
 
 	desc := fmt.Sprintf("Vipps innbetaling: %s", b.customerName)
-	entryID, err := postVippsChargeTx(ctx, tx, clubID, createdBy, receivablesAccountCode, desc, b, policy)
+	entryID, err := postVippsChargeTx(ctx, tx, clubID, createdBy, receivablesAccountCode, desc, b, mode)
 	if err == errChargeRaced {
 		return &VippsChargePostResult{EntryID: entryID, AlreadyReconciled: true}, nil
 	}
@@ -413,16 +444,22 @@ func (s *Service) assignVippsChargeToInvoice(ctx context.Context, clubID, vippsR
 // (or other) account: DR clearing / CR <accountCode>. Use this for walk-up
 // payments with no faktura. Idempotent per charge. This is a person's booking
 // in Tildel (Lag bilag): a missing fiscal year for the charge's date is
-// created, as it always was. The automatic passes use createVippsChargeBilag
-// with auto set.
+// created, as it always was, a declined charge is booked, and the decline is
+// lifted from the settlement's payout deposit (ACC-11). The automatic passes
+// use createVippsChargeBilag with automaticBooking.
 func (s *Service) CreateVippsChargeBilag(ctx context.Context, clubID, vippsRowID, accountCode, note, createdBy string) (*VippsChargePostResult, error) {
-	return s.createVippsChargeBilag(ctx, clubID, vippsRowID, accountCode, note, createdBy, periodMayCreate)
+	res, err := s.createVippsChargeBilag(ctx, clubID, vippsRowID, accountCode, note, createdBy, personBooking)
+	if err == nil && !res.AlreadyReconciled {
+		s.liftSettlementDepositDecline(ctx, clubID, vippsRowID)
+	}
+	return res, err
 }
 
-// createVippsChargeBilag is CreateVippsChargeBilag with the period policy
-// chosen by the caller; periodExistingOnly refuses to open a fiscal year or to
-// book into a period that is not open.
-func (s *Service) createVippsChargeBilag(ctx context.Context, clubID, vippsRowID, accountCode, note, createdBy string, policy periodPolicy) (*VippsChargePostResult, error) {
+// createVippsChargeBilag is CreateVippsChargeBilag with the booking mode
+// chosen by the caller; automaticBooking refuses to open a fiscal year, to
+// book into a period that is not open, and to book a charge a person declined
+// (errAutoDeclined).
+func (s *Service) createVippsChargeBilag(ctx context.Context, clubID, vippsRowID, accountCode, note, createdBy string, mode bookingMode) (*VippsChargePostResult, error) {
 	if accountCode == "" {
 		return nil, fmt.Errorf("account code is required")
 	}
@@ -436,12 +473,15 @@ func (s *Service) createVippsChargeBilag(ctx context.Context, clubID, vippsRowID
 	if b.dismissedAt != nil {
 		return nil, fmt.Errorf("charge is dismissed — un-dismiss it before booking")
 	}
+	if mode.auto && b.declined {
+		return nil, errAutoDeclined
+	}
 
 	desc := fmt.Sprintf("Vipps innbetaling: %s", b.customerName)
 	if note != "" {
 		desc = fmt.Sprintf("%s — %s", desc, note)
 	}
-	entryID, err := s.postVippsCharge(ctx, clubID, createdBy, accountCode, desc, b, policy)
+	entryID, err := s.postVippsCharge(ctx, clubID, createdBy, accountCode, desc, b, mode)
 	if err == errChargeRaced {
 		return &VippsChargePostResult{EntryID: entryID, AlreadyReconciled: true}, nil
 	}
@@ -458,31 +498,37 @@ func (s *Service) createVippsChargeBilag(ctx context.Context, clubID, vippsRowID
 // every belastning charge in the settlement has been booked, refuses with
 // ErrVippsSettlementNotNetting (nothing posted) when the clearing account would
 // not net to zero, and is idempotent: an already-cleared bank row returns its
-// existing entries. This is a person's clearing in Tildel: a missing fiscal
-// year for the fee or bank date is created, as it always was. The payout sweep
-// uses clearVippsPayout with auto set.
+// existing entries. This is a person's clearing in Tildel (Utlign
+// utbetaling): a missing fiscal year for the fee or bank date is
+// created, as it always was, and a deposit a person declined ("Angre
+// innbetalingen") is cleared, which lifts its decline. The payout sweep uses
+// clearVippsPayout with automaticBooking.
 func (s *Service) ClearVippsPayout(ctx context.Context, clubID, bankRowID, createdBy string) (*VippsPayoutClearResult, error) {
-	return s.clearVippsPayout(ctx, clubID, bankRowID, createdBy, periodMayCreate)
+	return s.clearVippsPayout(ctx, clubID, bankRowID, createdBy, personBooking)
 }
 
-// clearVippsPayout is ClearVippsPayout with the period policy chosen by the
-// caller; periodExistingOnly refuses to open a fiscal year (a missing one is
-// *noFiscalYearError, nothing is posted).
-func (s *Service) clearVippsPayout(ctx context.Context, clubID, bankRowID, createdBy string, policy periodPolicy) (*VippsPayoutClearResult, error) { //nolint:gocognit,cyclop // validate, lock and post one payout clearing in a single transaction; split tracked in BRY-424
+// clearVippsPayout is ClearVippsPayout with the booking mode chosen by the
+// caller; automaticBooking refuses to open a fiscal year (a missing one is
+// *noFiscalYearError, nothing is posted) and to clear a deposit a person
+// declined (errAutoDeclined, also when the decline lands while it waits for
+// the settlement's lock).
+func (s *Service) clearVippsPayout(ctx context.Context, clubID, bankRowID, createdBy string, mode bookingMode) (*VippsPayoutClearResult, error) { //nolint:gocognit,cyclop // validate, lock and post one payout clearing in a single transaction; split tracked in BRY-424
 	var (
 		bankDate    time.Time
 		description string
 		bankAmount  float64
 		bankAccount string
 		bankEntry   *string
+		declined    bool
 	)
 	err := s.db.QueryRow(ctx,
-		`SELECT bir.row_date, bir.description, bir.amount, bi.bank_account_code, bir.journal_entry_id
+		`SELECT bir.row_date, bir.description, bir.amount, bi.bank_account_code, bir.journal_entry_id,
+		        bir.auto_declined_at IS NOT NULL
 		   FROM bank_import_rows bir
 		   JOIN bank_imports bi ON bi.id = bir.bank_import_id
 		  WHERE bir.id = $1 AND bir.club_id = $2`,
 		bankRowID, clubID,
-	).Scan(&bankDate, &description, &bankAmount, &bankAccount, &bankEntry)
+	).Scan(&bankDate, &description, &bankAmount, &bankAccount, &bankEntry, &declined)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("bank row not found")
 	}
@@ -524,6 +570,9 @@ func (s *Service) clearVippsPayout(ctx context.Context, clubID, bankRowID, creat
 	// existing entries and the clearing balance so callers stay idempotent.
 	if bankEntry != nil {
 		return s.alreadyClearedResult(ctx, clubID, res, bankRowID, *bankEntry, payoutBooking), nil
+	}
+	if mode.auto && declined {
+		return nil, fmt.Errorf("%w: Utb. %s Vippsnr %s", errAutoDeclined, res.SettlementNumber, res.MSN)
 	}
 
 	// Everything below runs in one transaction that holds the settlement's
@@ -618,7 +667,7 @@ func (s *Service) clearVippsPayout(ctx context.Context, clubID, bankRowID, creat
 
 	// Resolve both periods before posting either entry, so a period that is
 	// not open is reported as such instead of as a failed post.
-	feePeriod, bankPeriod, err := payoutPeriods(ctx, tx, clubID, payoutBooking, bankDate, postFee, policy)
+	feePeriod, bankPeriod, err := payoutPeriods(ctx, tx, clubID, payoutBooking, bankDate, postFee, mode.policy)
 	if err != nil {
 		return nil, err
 	}
@@ -687,15 +736,28 @@ func (s *Service) clearVippsPayout(ctx context.Context, clubID, bankRowID, creat
 	if cerr != nil {
 		return nil, fmt.Errorf("creating bank entry: %w", cerr)
 	}
-	tag, uerr := tx.Exec(ctx,
-		`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true
-		  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL`,
-		bankJE.ID, bankRowID, clubID,
-	)
+	// The link books the deposit, so it lifts a person's decline in the same
+	// statement (the transaction rolls both back if the post fails). The
+	// sweep's link refuses a declined deposit instead.
+	linkSQL := `UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true, auto_declined_at = NULL
+		  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL`
+	if mode.auto {
+		linkSQL += ` AND auto_declined_at IS NULL`
+	}
+	tag, uerr := tx.Exec(ctx, linkSQL, bankJE.ID, bankRowID, clubID)
 	if uerr != nil {
 		return nil, fmt.Errorf("linking bank row: %w", uerr)
 	}
 	if tag.RowsAffected() == 0 {
+		// A person undid the deposit's clearing while the sweep waited: the
+		// sweep reports it declined, not cleared.
+		if mode.auto {
+			if d, derr := bankRowDeclinedIn(ctx, tx, clubID, []string{bankRowID}); derr != nil {
+				return nil, derr
+			} else if d {
+				return nil, fmt.Errorf("%w: Utb. %s Vippsnr %s", errAutoDeclined, res.SettlementNumber, res.MSN)
+			}
+		}
 		// Booked by something else (a manual assign) since the lock was taken:
 		// drop the whole clearing and report that booking.
 		_ = tx.Rollback(ctx)
@@ -716,7 +778,7 @@ func (s *Service) clearVippsPayout(ctx context.Context, clubID, bankRowID, creat
 	// Mark the payout row reconciled against the bank entry.
 	if payoutEntry == nil {
 		if _, err := tx.Exec(ctx,
-			`UPDATE vipps_import_rows SET journal_entry_id = $1
+			`UPDATE vipps_import_rows SET journal_entry_id = $1, auto_declined_at = NULL
 			  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL`,
 			bankJE.ID, payoutRowID, clubID,
 		); err != nil {
@@ -916,7 +978,7 @@ func unbookedSettlementFees(ctx context.Context, q dbtx, clubID, msn string, boo
 // means booking this total would book the fee twice.
 func linkFeeRowsTx(ctx context.Context, tx pgx.Tx, clubID, entryID string, feeRows []string, settlement string) error {
 	tag, err := tx.Exec(ctx,
-		`UPDATE vipps_import_rows SET journal_entry_id = $1
+		`UPDATE vipps_import_rows SET journal_entry_id = $1, auto_declined_at = NULL
 		  WHERE club_id = $2 AND journal_entry_id IS NULL AND id = ANY($3::uuid[])`,
 		entryID, clubID, feeRows,
 	)

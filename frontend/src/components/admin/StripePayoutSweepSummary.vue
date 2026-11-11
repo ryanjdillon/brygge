@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { StripePayoutSweepItem, StripePayoutSweepResult } from '@/composables/useBankImports'
+import DeclinedNotice from '@/components/admin/DeclinedNotice.vue'
 
 // Shows the Stripe payouts a sync or import cleared on its own and why the
 // rest stay open: members still to book, a deposit not imported yet, an
@@ -28,6 +29,7 @@ function label(p: StripePayoutSweepItem): string {
         failed: props.result.failed.length,
       }) }}
     </p>
+    <DeclinedNotice :count="props.result.declined_skipped" testid="stripe-payout-sweep-declined" />
     <p v-if="props.result.error" class="text-red-700" data-testid="stripe-payout-sweep-error">
       {{ props.result.error }}
     </p>

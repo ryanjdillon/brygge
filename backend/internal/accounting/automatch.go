@@ -149,7 +149,9 @@ func (s *Service) DeleteRule(ctx context.Context, ruleID string) error {
 // Matched rows get draft journal entries (not auto-posted — treasurer reviews).
 // A provider payout deposit is never matched: a rule on its text ("Vipps",
 // "Stripe") would book money the provider's postings already put on a
-// clearing account a second time.
+// clearing account a second time. Nor is a row a person's undo declined
+// (auto_declined_at, ACC-13(b)): the rules are automatic, so they leave it,
+// in the candidate query and in the guarded link.
 func (s *Service) AutoMatchImport(ctx context.Context, clubID, importID, periodID, matchedBy string) (int, error) {
 	if err := s.refuseReferencePeriod(ctx, clubID, periodID); err != nil {
 		return 0, err
@@ -216,11 +218,12 @@ func (s *Service) AutoMatchImport(ctx context.Context, clubID, importID, periodI
 				break
 			}
 
-			// Guarded on the row still being unbooked, so a concurrent match
-			// can't be overwritten; a failed link leaves no draft behind.
+			// Guarded on the row still being unbooked and not declined, so a
+			// concurrent match can't be overwritten and a person's undo that
+			// landed meanwhile holds; a failed link leaves no draft behind.
 			tag, lerr := s.db.Exec(ctx,
 				`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true
-				  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL`,
+				  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL AND auto_declined_at IS NULL`,
 				entry.ID, row.id, clubID,
 			)
 			if lerr != nil || tag.RowsAffected() != 1 {
@@ -247,14 +250,17 @@ type autoMatchRow struct {
 }
 
 // loadAutoMatchRows lists the import's unbooked rows, leaving out provider
-// payout deposits and rows dated in a reference year (BRY-418: the caller's
-// period says nothing about which year a row belongs to).
+// payout deposits, rows a person declined and rows dated in a reference year
+// (BRY-418: the caller's period says nothing about which year a row belongs
+// to). AutoMatchImport reports only a count of matches, so a declined row is
+// filtered here rather than counted.
 func (s *Service) loadAutoMatchRows(ctx context.Context, clubID, importID string, payouts providerPayouts) ([]autoMatchRow, error) {
 	rows, err := s.db.Query(ctx,
 		`SELECT bir.id, bir.row_date, bir.description, bir.amount, bir.counterpart, bir.kid_number
 		 FROM bank_import_rows bir
 		 JOIN bank_imports bi ON bi.id = bir.bank_import_id
 		 WHERE bi.id = $1 AND bi.club_id = $2 AND bir.journal_entry_id IS NULL
+		   AND bir.auto_declined_at IS NULL
 		   AND NOT `+referenceDateSQL("bir.club_id", "bir.row_date")+`
 		 ORDER BY bir.row_date`,
 		importID, clubID,

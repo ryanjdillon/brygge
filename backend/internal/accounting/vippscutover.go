@@ -243,7 +243,11 @@ func (s *Service) regenerateOneSettlement(ctx context.Context, clubID, createdBy
 		}
 		bel := b // capture
 		desc := fmt.Sprintf("Vipps innbetaling: %s", bel.customerName)
-		if _, err := s.postVippsCharge(ctx, clubID, createdBy, account, desc, &bel, periodMayCreate); err != nil {
+		// A supervised tool: it may open the year, takes no guard and no
+		// settlement lift (liftSettlementDepositDecline); its links clear
+		// the row's own marker like any link (its rows were booked, so
+		// none is declined in practice).
+		if _, err := s.postVippsCharge(ctx, clubID, createdBy, account, desc, &bel, personBooking); err != nil {
 			if err == errChargeRaced {
 				continue
 			}

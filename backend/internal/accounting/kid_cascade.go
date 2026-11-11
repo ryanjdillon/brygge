@@ -13,10 +13,12 @@ import (
 
 // kidCascadeEligibleSQL is true for a bank row the payment-match cascade
 // (KID → invoice number → counterpart name, at bank import and bank sync)
-// may book: not booked, not dismissed, not paired as a refund and not dated
-// in a reference year (BRY-418: that year's deposits are left alone, whatever
+// may book: not booked, not dismissed, not paired as a refund, not declined
+// by a person's undo (auto_declined_at, ACC-13(b)) and not dated in a
+// reference year (BRY-418: that year's deposits are left alone, whatever
 // period an import override names). alias is the bank_import_rows alias, ""
-// for an unaliased table.
+// for an unaliased table. The cascade is automatic, and this predicate serves
+// only it, so a declined row is filtered here rather than counted.
 //
 // Bank sync lists its candidates with it, and both cascades guard the row
 // link with it, so a row the treasurer dismissed while a sync was waiting
@@ -35,7 +37,8 @@ func kidCascadeEligibleSQL(alias string) string {
 	if t == "" {
 		t = "bank_import_rows"
 	}
-	return "(" + p + "journal_entry_id IS NULL AND " + p + "dismissed_at IS NULL AND " + p + "refund_paired_with IS NULL AND NOT " +
+	return "(" + p + "journal_entry_id IS NULL AND " + p + "dismissed_at IS NULL AND " + p + "refund_paired_with IS NULL AND " +
+		p + "auto_declined_at IS NULL AND NOT " +
 		referenceDateSQL(t+".club_id", t+".row_date") + ")"
 }
 

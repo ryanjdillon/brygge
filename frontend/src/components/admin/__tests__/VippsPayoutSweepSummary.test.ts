@@ -31,4 +31,9 @@ describe('VippsPayoutSweepSummary', () => {
     const wrapper = mountWithPlugins(VippsPayoutSweepSummary, { props: { result } })
     expect(wrapper.find('[data-testid="vipps-payout-sweep-error"]').exists()).toBe(false)
   })
+
+  it('says how many deposits wait because a person undid their clearing', () => {
+    const wrapper = mountWithPlugins(VippsPayoutSweepSummary, { props: { result: { ...result, declined_skipped: 1 } } })
+    expect(wrapper.find('[data-testid="vipps-payout-sweep-declined"]').exists()).toBe(true)
+  })
 })

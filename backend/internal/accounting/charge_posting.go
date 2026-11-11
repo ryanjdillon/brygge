@@ -111,6 +111,14 @@ type chargePosting struct {
 	// periodPolicy says whether postChargeTx may open a fiscal year when no
 	// period is set and none covers the date. The zero value forbids it.
 	periodPolicy periodPolicy
+	// auto marks an automatic pass (ACC-13(b)): markSQL then refuses a row
+	// a person's undo declined, and a lost mark reads declinedSQL ($1 row,
+	// $2 club) to report errAutoDeclined instead of a race.
+	auto        bool
+	declinedSQL string
+	// liftSQL ($1 row, $2 club, $3 entry), when set, clears the row's decline
+	// marker once the entry is posted, so a failed post never loses it.
+	liftSQL string
 }
 
 // periodPolicy is whether a posting may create the fiscal year of its date.
@@ -147,6 +155,30 @@ func (p *chargePosting) entryInput(periodID string) CreateJournalEntryInput {
 		ClubID:         p.clubID,
 		Lines:          lines,
 	}
+}
+
+// lostChargeMark explains a guarded mark that matched no row, on q: the
+// winner's entry with errChargeRaced, errAutoDeclined when an automatic pass
+// found the row declined by a person, or an error when the row left the
+// bookable state (dismissed, sent to review) after it was read.
+func lostChargeMark(ctx context.Context, q dbtx, p *chargePosting) (string, error) {
+	var existing *string
+	if err := q.QueryRow(ctx, p.winnerSQL, p.sourceID, p.clubID).Scan(&existing); err != nil {
+		return "", fmt.Errorf("charge already reconciled but reading winner failed: %w", err)
+	}
+	if existing != nil {
+		return *existing, errChargeRaced
+	}
+	if p.auto && p.declinedSQL != "" {
+		var declined bool
+		if err := q.QueryRow(ctx, p.declinedSQL, p.sourceID, p.clubID).Scan(&declined); err != nil {
+			return "", fmt.Errorf("charge not booked but reading its decline failed: %w", err)
+		}
+		if declined {
+			return "", errAutoDeclined
+		}
+	}
+	return "", errors.New("charge changed while it was being booked")
 }
 
 // postChargeTx books p inside the caller's transaction and returns the
@@ -191,19 +223,15 @@ func postChargeTx(ctx context.Context, tx pgx.Tx, p *chargePosting) (string, err
 		if _, err := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT `+p.savepoint); err != nil {
 			return "", fmt.Errorf("rollback to savepoint: %w", err)
 		}
-		var existing *string
-		if err := tx.QueryRow(ctx, p.winnerSQL, p.sourceID, p.clubID).Scan(&existing); err != nil {
-			return "", fmt.Errorf("charge already reconciled but reading winner failed: %w", err)
-		}
-		if existing == nil {
-			// Not booked by anyone: the row left the bookable state (dismissed,
-			// sent to review) after it was read.
-			return "", errors.New("charge changed while it was being booked")
-		}
-		return *existing, errChargeRaced
+		return lostChargeMark(ctx, tx, p)
 	}
 	if err := postJournalEntryTx(ctx, tx, p.clubID, entry.ID, p.createdBy); err != nil {
 		return "", fmt.Errorf("posting journal entry: %w", err)
+	}
+	if p.liftSQL != "" {
+		if _, err := tx.Exec(ctx, p.liftSQL, p.sourceID, p.clubID, entry.ID); err != nil {
+			return "", fmt.Errorf("lifting the row's decline: %w", err)
+		}
 	}
 	if _, err := tx.Exec(ctx, `RELEASE SAVEPOINT `+p.savepoint); err != nil {
 		return "", fmt.Errorf("release savepoint: %w", err)
