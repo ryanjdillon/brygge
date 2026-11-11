@@ -1590,6 +1590,7 @@
       "refreshed": "Aggiornate",
       "provisionalSettledNotice": "{count} riga/e provvisoria/e di un’esportazione precedente ora riportano il testo bancario definitivo.",
       "kidSkippedSettledNotice": "{count} pagamento/i KID corrispondono a una faktura già saldata (possibile doppio pagamento). Restano in Tildel.",
+      "missingPeriodsNotice": "Nessun esercizio contabile per {years}: crea l'anno in «Journal entries» (Create period) e le righe verranno registrate alla prossima sincronizzazione.",
       "exportDayNotice": "L’estratto arriva fino al {date}. I bonifici ancora in corso il giorno dell’esportazione possono comparire come un semplice «Overførsel» finché non sono regolati. Esporta fino a ieri, oppure reimporta il {date} più tardi.",
       "provisionalAmbiguousNotice": "{count} riga/e provvisoria/e non sono state abbinate a un’unica riga regolata e restano in Tildel.",
       "referenceMismatchNotice": "{count} riga/e provvisoria/e hanno una riga regolata con lo stesso riferimento ma un altro importo o una data successiva. Nessuna è stata modificata; controllale in Tildel:",
@@ -1735,7 +1736,9 @@
           "deferred": "Il periodo contabile non è aperto. La transazione verrà registrata quando l'esercizio sarà aperto.",
           "failed": "La registrazione non è riuscita. La transazione attende la prossima sincronizzazione Stripe."
         }
-      }
+      },
+      "periodClosedNotice": "Il periodo contabile {year} è chiuso — riaprilo prima di creare la registrazione.",
+      "periodLockedNotice": "Il periodo contabile {year} è bloccato e non può essere riaperto in Brygge, quindi questa registrazione non può essere creata qui."
     },
     "bankReconcile": {
       "filterAll": "All",

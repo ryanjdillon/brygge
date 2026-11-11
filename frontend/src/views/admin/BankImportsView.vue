@@ -608,6 +608,9 @@ const filterMonthValue = computed<number>({
       <span v-if="syncResult.closed_periods?.length" class="ml-2 text-yellow-800">
         ({{ t('admin.bankImports.runSyncClosed', { years: syncResult.closed_periods.join(', ') }) }})
       </span>
+      <p v-if="syncResult.missing_periods?.length" class="mt-1 text-yellow-800" data-testid="bank-sync-missing-periods">
+        {{ t('admin.bankImports.missingPeriodsNotice', { years: syncResult.missing_periods.join(', ') }) }}
+      </p>
       <p v-if="syncResult.kid_skipped_settled" class="mt-1 text-yellow-800" data-testid="bank-sync-kid-skipped">
         {{ t('admin.bankImports.kidSkippedSettledNotice', { count: syncResult.kid_skipped_settled }) }}
       </p>
@@ -825,6 +828,13 @@ const filterMonthValue = computed<number>({
           </p>
           <p v-if="bankResult.closed_periods?.length" class="mt-2 rounded bg-yellow-50 px-2 py-1 text-yellow-800">
             {{ t('admin.bankImports.closedPeriodsNotice', { years: bankResult.closed_periods.join(', ') }) }}
+          </p>
+          <p
+            v-if="bankResult.missing_periods?.length"
+            class="mt-2 rounded bg-yellow-50 px-2 py-1 text-yellow-800"
+            data-testid="bank-import-missing-periods"
+          >
+            {{ t('admin.bankImports.missingPeriodsNotice', { years: bankResult.missing_periods.join(', ') }) }}
           </p>
           <div v-if="bankResult.row_errors?.length" class="mt-2 rounded bg-red-50 px-2 py-1 text-red-800">
             <p class="font-medium">{{ t('admin.bankImports.rowErrorsNotice', { count: bankResult.row_errors.length }) }}</p>
@@ -1062,7 +1072,7 @@ const filterMonthValue = computed<number>({
           </div>
 
           <div v-if="reconcilePreview.period_closed" class="rounded-md bg-red-50 px-3 py-2 text-xs text-red-800" data-testid="reconcile-period-closed">
-            {{ t('admin.bankImports.periodClosedNotice', { year: reconcilePreview.period_year }) }}
+            {{ t(reconcilePreview.period_locked ? 'admin.bankImports.periodLockedNotice' : 'admin.bankImports.periodClosedNotice', { year: reconcilePreview.period_year }) }}
           </div>
 
           <div v-if="reconcilePreview.unresolved_count > 0" class="rounded-md bg-yellow-50 px-3 py-2 text-xs text-yellow-800">

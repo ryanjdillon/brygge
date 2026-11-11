@@ -100,6 +100,12 @@ type BankSyncResult struct {
 	PaymentsLinked    int      `json:"payments_linked"`
 	DraftsReleased    int      `json:"drafts_released"`
 	ClosedPeriods     []string `json:"closed_periods"`
+	// MissingPeriods lists the years (e.g. "2027") of payments the sync left
+	// unbooked because no fiscal period exists for them: the KID cascade,
+	// the legacy Vipps pass, transfer pairing, bank auto-assign and the
+	// Vipps payout sweep never open a year (BRY-578). The next sync after
+	// the treasurer creates the year books them in it.
+	MissingPeriods []string `json:"missing_periods"`
 	// VippsPayouts reports the per-charge payout sweep (pass 5); its cleared
 	// settlements are also counted in VippsReconciled. Nil on the legacy model.
 	VippsPayouts *VippsPayoutSweepResult `json:"vipps_payouts,omitempty"`
@@ -136,6 +142,9 @@ type BankSyncResult struct {
 //     against an open fiscal period).
 //  3. Intra-bank transfer pairing across all of the club's imports.
 //
+// No pass opens a fiscal year (BRY-578): a payment dated in a year with no
+// period waits, and its year is listed in BankSyncResult.MissingPeriods.
+//
 // On the per-charge Vipps model pass 2 stands down and a final pass clears
 // every payout deposit whose settlement has all its charges booked
 // (ClearReadyVippsPayouts, in the club's Vipps booking slot: a slot still
@@ -151,6 +160,7 @@ type BankSyncResult struct {
 func (s *Service) BankSync(ctx context.Context, clubID, createdBy string) (*BankSyncResult, error) {
 	res := &BankSyncResult{}
 	closedYears := map[int]bool{}
+	missingYears := map[int]bool{}
 
 	// Pass 0: release rows a crashed KID match left linked to its unposted
 	// draft, so pass 1 can match them afresh.
@@ -180,22 +190,20 @@ func (s *Service) BankSync(ctx context.Context, clubID, createdBy string) (*Bank
 	}
 	res.KIDMatched = kid.matched
 	res.KIDSkippedSettled = kid.skippedSettled
-	for _, y := range kid.closedYears {
-		closedYears[y] = true
-	}
+	addYears(closedYears, kid.closedYears)
+	addYears(missingYears, kid.missingYears)
 
 	// Pass 2: Vipps reconciliation on all unmatched bank rows that match
 	// the Utb./Vippsnr pattern. Only confirm when balanced and the
 	// target period is open.
-	reconciled, unbalanced, vippsClosed, err := s.syncVippsReconciliations(ctx, clubID, createdBy)
+	vipps, err := s.syncVippsReconciliations(ctx, clubID, createdBy)
 	if err != nil {
 		return nil, fmt.Errorf("vipps sync: %w", err)
 	}
-	res.VippsReconciled = reconciled
-	res.VippsUnbalanced = unbalanced
-	for _, y := range vippsClosed {
-		closedYears[y] = true
-	}
+	res.VippsReconciled = vipps.matched
+	res.VippsUnbalanced = vipps.unbalanced
+	addYears(closedYears, vipps.closedYears)
+	addYears(missingYears, vipps.missingYears)
 
 	// Pass 3: re-run intra-bank transfer detection across ALL of the
 	// club's imports (the import-time detector only runs against the
@@ -214,11 +222,13 @@ func (s *Service) BankSync(ctx context.Context, clubID, createdBy string) (*Bank
 		importRows.Close()
 	}
 	for _, importID := range importIDs {
-		n, skipped, _ := s.detectIntraBankTransfers(ctx, clubID, importID, "", createdBy)
-		res.TransfersLinked += n
-		for _, y := range skipped {
-			closedYears[y] = true
+		n, skipped, missing, terr := s.detectIntraBankTransfers(ctx, clubID, importID, "", createdBy)
+		if terr != nil {
+			s.log.Warn().Err(terr).Str("bank_import_id", importID).Msg("bank sync: transfer detection failed")
 		}
+		res.TransfersLinked += n
+		addYears(closedYears, skipped)
+		addYears(missingYears, missing)
 	}
 
 	// Pass 4: backfill payment back-links for invoices whose bank row
@@ -247,6 +257,7 @@ func (s *Service) BankSync(ctx context.Context, clubID, createdBy string) (*Bank
 	// Pass 4c: book the unambiguous KID-less deposits (BRY-366), after the
 	// KID passes have taken every row that carries a reference.
 	res.AutoAssign = s.AutoAssignBankDepositsReported(ctx, clubID, createdBy, BankAutoAssignOpts{Trigger: BankAutoAssignTriggerSync})
+	addYears(missingYears, res.AutoAssign.noPeriodYears())
 
 	// Pass 5: per-charge model only — clear every Vipps payout deposit whose
 	// settlement has all its charges booked. Legacy clubs get an empty sweep.
@@ -259,6 +270,7 @@ func (s *Service) BankSync(ctx context.Context, clubID, createdBy string) (*Bank
 		if sweep != nil {
 			res.VippsReconciled += len(sweep.Cleared)
 		}
+		addYears(missingYears, sweep.noPeriodYears())
 	}
 
 	// Pass 6: book the Stripe charges and fees that are ready, then clear
@@ -266,9 +278,8 @@ func (s *Service) BankSync(ctx context.Context, clubID, createdBy string) (*Bank
 	// failure never undoes the bank work above.
 	res.StripeBooking, res.StripePayouts = s.BookStripeBalanceReported(ctx, clubID, createdBy)
 
-	for y := range closedYears {
-		res.ClosedPeriods = append(res.ClosedPeriods, fmt.Sprintf("%d", y))
-	}
+	res.ClosedPeriods = yearLabels(closedYears)
+	res.MissingPeriods = yearLabels(missingYears)
 	return res, nil
 }
 
@@ -506,6 +517,28 @@ type kidSyncResult struct {
 	// the faktura lock was held; they stay in Tildel.
 	skippedSettled int
 	closedYears    []int
+	// missingYears are the years of rows left because no fiscal period
+	// exists for them; the cascade never opens one (BRY-578).
+	missingYears []int
+}
+
+// recoverKIDAndPayer is a row's KID and counterpart as the KID sync pass
+// keeps them: a KID that is not one of ours gives way to one found in the
+// description, and a payer named in the description replaces the
+// counterpart.
+func recoverKIDAndPayer(kid, counterpart, desc string) (newKID, newCounterpart string) {
+	newKID = strings.TrimSpace(kid)
+	if newKID != "" && !isBryggeKID(newKID) {
+		newKID = ""
+	}
+	if newKID == "" {
+		newKID = ExtractKIDFromDescription(desc)
+	}
+	newCounterpart = counterpart
+	if payer := ExtractPayerFromDescription(desc); payer != "" {
+		newCounterpart = payer
+	}
+	return newKID, newCounterpart
 }
 
 // syncKIDMatches books unmatched incoming rows by KID, then by invoice
@@ -556,6 +589,7 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string, 
 	rows.Close()
 
 	closedYears := map[int]bool{}
+	missingYears := map[int]bool{}
 	for _, p := range work {
 		// Rejected-on-receiving-account rows ("KID … ble ikke
 		// akseptert på denne kontoen") are notification rows the bank
@@ -573,17 +607,7 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string, 
 		// which is NOT a KID. Drop anything that isn't our exact
 		// shape (12 digits + Luhn) and let the description-extractor
 		// have a try.
-		newKID := strings.TrimSpace(p.kid)
-		if newKID != "" && !isBryggeKID(newKID) {
-			newKID = ""
-		}
-		if newKID == "" {
-			newKID = ExtractKIDFromDescription(p.desc)
-		}
-		newCounterpart := p.counterpart
-		if payer := ExtractPayerFromDescription(p.desc); payer != "" {
-			newCounterpart = payer
-		}
+		newKID, newCounterpart := recoverKIDAndPayer(p.kid, p.counterpart, p.desc)
 		if newKID != p.kid || newCounterpart != p.counterpart {
 			_, _ = s.db.Exec(ctx,
 				`UPDATE bank_import_rows SET kid_number = $1, counterpart = $2 WHERE id = $3`,
@@ -613,6 +637,9 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string, 
 			res.skippedSettled++
 		case errors.Is(err, errKIDPeriodClosed):
 			closedYears[p.date.Year()] = true
+		case errors.Is(err, errNoFiscalPeriod):
+			// The row waits until the treasurer creates the year.
+			missingYears[p.date.Year()] = true
 		case errors.Is(err, errKIDRowTaken), errors.Is(err, errInvoiceNotOpen):
 			// A concurrent booking or a dismissal won the row, or the
 			// faktura was voided or credited meanwhile; the row stays in
@@ -640,23 +667,39 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string, 
 	for y := range closedYears {
 		res.closedYears = append(res.closedYears, y)
 	}
+	for y := range missingYears {
+		res.missingYears = append(res.missingYears, y)
+	}
 	return res, nil
 }
 
-func (s *Service) syncVippsReconciliations(ctx context.Context, clubID, createdBy string) (matched, unbalanced int, closed []int, err error) {
+// vippsSyncResult is what syncVippsReconciliations booked and left.
+type vippsSyncResult struct {
+	matched, unbalanced int
+	// closedYears and missingYears are the years of deposits left because
+	// their fiscal period is closed or locked, or does not exist; the pass
+	// never opens one (BRY-578).
+	closedYears, missingYears []int
+}
+
+// syncVippsReconciliations is bank sync's legacy Vipps pass (pass 2): every
+// unbooked "Utb. N Vippsnr M" deposit whose settlement previews balanced is
+// confirmed as one bilag, into an existing open period only.
+func (s *Service) syncVippsReconciliations(ctx context.Context, clubID, createdBy string) (vippsSyncResult, error) {
+	var res vippsSyncResult
 	// Clubs on the per-charge model own Vipps payout reconciliation through the
 	// Tildel per-charge flow + payout auto-clear (BRY-226/227). The legacy
 	// single-bilag auto-match must stand down so it doesn't pre-empt them.
 	perCharge, ferr := s.VippsPerChargeEnabled(ctx, clubID)
 	if ferr != nil {
-		return 0, 0, nil, fmt.Errorf("checking vipps model: %w", ferr)
+		return res, fmt.Errorf("checking vipps model: %w", ferr)
 	}
 	if perCharge {
-		return 0, 0, nil, nil
+		return res, nil
 	}
 
 	rows, qerr := s.db.Query(ctx,
-		`SELECT id FROM bank_import_rows
+		`SELECT id, row_date FROM bank_import_rows
 		 WHERE club_id = $1
 		   AND journal_entry_id IS NULL
 		   AND description ~* '^utb\.\s*[0-9]+\s+vippsnr\s+[0-9]+'
@@ -664,45 +707,65 @@ func (s *Service) syncVippsReconciliations(ctx context.Context, clubID, createdB
 		clubID,
 	)
 	if qerr != nil {
-		return 0, 0, nil, fmt.Errorf("listing candidate rows: %w", qerr)
+		return res, fmt.Errorf("listing candidate rows: %w", qerr)
 	}
 	defer rows.Close()
 
-	var rowIDs []string
+	type candidate struct {
+		id   string
+		date time.Time
+	}
+	var cands []candidate
 	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err == nil {
-			rowIDs = append(rowIDs, id)
+		var c candidate
+		if err := rows.Scan(&c.id, &c.date); err == nil {
+			cands = append(cands, c)
 		}
 	}
 	rows.Close()
 
 	closedYears := map[int]bool{}
-	for _, rowID := range rowIDs {
-		preview, perr := s.ReconcileVippsPreview(ctx, clubID, rowID)
+	missingYears := map[int]bool{}
+	for _, c := range cands {
+		preview, perr := s.ReconcileVippsPreview(ctx, clubID, c.id)
 		if perr != nil {
-			if perr == pgx.ErrNoRows {
-				continue
-			}
 			continue
 		}
 		if !preview.Balanced {
-			unbalanced++
+			res.unbalanced++
+			continue
+		}
+		// A year with no period waits for the treasurer to create it; the
+		// preview says so before any faktura is locked.
+		if preview.PeriodMissing {
+			missingYears[c.date.Year()] = true
 			continue
 		}
 		if preview.PeriodClosed {
 			closedYears[preview.PeriodYear] = true
 			continue
 		}
-		if _, cerr := s.ReconcileVippsConfirm(ctx, clubID, rowID, "", createdBy, preview.Lines); cerr != nil {
-			unbalanced++
-			continue
+		_, cerr := s.reconcileVippsConfirm(ctx, clubID, c.id, "", createdBy, preview.Lines, true, periodExistingOnly)
+		switch {
+		case cerr == nil:
+			res.matched++
+		case errors.Is(cerr, errNoFiscalPeriod):
+			// The period was deleted after the preview.
+			missingYears[c.date.Year()] = true
+		case errors.Is(cerr, ErrVippsPeriodClosed):
+			// Closed or locked after the preview.
+			closedYears[c.date.Year()] = true
+		default:
+			s.log.Warn().Err(cerr).Str("bank_row_id", c.id).Msg("legacy Vipps reconcile failed; deposit stays unmatched")
+			res.unbalanced++
 		}
-		matched++
 	}
 
 	for y := range closedYears {
-		closed = append(closed, y)
+		res.closedYears = append(res.closedYears, y)
 	}
-	return matched, unbalanced, closed, nil
+	for y := range missingYears {
+		res.missingYears = append(res.missingYears, y)
+	}
+	return res, nil
 }

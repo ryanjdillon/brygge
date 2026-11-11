@@ -242,13 +242,13 @@ func TestTransferDetectionSkipsReferencePair(t *testing.T) {
 	f.club.NewBankRow(t, impA, fin.BankRowOpts{Date: f.refDay(5, 5), Cents: -100000})
 	f.club.NewBankRow(t, impB, fin.BankRowOpts{Date: f.refDay(5, 5), Cents: 100000})
 
-	matched, _, err := f.svc.detectIntraBankTransfers(ctx, f.club.ID, impA, "", f.club.Treasurer.ID)
+	matched, _, _, err := f.svc.detectIntraBankTransfers(ctx, f.club.ID, impA, "", f.club.Treasurer.ID)
 	if err != nil || matched != 0 {
 		t.Fatalf("reference pair: matched %d (%v), want 0", matched, err)
 	}
 
 	f.mark(t, false)
-	matched, _, err = f.svc.detectIntraBankTransfers(ctx, f.club.ID, impA, "", f.club.Treasurer.ID)
+	matched, _, _, err = f.svc.detectIntraBankTransfers(ctx, f.club.ID, impA, "", f.club.Treasurer.ID)
 	if err != nil || matched != 1 {
 		t.Fatalf("unmarked pair: matched %d (%v), want 1", matched, err)
 	}

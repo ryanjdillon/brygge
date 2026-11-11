@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 )
 
@@ -33,6 +34,18 @@ type VippsPayoutSweepResult struct {
 	// Error is set when the sweep itself could not run; the lists above are
 	// then whatever it got through before stopping.
 	Error string `json:"error,omitempty"`
+	// noPeriod is the years of deposits skipped because no fiscal period
+	// exists for them, folded into the import or sync's MissingPeriods.
+	noPeriod []int
+}
+
+// noPeriodYears is the years of deposits the sweep skipped because no
+// fiscal period exists for them; nil for a nil result.
+func (r *VippsPayoutSweepResult) noPeriodYears() []int {
+	if r == nil {
+		return nil
+	}
+	return r.noPeriod
 }
 
 // sweepFailedText is shown when the sweep could not run at all. The cause is
@@ -114,6 +127,10 @@ func (s *Service) ClearReadyVippsPayouts(ctx context.Context, clubID, actor stri
 		case err != nil:
 			reason, skip := payoutSweepReason(err)
 			item.Reason = reason
+			var noYear *noFiscalYearError
+			if errors.As(err, &noYear) && !slices.Contains(res.noPeriod, noYear.year) {
+				res.noPeriod = append(res.noPeriod, noYear.year)
+			}
 			if skip {
 				res.Skipped = append(res.Skipped, item)
 			} else {

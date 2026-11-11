@@ -511,7 +511,14 @@ func (e *periodNotOpenError) Is(target error) bool { return target == ErrVippsPe
 // one that already exists and is open. It returns *noFiscalYearError when
 // there is none and *periodNotOpenError when it is closed or locked.
 func existingOpenPeriodIn(ctx context.Context, q dbtx, clubID string, date time.Time) (string, error) {
-	id, status, err := existingPeriodIn(ctx, q, clubID, date, "")
+	return openPeriodIn(ctx, q, clubID, date, "")
+}
+
+// openPeriodIn is existingOpenPeriodIn with an import's period override: when
+// override is set, that period (a person's choice of an existing one) is
+// loaded instead of the date's, and must be open too. It never creates one.
+func openPeriodIn(ctx context.Context, q dbtx, clubID string, date time.Time, override string) (string, error) {
+	id, status, err := existingPeriodIn(ctx, q, clubID, date, override)
 	if errors.Is(err, errNoFiscalPeriod) {
 		return "", &noFiscalYearError{year: date.Year()}
 	}

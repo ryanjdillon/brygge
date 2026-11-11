@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 	"time"
 
@@ -54,6 +55,25 @@ type AutoAssignResult struct {
 	// Error is set when the run itself failed; what it booked before
 	// failing is still listed.
 	Error string `json:"error,omitempty"`
+	// noPeriod is the years of payments left because no fiscal
+	// period exists for them (bank rule: no_period), folded into the
+	// import or sync's MissingPeriods.
+	noPeriod []int
+}
+
+func (r *AutoAssignResult) addNoPeriodYear(year int) {
+	if !slices.Contains(r.noPeriod, year) {
+		r.noPeriod = append(r.noPeriod, year)
+	}
+}
+
+// noPeriodYears is the years of payments the run left because no fiscal
+// period exists for them; nil for a nil result.
+func (r *AutoAssignResult) noPeriodYears() []int {
+	if r == nil {
+		return nil
+	}
+	return r.noPeriod
 }
 
 // Reasons a payment is left for a human, as reported by both rules.

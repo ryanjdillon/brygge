@@ -235,6 +235,12 @@ type ImportResult struct {
 	Matched       int
 	Transfers     int      // intra-bank transfer pairs auto-linked
 	ClosedPeriods []string // labels of closed periods that prevented auto-match (e.g. "2025")
+	// MissingPeriods lists the years (e.g. "2027") of rows the automatic
+	// passes left unbooked because no fiscal period exists for them: an
+	// import never opens a year (BRY-578). The rows wait, without a
+	// RowErrors entry, and are booked by the first sync after the treasurer
+	// creates the year.
+	MissingPeriods []string
 	// RowErrors lists rows whose auto-match failed after an invoice was
 	// found. The row stays unmatched for manual Tildel; the reason is
 	// surfaced instead of being swallowed.
@@ -479,9 +485,9 @@ func BankRowHash(clubID string, row BankRow) string {
 
 // ImportBankRows stores parsed bank rows (dedup by club_id + row_hash) and runs
 // KID auto-matching on newly inserted rows. Each created journal entry is
-// posted to the fiscal period whose date range contains the row's date
-// (auto-created as calendar-year if missing). Rows whose target period is
-// closed are stored but not auto-matched.
+// posted to the existing fiscal period whose date range contains the row's
+// date; a missing period is never created (BRY-578). Rows whose target period
+// is missing, closed or locked are stored but not auto-matched.
 //
 // The optional periodOverride argument, if non-empty, forces every row to
 // land in that one period regardless of date — kept for migration / special
@@ -512,6 +518,7 @@ func kidMatchCandidates(row BankRow) []string {
 func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOverride string, rows []BankRow) (ImportResult, error) { //nolint:gocognit,cyclop // per-row import and cascade in one pass; split tracked in BRY-424
 	var res ImportResult
 	closedYears := map[int]bool{}
+	missingYears := map[int]bool{}
 
 	bankAccount := bankAccountCode
 	var importedBy string
@@ -625,6 +632,10 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 			// very row; it is not in Tildel, so there is nothing to report.
 		case errors.Is(err, errKIDPeriodClosed):
 			closedYears[row.Date.Year()] = true
+		case errors.Is(err, errNoFiscalPeriod):
+			// No fiscal year for the row yet: not an error, the row waits
+			// for the treasurer to create the year (BRY-578).
+			missingYears[row.Date.Year()] = true
 		default:
 			res.rowError(rowID, row, err.Error())
 		}
@@ -649,14 +660,13 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 	// bank_account_code), same date, opposite amounts, account numbers
 	// crossing. Auto-link both rows to a single draft entry.
 	if importedBy != "" {
-		transfers, skipped, derr := s.detectIntraBankTransfers(ctx, clubID, importID, periodOverride, importedBy)
+		transfers, skipped, missing, derr := s.detectIntraBankTransfers(ctx, clubID, importID, periodOverride, importedBy)
 		if derr != nil {
 			return res, fmt.Errorf("intra-bank transfer detection: %w", derr)
 		}
 		res.Transfers = transfers
-		for _, y := range skipped {
-			closedYears[y] = true
-		}
+		addYears(closedYears, skipped)
+		addYears(missingYears, missing)
 	}
 
 	// Book the unambiguous KID-less deposits (BRY-366). Club-wide, so rows
@@ -667,6 +677,7 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 		ImportID:       importID,
 		PeriodOverride: periodOverride,
 	})
+	addYears(missingYears, res.AutoAssign.noPeriodYears())
 
 	// Book the Stripe charges and fees that are ready and clear the payouts
 	// this upload brought the deposits of, as the bank sync does, so an
@@ -683,13 +694,12 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 			s.log.Warn().Err(perr).Str("club_id", clubID).Msg("bank import: checking the vipps model failed; payout sweep skipped")
 		} else if perCharge {
 			res.VippsPayouts, res.BookingDeferred = s.sweepVippsPayoutsInSlot(ctx, clubID, importedBy)
+			addYears(missingYears, res.VippsPayouts.noPeriodYears())
 		}
 	}
 
-	for y := range closedYears {
-		res.ClosedPeriods = append(res.ClosedPeriods, fmt.Sprintf("%d", y))
-	}
-	sort.Strings(res.ClosedPeriods)
+	res.ClosedPeriods = yearLabels(closedYears)
+	res.MissingPeriods = yearLabels(missingYears)
 
 	return res, nil
 }
@@ -755,7 +765,13 @@ func inferOwnAccountNumber(rows []BankRow) string {
 //
 // For each pair, create one draft journal entry crediting the sending
 // account and debiting the receiving account, then link both rows.
-func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID, periodOverride, createdBy string) (matched int, skippedClosedYears []int, _ error) {
+//
+// It runs from import and bank sync, both automatic, so it never creates a
+// fiscal period (BRY-578): a pair dated in a year with no period is left
+// unpaired and its year returned in missingYears; one in a closed or locked
+// period is left and its year returned in skippedClosedYears. An import's
+// period override is loaded, never created.
+func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID, periodOverride, createdBy string) (matched int, skippedClosedYears, missingYears []int, _ error) {
 	rows, err := s.db.Query(ctx,
 		`WITH this_import AS (
 		   SELECT bank_account_code, bank_account_number FROM bank_imports WHERE id = $1
@@ -784,7 +800,7 @@ func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID
 		importID, clubID,
 	)
 	if err != nil {
-		return 0, nil, fmt.Errorf("querying transfer candidates: %w", err)
+		return 0, nil, nil, fmt.Errorf("querying transfer candidates: %w", err)
 	}
 	defer rows.Close()
 
@@ -805,17 +821,24 @@ func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID
 	rows.Close()
 
 	closedYearSet := map[int]bool{}
+	missingYearSet := map[int]bool{}
 	used := map[string]bool{}
 	for _, p := range pairs {
 		if used[p.r1ID] || used[p.r2ID] {
 			continue
 		}
-		periodID, periodStatus, perr := s.resolvePeriod(ctx, clubID, p.date, periodOverride)
-		if perr != nil {
+		periodID, perr := openPeriodIn(ctx, s.db, clubID, p.date, periodOverride)
+		switch {
+		case errors.Is(perr, errNoFiscalPeriod):
+			missingYearSet[p.date.Year()] = true
 			continue
-		}
-		if periodStatus == "closed" {
+		case errors.Is(perr, ErrVippsPeriodClosed):
+			// Closed or locked: a locked period would only fail at the
+			// entry insert.
 			closedYearSet[p.date.Year()] = true
+			continue
+		case perr != nil:
+			s.log.Warn().Err(perr).Str("bank_row_id", p.r1ID).Msg("intra-bank transfer: resolving the period failed; rows stay unmatched")
 			continue
 		}
 		debitCode, creditCode := p.codeB, p.codeA
@@ -869,7 +892,28 @@ func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID
 	for y := range closedYearSet {
 		skippedClosedYears = append(skippedClosedYears, y)
 	}
-	return matched, skippedClosedYears, nil
+	for y := range missingYearSet {
+		missingYears = append(missingYears, y)
+	}
+	return matched, skippedClosedYears, missingYears, nil
+}
+
+// addYears adds years to set.
+func addYears(set map[int]bool, years []int) {
+	for _, y := range years {
+		set[y] = true
+	}
+}
+
+// yearLabels is the sorted year labels ("2027") of set, for a result's
+// ClosedPeriods or MissingPeriods; nil when set is empty.
+func yearLabels(set map[int]bool) []string {
+	var out []string
+	for y := range set {
+		out = append(out, fmt.Sprintf("%d", y))
+	}
+	sort.Strings(out)
+	return out
 }
 
 // kidMatchDescription is the description every payment-match entry (bank

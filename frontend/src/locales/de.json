@@ -1590,6 +1590,7 @@
       "refreshed": "Aktualisiert",
       "provisionalSettledNotice": "{count} vorläufige Zeile(n) aus einem früheren Export tragen jetzt den gebuchten Banktext.",
       "kidSkippedSettledNotice": "{count} KID-Zahlung(en) trafen eine bereits beglichene Faktura (möglicherweise doppelt bezahlt). Sie bleiben in Tildel.",
+      "missingPeriodsNotice": "Kein Geschäftsjahr für {years}: Lege das Jahr unter „Journal entries“ an (Create period), dann werden die Zeilen bei der nächsten Synchronisierung gebucht.",
       "exportDayNotice": "Der Auszug reicht bis {date}. Überweisungen, die am Exporttag noch unterwegs waren, können als bloße „Overførsel“ erscheinen, bis sie gebucht sind. Exportieren Sie bis gestern oder importieren Sie {date} später erneut.",
       "provisionalAmbiguousNotice": "{count} vorläufige Zeile(n) ließen sich keiner einzelnen gebuchten Zeile zuordnen und bleiben in Tildel.",
       "referenceMismatchNotice": "{count} vorläufige Zeile(n) haben eine gebuchte Zeile mit derselben Referenz, aber anderem Betrag oder späterem Datum. Keine wurde geändert; prüfen Sie sie in Tildel:",
@@ -1735,7 +1736,9 @@
           "deferred": "Die Buchungsperiode ist nicht offen. Die Transaktion wird gebucht, sobald das Jahr eröffnet ist.",
           "failed": "Die Buchung ist fehlgeschlagen. Die Transaktion wartet auf die nächste Stripe-Synchronisierung."
         }
-      }
+      },
+      "periodClosedNotice": "Die Rechnungsperiode {year} ist geschlossen – öffne sie wieder, bevor du den Beleg erstellst.",
+      "periodLockedNotice": "Die Rechnungsperiode {year} ist gesperrt und kann in Brygge nicht wieder geöffnet werden, daher kann dieser Beleg hier nicht erstellt werden."
     },
     "bankReconcile": {
       "filterAll": "All",

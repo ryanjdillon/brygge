@@ -257,15 +257,15 @@ func TestLegacyVippsReconcileSkipsReferenceDeposit(t *testing.T) {
 	f.club.NewBankRow(t, imp, fin.BankRowOpts{Date: f.refDay(6, 2), Cents: 80000, Description: "Utb. 7 Vippsnr 000001"})
 
 	f.mark(t, true)
-	matched, unbalanced, _, err := f.svc.syncVippsReconciliations(ctx, f.club.ID, f.club.Treasurer.ID)
-	if err != nil || matched != 0 || unbalanced != 0 {
-		t.Errorf("reference year: matched %d, unbalanced %d (%v); want the deposit not to be a candidate", matched, unbalanced, err)
+	r, err := f.svc.syncVippsReconciliations(ctx, f.club.ID, f.club.Treasurer.ID)
+	if err != nil || r.matched != 0 || r.unbalanced != 0 {
+		t.Errorf("reference year: matched %d, unbalanced %d (%v); want the deposit not to be a candidate", r.matched, r.unbalanced, err)
 	}
 
 	f.mark(t, false)
-	matched, unbalanced, _, err = f.svc.syncVippsReconciliations(ctx, f.club.ID, f.club.Treasurer.ID)
-	if err != nil || matched+unbalanced == 0 {
-		t.Errorf("unmarked: matched %d, unbalanced %d (%v); want the deposit to be a candidate", matched, unbalanced, err)
+	r, err = f.svc.syncVippsReconciliations(ctx, f.club.ID, f.club.Treasurer.ID)
+	if err != nil || r.matched+r.unbalanced == 0 {
+		t.Errorf("unmarked: matched %d, unbalanced %d (%v); want the deposit to be a candidate", r.matched, r.unbalanced, err)
 	}
 }
 

@@ -1590,6 +1590,7 @@
       "refreshed": "Bijgewerkt",
       "provisionalSettledNotice": "{count} voorlopige regel(s) uit een eerdere export hebben nu de definitieve banktekst.",
       "kidSkippedSettledNotice": "{count} KID-betaling(en) kwamen overeen met een al betaalde faktura (mogelijk dubbel betaald). Ze blijven in Tildel.",
+      "missingPeriodsNotice": "Geen boekjaar voor {years}: maak het jaar aan onder ‘Journal entries’ (Create period), dan worden de regels bij de volgende synchronisatie geboekt.",
       "exportDayNotice": "Het afschrift loopt tot en met {date}. Overboekingen die op de exportdag nog onderweg waren, kunnen als kale „Overførsel” verschijnen tot ze verwerkt zijn. Exporteer tot en met gisteren, of importeer {date} later opnieuw.",
       "provisionalAmbiguousNotice": "{count} voorlopige regel(s) konden niet aan één verwerkte regel worden gekoppeld en blijven in Tildel staan.",
       "referenceMismatchNotice": "{count} voorlopige regel(s) hebben een verwerkte regel met dezelfde referentie maar een ander bedrag of latere datum. Geen van beide is gewijzigd; controleer ze in Tildel:",
@@ -1735,7 +1736,9 @@
           "deferred": "De boekingsperiode is niet open. De transactie wordt geboekt zodra het jaar is geopend.",
           "failed": "Het boeken is mislukt. De transactie wacht op de volgende Stripe-synchronisatie."
         }
-      }
+      },
+      "periodClosedNotice": "Boekingsperiode {year} is afgesloten — heropen deze voordat je de boeking aanmaakt.",
+      "periodLockedNotice": "Boekingsperiode {year} is vergrendeld en kan in Brygge niet worden heropend, dus deze boeking kan hier niet worden aangemaakt."
     },
     "bankReconcile": {
       "filterAll": "All",

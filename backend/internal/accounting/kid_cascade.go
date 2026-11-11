@@ -126,6 +126,11 @@ var (
 // errInvoiceNotOpen; an imported one whose receivable isn't in the GL by
 // the row date is ErrImportedNoOpeningBalance (BRY-386).
 //
+// It never creates a fiscal period (BRY-578): a row dated in a year with no
+// period is *noFiscalYearError (errors.Is errNoFiscalPeriod), which the
+// callers report as a missing year rather than a row error, and a closed or
+// locked period is errKIDPeriodClosed.
+//
 // The entry, the row link and the post commit together, so a posted entry
 // never exists without its row (a later sync would book the money again),
 // and the link records the faktura so the other settle paths see this
@@ -159,12 +164,17 @@ func (s *Service) bookKIDCascadeMatch(ctx context.Context, clubID string, m kidC
 		return lockErr
 	}
 
-	periodID, periodStatus, err := resolvePeriodIn(ctx, tx, clubID, m.date, m.periodOverride)
-	if err != nil {
-		return fmt.Errorf("resolving fiscal period: %w", err)
-	}
-	if periodStatus != "open" {
+	// The cascade is automatic whoever started the import or sync, so it
+	// never opens a fiscal year: a date with no year is *noFiscalYearError
+	// and the row waits in Tildel until the treasurer creates the year. An
+	// import's period override names an existing period and is only loaded.
+	// Looked up on tx, which holds the faktura lock (BRY-433).
+	periodID, err := openPeriodIn(ctx, tx, clubID, m.date, m.periodOverride)
+	if errors.Is(err, ErrVippsPeriodClosed) {
 		return errKIDPeriodClosed
+	}
+	if err != nil {
+		return err
 	}
 
 	sourceID := m.rowID
@@ -184,7 +194,7 @@ func (s *Service) bookKIDCascadeMatch(ctx context.Context, clubID string, m kidC
 		},
 	})
 	if errors.Is(err, ErrPeriodClosed) {
-		// Closed between resolvePeriod and here, by a concurrent ClosePeriod.
+		// Closed between openPeriodIn and here, by a concurrent ClosePeriod.
 		return errKIDPeriodClosed
 	}
 	if err != nil {

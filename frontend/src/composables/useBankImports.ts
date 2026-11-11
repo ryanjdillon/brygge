@@ -39,6 +39,9 @@ export interface BankImportResult {
   matched: number
   transfers: number
   closed_periods?: string[]
+  // Years with no fiscal period: those rows wait, unbooked and without a row
+  // error, until the year is created (BRY-578).
+  missing_periods?: string[] | null
   bank_account_code: string
   auto_matched: boolean
   // Present only on a full-account overwrite reconcile.
@@ -207,6 +210,8 @@ export interface VippsReconcilePreview {
   reason?: string
   period_year: number
   period_closed: boolean
+  // The period is locked, which cannot be reopened in Brygge (period_closed is true too).
+  period_locked?: boolean
   lines: VippsReconcileLine[]
 }
 
@@ -387,6 +392,9 @@ export interface BankSyncResult {
   vipps_unbalanced: number
   transfers_linked: number
   closed_periods: string[]
+  // Years with no fiscal period: no sync pass opens one, so those payments
+  // wait until the year is created (BRY-578).
+  missing_periods?: string[] | null
   vipps_payouts?: VippsPayoutSweepResult | null
   provisional_superseded?: number
   provisional_ambiguous?: ProvisionalBankRow[] | null

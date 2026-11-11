@@ -61,10 +61,17 @@ type VippsReconcilePreview struct {
 	// year if the period would be auto-created).
 	PeriodYear int `json:"period_year"`
 	// PeriodClosed is true when the target fiscal period exists and is
-	// closed — confirming the bilag will fail. The UI uses this to disable
-	// the confirm button.
+	// closed or locked — confirming the bilag will fail. The UI uses this to
+	// disable the confirm button.
 	PeriodClosed bool                 `json:"period_closed"`
 	Lines        []VippsReconcileLine `json:"lines"`
+	// PeriodLocked is true when that period is locked, which cannot be
+	// reopened in Brygge; the UI words the notice by it.
+	PeriodLocked bool `json:"period_locked"`
+	// PeriodMissing is true when no fiscal period covers the bank row's
+	// date. Bank sync's legacy pass skips the row before locking any
+	// faktura, since it never opens a year (BRY-578).
+	PeriodMissing bool `json:"period_missing"`
 }
 
 // ReconcileVippsPreview reads a bank row, extracts the Utb./Vippsnr key from its
@@ -161,17 +168,25 @@ func (s *Service) ReconcileVippsPreview(ctx context.Context, clubID, bankRowID s
 	}
 
 	// Check the target period without auto-creating it (preview shouldn't
-	// have side effects). If a closed period covers the bank-row date,
-	// flag it so the UI can disable confirm.
+	// have side effects). If a closed or locked period covers the bank-row
+	// date, flag it so the UI can disable confirm; if none does, flag that
+	// so bank sync leaves the row for the year to be created.
 	var periodStatus string
 	perr := s.db.QueryRow(ctx,
 		`SELECT status FROM fiscal_periods
 		 WHERE club_id = $1 AND $2::date BETWEEN start_date AND end_date
+		 ORDER BY start_date DESC
 		 LIMIT 1`,
 		clubID, bankDate.Format("2006-01-02"),
 	).Scan(&periodStatus)
-	if perr == nil && periodStatus == "closed" {
+	switch {
+	case errors.Is(perr, pgx.ErrNoRows):
+		preview.PeriodMissing = true
+	case perr != nil:
+		return nil, fmt.Errorf("loading fiscal period: %w", perr)
+	case periodStatus != "open":
 		preview.PeriodClosed = true
+		preview.PeriodLocked = periodStatus == "locked"
 	}
 
 	if bankAccount == "" {
@@ -339,21 +354,29 @@ var ErrVippsRowAlreadyBooked = errors.New( //nolint:staticcheck // ST1005: a use
 // ReconcileVippsConfirm books a (possibly edited) preview as a posted journal
 // entry (BRY-339). The caller is responsible for passing the final line set.
 // If periodOverride is empty, the period is auto-resolved from the bank row's
-// date (and auto-created as calendar-year if missing).
+// date (and auto-created as calendar-year if missing): it is a person's
+// confirm, so it may open the year (periodMayCreate). Bank sync's automatic
+// pass calls reconcileVippsConfirm with periodExistingOnly instead.
 //
 // The preview may be stale or edited, so every faktura a line settles is
 // locked and re-checked inside the booking transaction, as a manual assign
 // does (lockManual): a faktura voided, credited, paid or booked since the
 // preview is refused with nothing booked.
 func (s *Service) ReconcileVippsConfirm(ctx context.Context, clubID, bankRowID, periodOverride, createdBy string, lines []VippsReconcileLine) (string, error) {
-	return s.reconcileVippsConfirm(ctx, clubID, bankRowID, periodOverride, createdBy, lines, true)
+	return s.reconcileVippsConfirm(ctx, clubID, bankRowID, periodOverride, createdBy, lines, true, periodMayCreate)
 }
 
 // reconcileVippsConfirm is ReconcileVippsConfirm with posting optional.
 // ResyncVippsBilags re-creates existing draft bilags and keeps them drafts:
 // posting a pre-existing backlog is a supervised step (BRY-341), not a side
 // effect of reclassifying it.
-func (s *Service) reconcileVippsConfirm(ctx context.Context, clubID, bankRowID, periodOverride, createdBy string, lines []VippsReconcileLine, post bool) (string, error) { //nolint:gocognit,cyclop // re-checks and posts each previewed match in one transaction; split tracked in BRY-424
+//
+// policy says whether the booking may open the bank row's fiscal year:
+// periodMayCreate for a person's confirm and the supervised resync,
+// periodExistingOnly for bank sync, which then gets *noFiscalYearError for a
+// year that does not exist and *periodNotOpenError for one closed or locked,
+// with nothing booked (BRY-578).
+func (s *Service) reconcileVippsConfirm(ctx context.Context, clubID, bankRowID, periodOverride, createdBy string, lines []VippsReconcileLine, post bool, policy periodPolicy) (string, error) { //nolint:gocognit,cyclop // re-checks and posts each previewed match in one transaction; split tracked in BRY-424
 	if len(lines) == 0 {
 		return "", fmt.Errorf("at least one line is required")
 	}
@@ -446,12 +469,19 @@ func (s *Service) reconcileVippsConfirm(ctx context.Context, clubID, bankRowID, 
 		}
 	}
 
-	periodID, periodStatus, perr := resolvePeriodIn(ctx, tx, clubID, bankDate, periodOverride)
-	if perr != nil {
-		return "", fmt.Errorf("resolving fiscal period: %w", perr)
-	}
-	if periodStatus == "closed" {
-		return "", fmt.Errorf("fiscal period %d is closed — reopen it or pick a different period", bankDate.Year())
+	// On tx, which holds the faktura locks (BRY-433).
+	var periodID string
+	if policy == periodMayCreate {
+		var periodStatus string
+		periodID, periodStatus, err = resolvePeriodIn(ctx, tx, clubID, bankDate, periodOverride)
+		if err != nil {
+			return "", fmt.Errorf("resolving fiscal period: %w", err)
+		}
+		if periodStatus != "open" {
+			return "", periodNotOpenConfirmError(bankDate.Year(), periodStatus)
+		}
+	} else if periodID, err = openPeriodIn(ctx, tx, clubID, bankDate, periodOverride); err != nil {
+		return "", err
 	}
 
 	sourceID := bankRowID
@@ -533,6 +563,16 @@ func (s *Service) reconcileVippsConfirm(ctx context.Context, clubID, bankRowID, 
 	}
 
 	return entry.ID, nil
+}
+
+// periodNotOpenConfirmError is a person's settlement confirm refused for a
+// period that is not open. A closed period can be reopened; a locked one
+// cannot be reopened in Brygge, so its message does not suggest it.
+func periodNotOpenConfirmError(year int, status string) error {
+	if status == "locked" {
+		return fmt.Errorf("fiscal period %d is locked and cannot be reopened in Brygge — pick a different period", year)
+	}
+	return fmt.Errorf("fiscal period %d is %s — reopen it or pick a different period", year, status)
 }
 
 // matchVippsAmountToPriceArticle returns the GL revenue account and a

@@ -146,7 +146,7 @@ func (s *Service) ResyncVippsBilags(ctx context.Context, clubID, createdBy strin
 			res.Skipped++
 			continue
 		}
-		if _, err := s.reconcileVippsConfirm(ctx, clubID, c.bankRowID, "", createdBy, preview.Lines, false); err != nil {
+		if _, err := s.reconcileVippsConfirm(ctx, clubID, c.bankRowID, "", createdBy, preview.Lines, false, periodMayCreate); err != nil {
 			res.Failed = append(res.Failed, c.bankRowID)
 			continue
 		}
