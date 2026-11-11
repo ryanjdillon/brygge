@@ -1926,6 +1926,7 @@
         "voidBankEntryLink": "Gå til Tildel",
         "createPeriodConfirmTitle": "Opprette rekneskapsåret {year}?",
         "createPeriodConfirmBody": "Betalingar datert i {year} blir bokførte i dette året ved neste synkronisering. Lukk det gamle året først når det nye finst.",
+        "periodCreatedSyncLater": "Rekneskapsåret {year} er oppretta. Betalingar som ventar på det, blir bokførte ved neste synkronisering.",
         "reopenConfirmTitle": "Opne rekneskapsåret {year} igjen?",
         "reopenConfirmBody": "Året kan få nye bilag igjen. Lukk det igjen når betalingane som ventar på det, er bokførte."
       },

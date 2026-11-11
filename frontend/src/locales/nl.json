@@ -1280,6 +1280,7 @@
         "voidBankEntryLink": "Naar Tildel",
         "createPeriodConfirmTitle": "Boekjaar {year} aanmaken?",
         "createPeriodConfirmBody": "Betalingen gedateerd in {year} worden bij de volgende synchronisatie in dit jaar geboekt. Sluit het oude jaar pas als het nieuwe bestaat.",
+        "periodCreatedSyncLater": "Het boekjaar {year} is aangemaakt. Betalingen die erop wachten, worden bij de volgende synchronisatie geboekt.",
         "reopenConfirmTitle": "Boekjaar {year} heropenen?",
         "reopenConfirmBody": "Het jaar neemt weer nieuwe boekingen aan. Sluit het opnieuw zodra de wachtende betalingen geboekt zijn."
       },

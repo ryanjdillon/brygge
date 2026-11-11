@@ -1254,6 +1254,7 @@
         "voidBankEntryLink": "Przejdź do Tildel",
         "createPeriodConfirmTitle": "Utworzyć rok obrotowy {year}?",
         "createPeriodConfirmBody": "Płatności z datą w {year} zostaną zaksięgowane w tym roku przy następnej synchronizacji. Zamknij stary rok dopiero, gdy nowy już istnieje.",
+        "periodCreatedSyncLater": "Rok obrotowy {year} został utworzony. Oczekujące płatności zostaną zaksięgowane przy następnej synchronizacji.",
         "reopenConfirmTitle": "Ponownie otworzyć rok obrotowy {year}?",
         "reopenConfirmBody": "Rok znów przyjmuje nowe zapisy. Zamknij go ponownie, gdy oczekujące płatności zostaną zaksięgowane."
       },

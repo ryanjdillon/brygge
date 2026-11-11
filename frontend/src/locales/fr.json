@@ -1279,6 +1279,7 @@
         "voidBankEntryLink": "Aller à Tildel",
         "createPeriodConfirmTitle": "Créer l'exercice {year} ?",
         "createPeriodConfirmBody": "Les paiements datés de {year} seront comptabilisés dans cet exercice lors de la prochaine synchronisation. Ne clôturez l'ancien exercice qu'une fois le nouveau créé.",
+        "periodCreatedSyncLater": "L'exercice {year} a été créé. Les paiements en attente seront comptabilisés lors de la prochaine synchronisation.",
         "reopenConfirmTitle": "Rouvrir l'exercice {year} ?",
         "reopenConfirmBody": "L'exercice accepte à nouveau des écritures. Clôturez-le de nouveau une fois les paiements en attente comptabilisés."
       },

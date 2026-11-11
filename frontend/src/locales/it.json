@@ -1280,6 +1280,7 @@
         "voidBankEntryLink": "Vai a Tildel",
         "createPeriodConfirmTitle": "Creare l'esercizio {year}?",
         "createPeriodConfirmBody": "I pagamenti datati {year} verranno registrati in questo esercizio alla prossima sincronizzazione. Chiudi il vecchio esercizio solo dopo aver creato il nuovo.",
+        "periodCreatedSyncLater": "L'esercizio {year} è stato creato. I pagamenti in attesa verranno registrati alla prossima sincronizzazione.",
         "reopenConfirmTitle": "Riaprire l'esercizio {year}?",
         "reopenConfirmBody": "L'esercizio accetta di nuovo registrazioni. Chiudilo di nuovo quando i pagamenti in attesa sono stati registrati."
       },

@@ -501,12 +501,21 @@ async function handleCreatePeriod(yearArg?: number) {
     cancelLabel: t('common.cancel'),
   })
   if (!ok) return
+  syncMessage.value = ''
   createPeriodMutation.mutate({ year }, {
     onSuccess: (period) => {
       selectedPeriodId.value = period.id
       showCreateYear.value = false
       newYear.value = nextYear.value
-      handleSync()
+      // The sync routes are money actions (moneyGate); a ledger-only user
+      // (a board member) may create the year but not sync, so they are told
+      // the waiting payments are booked at the next sync instead (BRY-671).
+      if (canBook) {
+        handleSync()
+      } else {
+        syncSkipped.value = []
+        syncMessage.value = t('admin.accounting.journal.periodCreatedSyncLater', { year: period.year })
+      }
     },
     onError: (err) => {
       syncMessage.value = `${t('common.error')}: ${(err as Error).message}`

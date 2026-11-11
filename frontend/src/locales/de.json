@@ -1280,6 +1280,7 @@
         "voidBankEntryLink": "Zu Tildel",
         "createPeriodConfirmTitle": "Geschäftsjahr {year} anlegen?",
         "createPeriodConfirmBody": "Zahlungen mit Datum in {year} werden bei der nächsten Synchronisierung in diesem Jahr gebucht. Schließen Sie das alte Jahr erst, wenn das neue existiert.",
+        "periodCreatedSyncLater": "Das Geschäftsjahr {year} wurde angelegt. Zahlungen, die darauf warten, werden bei der nächsten Synchronisierung gebucht.",
         "reopenConfirmTitle": "Geschäftsjahr {year} wieder öffnen?",
         "reopenConfirmBody": "Das Jahr nimmt wieder neue Buchungen an. Schließen Sie es wieder, sobald die wartenden Zahlungen gebucht sind."
       },

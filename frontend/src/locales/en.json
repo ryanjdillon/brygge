@@ -2032,6 +2032,7 @@
         "voidBankEntryLink": "Go to Tildel",
         "createPeriodConfirmTitle": "Create the fiscal year {year}?",
         "createPeriodConfirmBody": "Payments dated in {year} are booked in this year at the next sync. Close the old year only once the new one exists.",
+        "periodCreatedSyncLater": "The fiscal year {year} has been created. Payments waiting for it are booked at the next sync.",
         "reopenConfirmTitle": "Reopen the fiscal year {year}?",
         "reopenConfirmBody": "The year takes new entries again. Close it again once the payments waiting for it are booked."
       },

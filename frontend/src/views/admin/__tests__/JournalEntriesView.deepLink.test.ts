@@ -11,7 +11,7 @@ const { ensureFreshTotp, fetchApi, confirm, icon, state } = vi.hoisted(() => ({
   fetchApi: vi.fn(),
   confirm: vi.fn(),
   icon: { template: '<span />' },
-  state: { periods: [] as Record<string, unknown>[], can: true },
+  state: { periods: [] as Record<string, unknown>[], can: true, denied: [] as string[] },
 }))
 
 vi.mock('lucide-vue-next', () => ({
@@ -19,7 +19,7 @@ vi.mock('lucide-vue-next', () => ({
   Trash2: icon, RefreshCw: icon, Lock: icon, Unlock: icon, Search: icon, Paperclip: icon,
 }))
 vi.mock('@/composables/useFreshTotp', () => ({ useFreshTotp: () => ({ ensureFreshTotp }) }))
-vi.mock('@/composables/useCan', () => ({ useCan: () => ({ can: () => state.can }) }))
+vi.mock('@/composables/useCan', () => ({ useCan: () => ({ can: (area: string) => state.can && !state.denied.includes(area) }) }))
 vi.mock('@/composables/useApi', () => ({ useApi: () => ({ fetchApi }) }))
 vi.mock('@/stores/confirm', () => ({ useConfirm: () => confirm, useConfirmStore: () => ({ checklistValues: [] }) }))
 vi.mock('@tanstack/vue-query', async () => {
@@ -76,6 +76,7 @@ describe('JournalEntriesView deep links from the fiscal year notice', () => {
     confirm.mockResolvedValue(true)
     ensureFreshTotp.mockResolvedValue(true)
     state.can = true
+    state.denied = []
     state.periods = [period({ id: 'p26', year: 2026 })]
   })
 
@@ -179,6 +180,8 @@ describe('JournalEntriesView period buttons', () => {
     confirm.mockResolvedValue(true)
     ensureFreshTotp.mockResolvedValue(true)
     state.can = true
+    state.denied = []
+    state.periods = [period({ id: 'p26', year: 2026 })]
   })
 
   it('the reopen button asks for a fresh TOTP at click time, before the confirm', async () => {
@@ -221,5 +224,79 @@ describe('JournalEntriesView period buttons', () => {
     expect(posts('/periods')).toEqual([
       ['/api/v1/admin/accounting/periods', expect.objectContaining({ body: JSON.stringify({ year: 2027 }) })],
     ])
+  })
+})
+
+// BRY-671: the follow-up sync after creating a year is a money action
+// (moneyGate). A ledger-only user (a board member) may create the year but
+// gets no step-up prompt and no sync call, only a note.
+describe('JournalEntriesView sync after creating a fiscal year', () => {
+  beforeEach(() => {
+    ensureFreshTotp.mockReset()
+    fetchApi.mockReset()
+    confirm.mockReset()
+    fetchApi.mockImplementation(respond)
+    confirm.mockResolvedValue(true)
+    ensureFreshTotp.mockResolvedValue(true)
+    state.can = true
+    state.denied = []
+    state.periods = [period({ id: 'p26', year: 2026 })]
+  })
+
+  async function createNextYear() {
+    const wrapper = await mountAt('/')
+    await wrapper.get('[data-testid="create-period"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="create-period"]').trigger('click')
+    await flushPromises()
+    await flushPromises()
+    return wrapper
+  }
+
+  it('a ledger-only user creates the year without a step-up or a sync, and sees the note', async () => {
+    state.denied = ['money']
+    const wrapper = await createNextYear()
+    expect(posts('/periods')).toEqual([
+      ['/api/v1/admin/accounting/periods', expect.objectContaining({ body: JSON.stringify({ year: 2027 }) })],
+    ])
+    expect(ensureFreshTotp).not.toHaveBeenCalled()
+    expect(posts('/sync/payments')).toEqual([])
+    expect(posts('/sync/invoices')).toEqual([])
+    expect(wrapper.text()).toContain('admin.accounting.journal.periodCreatedSyncLater')
+  })
+
+  it('a ledger-only user creating the first year from the empty state gets no sync either', async () => {
+    state.denied = ['money']
+    state.periods = []
+    const wrapper = await mountAt('/')
+    await wrapper.get('[data-testid="create-period-empty"]').trigger('click')
+    await flushPromises()
+    await flushPromises()
+    expect(posts('/periods')).toHaveLength(1)
+    expect(ensureFreshTotp).not.toHaveBeenCalled()
+    expect(posts('/sync/payments')).toEqual([])
+  })
+
+  it('a ledger-only user following the openPeriod deep link creates the year without a sync', async () => {
+    state.denied = ['money']
+    const wrapper = await mountAt('/?openPeriod=2027')
+    await flushPromises()
+    expect(posts('/periods')).toEqual([
+      ['/api/v1/admin/accounting/periods', expect.objectContaining({ body: JSON.stringify({ year: 2027 }) })],
+    ])
+    expect(ensureFreshTotp).not.toHaveBeenCalled()
+    expect(fetchApi.mock.calls.some(([url, o]) =>
+      String(url).includes('/sync/') && (o as { method?: string })?.method === 'POST')).toBe(false)
+    expect(wrapper.text()).toContain('admin.accounting.journal.periodCreatedSyncLater')
+    expect(wrapper.vm.$route.query).toEqual({})
+  })
+
+  it('a user with the money role still runs the sync after a fresh TOTP', async () => {
+    const wrapper = await createNextYear()
+    expect(posts('/periods')).toHaveLength(1)
+    expect(ensureFreshTotp).toHaveBeenCalledOnce()
+    expect(posts('/sync/payments')).toHaveLength(1)
+    expect(posts('/sync/invoices')).toHaveLength(1)
+    expect(wrapper.text()).not.toContain('admin.accounting.journal.periodCreatedSyncLater')
   })
 })
