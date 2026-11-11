@@ -155,7 +155,9 @@ func TestVippsAndBankAutoAssignShareTheFakturaLock(t *testing.T) {
 		func() {
 			_, _ = f.svc.AutoAssignBankDeposits(ctx, f.club.ID, f.club.Treasurer.ID, BankAutoAssignOpts{Trigger: BankAutoAssignTriggerSync})
 		},
-		func() { _, _ = f.svc.AutoAssignVippsCharges(ctx, f.club.ID, f.club.Treasurer.ID) },
+		func() {
+			_, _ = f.svc.AutoAssignVippsCharges(ctx, f.club.ID, f.club.Treasurer.ID, VippsAutoAssignOpts{})
+		},
 	)
 
 	bankBooked, vippsBooked := f.entry(t, bankRow) != "", rowEntry(t, f.club, vippsRow) != ""

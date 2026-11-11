@@ -86,7 +86,7 @@ func TestVippsBookingSlotBusyAnswersPeople(t *testing.T) {
 	lock := testutil.HoldRowLock(t, club.Pool, `SELECT id FROM invoices WHERE id = $1 FOR UPDATE`, inv.ID)
 	holder := make(chan error, 1)
 	go func() {
-		_, err := svc.BookVippsQueue(ctx, club.ID, club.Treasurer.ID, 30*time.Second)
+		_, err := svc.BookVippsQueue(ctx, club.ID, club.Treasurer.ID, accounting.VippsBookingOpts{Wait: 30 * time.Second})
 		holder <- err
 	}()
 	lock.WaitForBlocked(30 * time.Second)

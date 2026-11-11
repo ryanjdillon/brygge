@@ -19,8 +19,9 @@ import (
 // auto_declined_at), the pass runs again and leaves the row, counted as
 // declined where it reports counts, and a person's booking books it and lifts
 // the marker. Then the guarded links: a pass that read the row before the
-// undo cannot book it after. TODO(BRY-567): run the matrix through
-// RunAutomaticBooking once it exists.
+// undo cannot book it after. TestRunAutomaticBookingHonoursDeclines
+// (auto_booking_integration_test.go) runs the matrix through
+// RunAutomaticBooking.
 
 // declinedRow reports whether a bank_import_rows or vipps_import_rows row
 // carries a person's decline.

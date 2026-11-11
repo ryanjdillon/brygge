@@ -32,6 +32,15 @@ type Service struct {
 	// vippsBookingSlotWait bounds a person's wait for vippsBooking; zero is
 	// defaultVippsBookingSlotWait. Tests shorten it.
 	vippsBookingSlotWait time.Duration
+	// autoBookingSlotWait bounds the automatic run's wait for vippsBooking;
+	// zero is defaultAutoBookingSlotWait. Tests shorten it.
+	autoBookingSlotWait time.Duration
+	// autoBookingObs is told about Report API syncs and automatic runs
+	// (SetAutoBookingObserver, the BRY-571 metrics); nil tells no one.
+	autoBookingObs AutoBookingObserver
+	// autoBookingNow is the automatic run's clock, which picks the Report API
+	// dates; nil is time.Now. Tests set it.
+	autoBookingNow func() time.Time
 	// kickDeliveries nudges the delivery worker after the booking pass
 	// queued a refund document (SetDeliveryKick); nil leaves the rows for
 	// the worker's next tick.

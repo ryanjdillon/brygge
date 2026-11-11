@@ -247,8 +247,12 @@ func (s *Service) bookKIDCascadeMatch(ctx context.Context, clubID string, m kidC
 	}
 
 	// Best-effort: the GL is already correct, and bank sync's back-link
-	// passes heal a missing full-amount payment row.
-	if err := s.linkInvoicePayment(ctx, clubID, m.invoiceID, m.date); err != nil {
+	// passes heal a missing full-amount payment row. It follows the commit,
+	// so it runs on postCommitContext: a request or run cancelled right
+	// after the booking still marks the faktura paid.
+	linkCtx, cancel := postCommitContext(ctx)
+	defer cancel()
+	if err := s.linkInvoicePayment(linkCtx, clubID, m.invoiceID, m.date); err != nil {
 		s.log.Warn().Err(err).
 			Str("invoice_id", m.invoiceID).
 			Str("bank_row_id", m.rowID).

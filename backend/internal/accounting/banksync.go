@@ -219,28 +219,10 @@ func (s *Service) BankSync(ctx context.Context, clubID, createdBy string) (*Bank
 	// Pass 3: re-run intra-bank transfer detection across ALL of the
 	// club's imports (the import-time detector only runs against the
 	// current import).
-	var importIDs []string
-	importRows, err := s.db.Query(ctx,
-		`SELECT id FROM bank_imports WHERE club_id = $1`, clubID,
-	)
-	if err == nil {
-		for importRows.Next() {
-			var id string
-			if err := importRows.Scan(&id); err == nil {
-				importIDs = append(importIDs, id)
-			}
-		}
-		importRows.Close()
-	}
-	for _, importID := range importIDs {
-		n, skipped, missing, terr := s.detectIntraBankTransfers(ctx, clubID, importID, "", createdBy)
-		if terr != nil {
-			s.log.Warn().Err(terr).Str("bank_import_id", importID).Msg("bank sync: transfer detection failed")
-		}
-		res.TransfersLinked += n
-		addYears(closedYears, skipped)
-		addYears(missingYears, missing)
-	}
+	linked, closedT, missingT := s.pairIntraBankTransfersAll(ctx, clubID, createdBy)
+	res.TransfersLinked = linked
+	addYears(closedYears, closedT)
+	addYears(missingYears, missingT)
 
 	// Pass 4: backfill payment back-links for invoices whose bank row
 	// was KID-matched at the GL level but never got the
@@ -292,6 +274,46 @@ func (s *Service) BankSync(ctx context.Context, clubID, createdBy string) (*Bank
 	res.ClosedPeriods = yearLabels(closedYears)
 	res.MissingPeriods = yearLabels(missingYears)
 	return res, nil
+}
+
+// pairIntraBankTransfersAll runs intra-bank transfer detection over every
+// bank import of the club, as BankSync pass 3 and the automatic booking run
+// do (the import-time detector only sees its own import). Each pair becomes
+// a draft bilag. It is O(imports) indexed queries. A failing import is
+// logged and the rest still run; a context that has ended stops it with what
+// it linked. It returns the pairs linked and the years left closed or
+// without a period.
+func (s *Service) pairIntraBankTransfersAll(ctx context.Context, clubID, actor string) (linked int, closedYears, missingYears []int) {
+	rows, err := s.db.Query(ctx, `SELECT id FROM bank_imports WHERE club_id = $1 ORDER BY id`, clubID)
+	if err != nil {
+		s.log.Warn().Err(err).Str("club_id", clubID).Msg("transfer pairing: listing bank imports failed")
+		return 0, nil, nil
+	}
+	importIDs, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		s.log.Warn().Err(err).Str("club_id", clubID).Msg("transfer pairing: listing bank imports failed")
+		return 0, nil, nil
+	}
+	closed, missing := map[int]bool{}, map[int]bool{}
+	for _, importID := range importIDs {
+		if ctx.Err() != nil {
+			break
+		}
+		n, skipped, miss, terr := s.detectIntraBankTransfers(ctx, clubID, importID, "", actor)
+		if terr != nil {
+			s.log.Warn().Err(terr).Str("bank_import_id", importID).Msg("bank sync: transfer detection failed")
+		}
+		linked += n
+		addYears(closed, skipped)
+		addYears(missing, miss)
+	}
+	for y := range closed {
+		closedYears = append(closedYears, y)
+	}
+	for y := range missing {
+		missingYears = append(missingYears, y)
+	}
+	return linked, closedYears, missingYears
 }
 
 // strandedDraftGrace is how old a linked KID draft must be before bank sync
@@ -435,6 +457,10 @@ func (s *Service) backfillUnlinkedPayments(ctx context.Context, clubID string) (
 
 	n := 0
 	for _, p := range pendings {
+		// A cancelled request or run stops here with what it linked.
+		if err := ctx.Err(); err != nil {
+			return n, err
+		}
 		if err := s.linkInvoicePayment(ctx, clubID, p.invoiceID, p.paidAt); err != nil {
 			s.log.Warn().Err(err).
 				Str("invoice_id", p.invoiceID).
@@ -510,6 +536,10 @@ func (s *Service) backfillInvoiceNumberPayments(ctx context.Context, clubID stri
 
 	n := 0
 	for _, p := range pendings {
+		// A cancelled request or run stops here with what it linked.
+		if err := ctx.Err(); err != nil {
+			return n, err
+		}
 		if err := s.linkInvoicePayment(ctx, clubID, p.invoiceID, p.paidAt); err != nil {
 			s.log.Warn().Err(err).
 				Str("invoice_id", p.invoiceID).
@@ -554,8 +584,10 @@ func recoverKIDAndPayer(kid, counterpart, desc string) (newKID, newCounterpart s
 
 // syncKIDMatches books unmatched incoming rows by KID, then by invoice
 // number; nameMatch adds the older counterpart-name + amount step, which
-// runs only while the club has bank auto-assign off. Only rows passing
-// kidCascadeEligibleSQL are considered.
+// runs only while the club has bank auto-assign off, and never in the
+// automatic booking run (it is the guess bank auto-assign replaces). Only
+// rows passing kidCascadeEligibleSQL are considered. A context that has
+// ended stops it with what it booked and the context's error.
 func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string, nameMatch bool) (kidSyncResult, error) {
 	var res kidSyncResult
 	// Drop the kid_number <> '' filter so we can ALSO process rows
@@ -601,7 +633,20 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string, 
 
 	closedYears := map[int]bool{}
 	missingYears := map[int]bool{}
+	fold := func() {
+		for y := range closedYears {
+			res.closedYears = append(res.closedYears, y)
+		}
+		for y := range missingYears {
+			res.missingYears = append(res.missingYears, y)
+		}
+	}
 	for _, p := range work {
+		// A cancelled request or run stops here with what it booked.
+		if err := ctx.Err(); err != nil {
+			fold()
+			return res, err
+		}
 		// Rejected-on-receiving-account rows ("KID … ble ikke
 		// akseptert på denne kontoen") are notification rows the bank
 		// posts when a transfer to a savings/høyrente account bounces
@@ -675,12 +720,7 @@ func (s *Service) syncKIDMatches(ctx context.Context, clubID, createdBy string, 
 		}
 	}
 
-	for y := range closedYears {
-		res.closedYears = append(res.closedYears, y)
-	}
-	for y := range missingYears {
-		res.missingYears = append(res.missingYears, y)
-	}
+	fold()
 	return res, nil
 }
 

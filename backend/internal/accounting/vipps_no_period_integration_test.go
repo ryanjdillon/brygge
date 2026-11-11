@@ -150,7 +150,7 @@ func (f *noPeriodFixture) runPasses(t *testing.T) passResults {
 	if r.orders, err = f.svc.AutoReconcileOrderCharges(ctx, f.club.ID, f.club.Treasurer.ID); err != nil {
 		t.Fatalf("AutoReconcileOrderCharges: %v", err)
 	}
-	if r.assign, err = f.svc.AutoAssignVippsCharges(ctx, f.club.ID, f.club.Treasurer.ID); err != nil {
+	if r.assign, err = f.svc.AutoAssignVippsCharges(ctx, f.club.ID, f.club.Treasurer.ID, VippsAutoAssignOpts{}); err != nil {
 		t.Fatalf("AutoAssignVippsCharges: %v", err)
 	}
 	if r.sweep, err = f.svc.ClearReadyVippsPayouts(ctx, f.club.ID, f.club.Treasurer.ID); err != nil {

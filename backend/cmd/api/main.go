@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -736,36 +737,39 @@ func main() {
 		}
 	}()
 
-	// Nightly Vipps settlement sync (BRY-4): pull the last few days of Report
-	// API funds+fees into the Vipps-kø as an automated import (NULL actor).
-	// Idempotent (row_hash dedup), so re-pulling recent days is free and covers
-	// reports that finalise late or over a weekend. Runs once at startup too.
-	if vippsClient != nil {
+	// Automatic booking run (ACC-13, BRY-567): once at every start of the API
+	// (boot, which includes every deploy) and every 24 h after. Each run
+	// pulls the last 4 days of the Vipps Report API into the Vipps-kø (when
+	// there is a Vipps client; idempotent, so re-pulling covers late
+	// reports) and then, when accounting is on and the club has turned on
+	// clubs.automatic_booking, books what a person's sync would book without
+	// guessing, as the club's system actor. The Report API finalises a day
+	// the next day, so "after every Report API pull" and "nightly" are the
+	// same run. One club per deployment (cfg.ClubSlug); a multi-club
+	// deployment would loop over clubs here. The run is tracked so shutdown
+	// waits for it (bounded below): a run cancelled by SIGTERM stops at the
+	// next item and still writes its summary audit row.
+	var autoBookingRuns sync.WaitGroup
+	if vippsClient != nil || cfg.Features.Accounting {
+		autoBookingRuns.Add(1)
 		go func() {
+			defer autoBookingRuns.Done()
 			ticker := time.NewTicker(24 * time.Hour)
 			defer ticker.Stop()
+			src := accounting.NewVippsReportSource(vippsClient)
+			trigger := accounting.AutoBookingTriggerBoot
 			for {
 				var clubID string
 				if err := db.QueryRow(ctx, `SELECT id FROM clubs WHERE slug = $1`, cfg.ClubSlug).Scan(&clubID); err != nil {
-					log.Warn().Err(err).Msg("vipps report sync: resolve club failed")
-				} else if ledgers, err := vippsClient.LedgersParsed(ctx); err != nil || len(ledgers) == 0 {
-					log.Warn().Err(err).Msg("vipps report sync: resolve ledger failed")
+					log.Warn().Err(err).Msg("automatic booking: resolve club failed")
 				} else {
-					ledgerID := ledgers[0].LedgerID
-					for d := 1; d <= 4; d++ {
-						date := time.Now().AddDate(0, 0, -d).Format("2006-01-02")
-						res, err := accountingSvc.SyncVippsReport(ctx, accounting.NewVippsReportSource(vippsClient), clubID, "", ledgerID, date)
-						switch {
-						case err != nil:
-							log.Warn().Err(err).Str("date", date).Msg("vipps report sync failed")
-						case res.TryLater:
-							log.Debug().Str("date", date).Msg("vipps report not finalised yet")
-						case res.Imported > 0:
-							log.Info().Str("date", date).Int("imported", res.Imported).
-								Int("skipped", res.SkippedDup).Msg("vipps report synced")
-						}
-					}
+					accountingSvc.RunAutomaticBooking(ctx, clubID, accounting.AutoBookingOpts{
+						Source:     src,
+						Trigger:    trigger,
+						Accounting: cfg.Features.Accounting,
+					})
 				}
+				trigger = accounting.AutoBookingTriggerNightly
 				select {
 				case <-ctx.Done():
 					return
@@ -826,7 +830,28 @@ func main() {
 		log.Error().Err(err).Msg("server shutdown error")
 	}
 
+	// Let a running automatic booking run stop at its next item and write
+	// its summary row; the next boot run is the retry for whatever it left.
+	if !waitBounded(&autoBookingRuns, 30*time.Second) {
+		log.Warn().Msg("automatic booking run still running at shutdown; the next start retries it")
+	}
+
 	log.Info().Msg("server stopped")
+}
+
+// waitBounded waits for wg at most d and reports whether it finished.
+func waitBounded(wg *sync.WaitGroup, d time.Duration) bool {
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return true
+	case <-time.After(d):
+		return false
+	}
 }
 
 func placeholder(name string) http.HandlerFunc {

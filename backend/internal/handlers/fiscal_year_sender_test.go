@@ -290,7 +290,7 @@ func TestMissingYearClosesAndPaymentBookedInOwnYear(t *testing.T) {
 	if _, err := svc.BankSync(ctx, club.ID, club.Treasurer.ID); err != nil {
 		t.Fatalf("BankSync: %v", err)
 	}
-	if _, err := svc.BookVippsQueue(ctx, club.ID, club.Treasurer.ID, time.Second); err != nil {
+	if _, err := svc.BookVippsQueue(ctx, club.ID, club.Treasurer.ID, accounting.VippsBookingOpts{Wait: time.Second}); err != nil {
 		t.Fatalf("BookVippsQueue: %v", err)
 	}
 	for name, q := range map[string]string{

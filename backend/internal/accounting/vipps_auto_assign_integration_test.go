@@ -55,7 +55,7 @@ func (f *autoAssignFixture) priceItem(t *testing.T, category, name string, cents
 
 func (f *autoAssignFixture) run(t *testing.T) *AutoAssignResult {
 	t.Helper()
-	res, err := f.svc.AutoAssignVippsCharges(context.Background(), f.club.ID, f.club.Treasurer.ID)
+	res, err := f.svc.AutoAssignVippsCharges(context.Background(), f.club.ID, f.club.Treasurer.ID, VippsAutoAssignOpts{})
 	if err != nil {
 		t.Fatalf("AutoAssignVippsCharges: %v", err)
 	}

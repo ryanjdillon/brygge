@@ -226,8 +226,11 @@ func (s *Service) assignBankRowToInvoice(
 	// per the existing DIL-363 contract. A failure here doesn't roll
 	// back the GL journal (which is already correct), it just means
 	// the dashboard will reflect the GL but not the payments row until
-	// a subsequent sync or the operator retries.
-	if err := s.linkInvoicePayment(ctx, clubID, invoiceID, rowDate); err != nil {
+	// a subsequent sync or the operator retries. It runs on
+	// postCommitContext, so a cancel right after the commit still links.
+	linkCtx, cancel := postCommitContext(ctx)
+	defer cancel()
+	if err := s.linkInvoicePayment(linkCtx, clubID, invoiceID, rowDate); err != nil {
 		s.log.Warn().Err(err).
 			Str("invoice_id", invoiceID).
 			Str("bank_row_id", bankRowID).

@@ -2797,7 +2797,7 @@ func (h *AccountingHandler) HandleImportVippsSettlement(w http.ResponseWriter, r
 	var booked accounting.VippsBookingResult
 	bookingDeferred := false
 	if perCharge, perr := h.svc.VippsPerChargeEnabled(r.Context(), claims.ClubID); perr == nil && perCharge {
-		res, berr := h.svc.BookVippsQueue(r.Context(), claims.ClubID, claims.UserID, 0)
+		res, berr := h.svc.BookVippsQueue(r.Context(), claims.ClubID, claims.UserID, accounting.VippsBookingOpts{Trigger: accounting.VippsAutoAssignTriggerUpload})
 		switch {
 		case errors.Is(berr, accounting.ErrVippsBookingBusy):
 			bookingDeferred = true

@@ -793,8 +793,13 @@ func inferOwnAccountNumber(rows []BankRow) string {
 // unpaired and its year returned in missingYears; one in a closed or locked
 // period is left and its year returned in skippedClosedYears. An import's
 // period override is loaded, never created. A row a person's undo declined
-// (auto_declined_at, ACC-13(b): an undone transfer marks both rows) is never
-// paired, in the candidate query or in the guarded link.
+// (auto_declined_at, ACC-13(b): an undone transfer marks both rows), a row a
+// person dismissed (the "Intern overføring" workaround for a pair booked by
+// hand) and a row paired as a refund are never paired, on either side, in
+// the candidate query or in the guarded link.
+//
+// The draft and the link of both rows commit together (pairIntraBankTransfer),
+// so a lost race or a cancelled context never leaves an orphan draft.
 func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID, periodOverride, createdBy string) (matched int, skippedClosedYears, missingYears []int, _ error) {
 	rows, err := s.db.Query(ctx,
 		`WITH this_import AS (
@@ -810,6 +815,8 @@ func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID
 		   AND r2.amount    = -r1.amount
 		   AND r2.journal_entry_id IS NULL
 		   AND r2.auto_declined_at IS NULL
+		   AND r2.dismissed_at IS NULL
+		   AND r2.refund_paired_with IS NULL
 		   AND r2.id <> r1.id
 		 JOIN bank_imports bi2 ON bi2.id = r2.bank_import_id
 		   AND bi2.bank_account_code <> ti.bank_account_code
@@ -821,6 +828,8 @@ func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID
 		   AND r1.club_id        = $2
 		   AND r1.journal_entry_id IS NULL
 		   AND r1.auto_declined_at IS NULL
+		   AND r1.dismissed_at IS NULL
+		   AND r1.refund_paired_with IS NULL
 		   AND NOT `+referenceDateSQL("r1.club_id", "r1.row_date")+`
 		   AND NOT `+referenceDateSQL("r2.club_id", "r2.row_date"),
 		importID, clubID,
@@ -853,19 +862,9 @@ func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID
 		if used[p.r1ID] || used[p.r2ID] {
 			continue
 		}
-		periodID, perr := openPeriodIn(ctx, s.db, clubID, p.date, periodOverride)
-		switch {
-		case errors.Is(perr, errNoFiscalPeriod):
-			missingYearSet[p.date.Year()] = true
-			continue
-		case errors.Is(perr, ErrVippsPeriodClosed):
-			// Closed or locked: a locked period would only fail at the
-			// entry insert.
-			closedYearSet[p.date.Year()] = true
-			continue
-		case perr != nil:
-			s.log.Warn().Err(perr).Str("bank_row_id", p.r1ID).Msg("intra-bank transfer: resolving the period failed; rows stay unmatched")
-			continue
+		// A cancelled request or run stops here with what it paired.
+		if ctx.Err() != nil {
+			break
 		}
 		debitCode, creditCode := p.codeB, p.codeA
 		if p.amount > 0 {
@@ -875,41 +874,26 @@ func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID
 		if amount < 0 {
 			amount = -amount
 		}
-		sourceID := p.r1ID
-		sourceTable := "bank_import_rows"
-		entry, err := s.CreateJournalEntry(ctx, CreateJournalEntryInput{
-			FiscalPeriodID: periodID,
-			EntryDate:      p.date.Format("2006-01-02"),
-			Description:    fmt.Sprintf("Intra-bank transfer: %s", p.desc),
-			Source:         "bank_import",
-			SourceID:       &sourceID,
-			SourceTable:    &sourceTable,
-			CreatedBy:      createdBy,
-			ClubID:         clubID,
-			Lines: []CreateJournalLineInput{
-				{AccountCode: debitCode, Debit: amount, Credit: 0},
-				{AccountCode: creditCode, Debit: 0, Credit: amount},
-			},
+		err := s.pairIntraBankTransfer(ctx, clubID, createdBy, periodOverride, intraBankPair{
+			r1ID: p.r1ID, r2ID: p.r2ID, debitCode: debitCode, creditCode: creditCode,
+			desc: p.desc, date: p.date, amount: amount,
 		})
-		if err != nil {
-			s.log.Warn().Err(err).Str("bank_row_id", p.r1ID).Msg("intra-bank transfer: CreateJournalEntry failed; rows stay unmatched")
+		switch {
+		case err == nil:
+		case errors.Is(err, errNoFiscalPeriod):
+			missingYearSet[p.date.Year()] = true
 			continue
-		}
-		tag, err := s.db.Exec(ctx,
-			`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true
-			  WHERE id = ANY($2::uuid[]) AND club_id = $3 AND journal_entry_id IS NULL AND auto_declined_at IS NULL`,
-			entry.ID, []string{p.r1ID, p.r2ID}, clubID,
-		)
-		if err != nil || tag.RowsAffected() != 2 {
-			// One side was booked concurrently, or a person declined it: a
-			// transfer needs both rows, so release whichever row this call did
-			// link and drop the draft.
-			s.log.Warn().Err(err).Str("bank_row_id", p.r1ID).Msg("intra-bank transfer: could not link both rows; draft discarded")
-			_, _ = s.db.Exec(ctx,
-				`UPDATE bank_import_rows SET journal_entry_id = NULL, auto_matched = false
-				  WHERE journal_entry_id = $1 AND club_id = $2`,
-				entry.ID, clubID)
-			s.discardDraft(ctx, clubID, entry.ID)
+		case errors.Is(err, ErrVippsPeriodClosed), errors.Is(err, ErrPeriodClosed):
+			// Closed or locked, also when closed between the period read and
+			// the entry insert.
+			closedYearSet[p.date.Year()] = true
+			continue
+		case errors.Is(err, errTransferRowTaken):
+			// One side was booked, dismissed, refund-paired or declined
+			// concurrently: a transfer needs both rows, and nothing was kept.
+			continue
+		default:
+			s.log.Warn().Err(err).Str("bank_row_id", p.r1ID).Msg("intra-bank transfer: pairing failed; rows stay unmatched")
 			continue
 		}
 		used[p.r1ID] = true
@@ -923,6 +907,95 @@ func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID
 		missingYears = append(missingYears, y)
 	}
 	return matched, skippedClosedYears, missingYears, nil
+}
+
+// errTransferRowTaken means one row of a transfer pair was booked,
+// dismissed, refund-paired or declined after the candidate query.
+var errTransferRowTaken = errors.New("transfer row was taken concurrently")
+
+// intraBankPair is one transfer the detector pairs: both rows, the GL codes
+// the draft debits and credits, and the amount (positive).
+type intraBankPair struct {
+	r1ID, r2ID, debitCode, creditCode, desc string
+	date                                    time.Time
+	amount                                  float64
+}
+
+// transferRowEligibleSQL is true for a row transfer pairing may link: not
+// booked, not declined by a person's undo, not dismissed and not paired as a
+// refund.
+const transferRowEligibleSQL = `journal_entry_id IS NULL AND auto_declined_at IS NULL AND dismissed_at IS NULL AND refund_paired_with IS NULL`
+
+// pairIntraBankTransfer books one transfer pair as a draft bilag and links
+// both rows to it, in one transaction: the rows are locked in id order, the
+// period is read on that transaction (existing and open only, BRY-578), and
+// the draft and the guarded link of both rows commit together. A row taken
+// meanwhile is errTransferRowTaken and nothing is kept, so neither a lost
+// race nor a cancelled context leaves an orphan draft behind.
+func (s *Service) pairIntraBankTransfer(ctx context.Context, clubID, createdBy, periodOverride string, p intraBankPair) error {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	ids := []string{p.r1ID, p.r2ID}
+	sort.Strings(ids)
+	locked, err := tx.Query(ctx,
+		`SELECT id::text FROM bank_import_rows
+		  WHERE id = ANY($1::uuid[]) AND club_id = $2 AND `+transferRowEligibleSQL+`
+		  ORDER BY id FOR UPDATE`,
+		ids, clubID,
+	)
+	if err != nil {
+		return fmt.Errorf("locking transfer rows: %w", err)
+	}
+	eligible, err := pgx.CollectRows(locked, pgx.RowTo[string])
+	if err != nil {
+		return fmt.Errorf("locking transfer rows: %w", err)
+	}
+	if len(eligible) != 2 {
+		return errTransferRowTaken
+	}
+
+	periodID, err := openPeriodIn(ctx, tx, clubID, p.date, periodOverride)
+	if err != nil {
+		return err
+	}
+	sourceID := p.r1ID
+	sourceTable := "bank_import_rows"
+	entry, err := createJournalEntryTx(ctx, tx, CreateJournalEntryInput{
+		FiscalPeriodID: periodID,
+		EntryDate:      p.date.Format("2006-01-02"),
+		Description:    fmt.Sprintf("Intra-bank transfer: %s", p.desc),
+		Source:         "bank_import",
+		SourceID:       &sourceID,
+		SourceTable:    &sourceTable,
+		CreatedBy:      createdBy,
+		ClubID:         clubID,
+		Lines: []CreateJournalLineInput{
+			{AccountCode: p.debitCode, Debit: p.amount, Credit: 0},
+			{AccountCode: p.creditCode, Debit: 0, Credit: p.amount},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("creating transfer draft: %w", err)
+	}
+	tag, err := tx.Exec(ctx,
+		`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true
+		  WHERE id = ANY($2::uuid[]) AND club_id = $3 AND `+transferRowEligibleSQL,
+		entry.ID, ids, clubID,
+	)
+	if err != nil {
+		return fmt.Errorf("linking transfer rows: %w", err)
+	}
+	if tag.RowsAffected() != 2 {
+		return errTransferRowTaken
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("committing transfer: %w", err)
+	}
+	return nil
 }
 
 // addYears adds years to set.

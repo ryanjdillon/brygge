@@ -65,7 +65,7 @@ func (s *Service) ResyncVippsBilags(ctx context.Context, clubID, createdBy strin
 		// their checkout order can be booked without a human. The booking
 		// tail runs in the club's booking slot; a person waits for it a few
 		// seconds, then gets ErrVippsBookingBusy and nothing is done.
-		booked, err := s.BookVippsQueue(ctx, clubID, createdBy, 0)
+		booked, err := s.BookVippsQueue(ctx, clubID, createdBy, VippsBookingOpts{Trigger: VippsAutoAssignTriggerResync})
 		if err != nil {
 			return nil, err
 		}

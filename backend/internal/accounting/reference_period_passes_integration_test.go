@@ -175,7 +175,7 @@ func TestVippsChargePassesSkipReferenceYear(t *testing.T) {
 		if err != nil {
 			t.Fatalf("order charges: %v", err)
 		}
-		auto, err = f.svc.AutoAssignVippsCharges(ctx, f.club.ID, f.club.Treasurer.ID)
+		auto, err = f.svc.AutoAssignVippsCharges(ctx, f.club.ID, f.club.Treasurer.ID, VippsAutoAssignOpts{})
 		if err != nil {
 			t.Fatalf("auto-assign: %v", err)
 		}

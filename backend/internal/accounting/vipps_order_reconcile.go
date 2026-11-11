@@ -104,9 +104,12 @@ func (s *Service) assignVippsChargeToOrder(ctx context.Context, clubID, vippsRow
 	if err := tx.Commit(ctx); err != nil {
 		return nil, true, fmt.Errorf("commit vipps order charge: %w", err)
 	}
+	// Best-effort, as in AssignVippsChargeToInvoice: the GL is already right.
+	// After the commit, so on postCommitContext.
+	linkCtx, cancel := postCommitContext(ctx)
+	defer cancel()
 	for _, id := range invoiceIDs {
-		// Best-effort, as in AssignVippsChargeToInvoice: the GL is already right.
-		if err := s.linkInvoicePayment(ctx, clubID, id, b.date); err != nil {
+		if err := s.linkInvoicePayment(linkCtx, clubID, id, b.date); err != nil {
 			s.log.Warn().Err(err).Str("invoice_id", id).Str("vipps_row_id", vippsRowID).
 				Msg("vipps order charge: invoice payment back-link failed")
 		}

@@ -81,8 +81,13 @@ const (
 	ActionAccountingVippsDraftsPosted = "accounting.vipps_drafts_posted"
 	ActionAccountingDraftDeleted      = "accounting.draft_deleted"
 	ActionAccountingStripeSynced      = "accounting.stripe_balance_synced"
-	ActionPaymentCreated              = "payment.created"
-	ActionPaymentViewed               = "finance.payment_viewed"
+	// ActionAccountingAutoBookingRun is the automatic booking run's summary
+	// (ACC-13, BRY-567): one row per run that changed, failed or was skipped
+	// (busy, aborted, ingest failed), per provider, written as the club's
+	// system actor.
+	ActionAccountingAutoBookingRun = "accounting.auto_booking_run"
+	ActionPaymentCreated           = "payment.created"
+	ActionPaymentViewed            = "finance.payment_viewed"
 
 	// A faktura recipient taken off the SES suppression list (BRY-590)
 	ActionInvoiceRecipientUnsuppressed = "invoice.recipient_unsuppressed"

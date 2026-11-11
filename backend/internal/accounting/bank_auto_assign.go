@@ -42,7 +42,8 @@ const (
 	reasonBookingFailed         = "booking_failed"
 )
 
-// What ran the bank rule, recorded on each audit row.
+// What ran the bank rule, recorded on each audit row. The automatic booking
+// run passes its own AutoBookingTriggerBoot or AutoBookingTriggerNightly.
 const (
 	BankAutoAssignTriggerImport = "bank_import"
 	BankAutoAssignTriggerSync   = "bank_sync"
@@ -96,8 +97,9 @@ func (s *Service) BankAutoAssignEnabled(ctx context.Context, clubID string) (boo
 
 // AutoAssignBankDepositsReported runs the rule for an import or a sync and
 // never fails its caller: a failure is logged and set as the result's
-// Error. It returns nil when the club has not opted in, so callers report
-// nothing.
+// Error. A context that ended stops it with what it booked and no Error (the
+// caller reports its own abort). It returns nil when the club has not opted
+// in, so callers report nothing.
 func (s *Service) AutoAssignBankDepositsReported(ctx context.Context, clubID, actorID string, opts BankAutoAssignOpts) *AutoAssignResult {
 	on, err := s.BankAutoAssignEnabled(ctx, clubID)
 	if err != nil {
@@ -109,10 +111,16 @@ func (s *Service) AutoAssignBankDepositsReported(ctx context.Context, clubID, ac
 	}
 	res, err := s.AutoAssignBankDeposits(ctx, clubID, actorID, opts)
 	if err != nil {
-		s.log.Error().Err(err).Str("club_id", clubID).Msg("bank auto-assign failed")
 		if res == nil {
 			res = &AutoAssignResult{Source: AutoAssignSourceBank, Enabled: true, Assigned: []AutoAssignItem{}, SkippedDetails: []SkippedItem{}}
 		}
+		if ctx.Err() != nil && errors.Is(err, ctx.Err()) {
+			// The request or run ended: not a failure of the rule. The
+			// caller reports its own abort; what was booked is listed.
+			s.log.Warn().Err(err).Str("club_id", clubID).Msg("bank auto-assign stopped: the request or run ended")
+			return res
+		}
+		s.log.Error().Err(err).Str("club_id", clubID).Msg("bank auto-assign failed")
 		res.Error = bankAutoAssignFailedText
 	}
 	return res
@@ -122,7 +130,9 @@ func (s *Service) AutoAssignBankDepositsReported(ctx context.Context, clubID, ac
 // club and reports what it booked and why the rest stays in Tildel. It is
 // club-wide and idempotent: a booked row leaves the candidate set. With
 // opts.DryRun it books nothing and decides as if the club had opted in;
-// Enabled still reports the real setting.
+// Enabled still reports the real setting. A context that has ended stops the
+// booking loop with what it booked and the context's error, instead of
+// counting every remaining row as booking_failed.
 func (s *Service) AutoAssignBankDeposits(ctx context.Context, clubID, actorID string, opts BankAutoAssignOpts) (*AutoAssignResult, error) {
 	res := &AutoAssignResult{Source: AutoAssignSourceBank, Assigned: []AutoAssignItem{}, SkippedDetails: []SkippedItem{}, ByReason: map[string]int{}}
 	on, err := s.BankAutoAssignEnabled(ctx, clubID)
@@ -170,6 +180,12 @@ func (s *Service) AutoAssignBankDeposits(ctx context.Context, clubID, actorID st
 
 	touched := map[string]bool{}
 	for _, d := range decided {
+		if err := ctx.Err(); err != nil {
+			rctx, cancel := postCommitContext(ctx)
+			s.refreshMatchedCounts(rctx, clubID, touched)
+			cancel()
+			return res, err
+		}
 		override := ""
 		if opts.ImportID != "" && d.row.importID == opts.ImportID {
 			override = opts.PeriodOverride
@@ -197,20 +213,30 @@ func (s *Service) AutoAssignBankDeposits(ctx context.Context, clubID, actorID st
 		res.Assigned = append(res.Assigned, item)
 		res.NeedsReview--
 		touched[d.row.importID] = true
-		if s.audit != nil {
-			s.audit.LogAction(ctx, clubID, actorID, "", audit.ActionBankRowAutoAssigned, "bank_import_row", d.row.id,
-				map[string]any{
-					"rule":             autoAssignRuleMemberInvoice,
-					"target":           item.Target,
-					"invoice_id":       d.invoiceID,
-					"journal_entry_id": entryID,
-					"match_pass":       item.MatchPass,
-					"trigger":          opts.Trigger,
-				})
-		}
+		s.logBankAutoAssigned(ctx, clubID, actorID, d.row.id, d.invoiceID, entryID, item, opts.Trigger)
 	}
 	s.refreshMatchedCounts(ctx, clubID, touched)
 	return res, nil
+}
+
+// logBankAutoAssigned writes a booking's bank_row.auto_assigned audit row.
+// It follows the booking's commit, so it runs on postCommitContext: a run
+// cancelled right after the commit still records the booking.
+func (s *Service) logBankAutoAssigned(ctx context.Context, clubID, actorID, rowID, invoiceID, entryID string, item AutoAssignItem, trigger string) {
+	if s.audit == nil {
+		return
+	}
+	ctx, cancel := postCommitContext(ctx)
+	defer cancel()
+	s.audit.LogAction(ctx, clubID, actorID, "", audit.ActionBankRowAutoAssigned, "bank_import_row", rowID,
+		map[string]any{
+			"rule":             autoAssignRuleMemberInvoice,
+			"target":           item.Target,
+			"invoice_id":       invoiceID,
+			"journal_entry_id": entryID,
+			"match_pass":       item.MatchPass,
+			"trigger":          trigger,
+		})
 }
 
 func (d bankDepositDecision) item(entryID string) AutoAssignItem {

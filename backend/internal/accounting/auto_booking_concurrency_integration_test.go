@@ -214,7 +214,7 @@ func TestVippsBookingSlotSerialisesPeopleAndLongWaiter(t *testing.T) {
 		note(r.Orders, r.AutoAssign, r.Payouts, nil)
 	})
 	run(func() {
-		r, err := f.svc.BookVippsQueue(ctx, f.club.ID, other.ID, 30*time.Second)
+		r, err := f.svc.BookVippsQueue(ctx, f.club.ID, other.ID, VippsBookingOpts{Wait: 30 * time.Second})
 		if err != nil {
 			note(nil, nil, nil, err)
 			return
@@ -264,7 +264,7 @@ func TestVippsBookingSlotHeldMakesPeopleWaitThenBusy(t *testing.T) {
 	if elapsed < 150*time.Millisecond || elapsed > 5*time.Second {
 		t.Errorf("busy after %s, want about the 200ms bound", elapsed)
 	}
-	if _, err := f.svc.BookVippsQueue(context.Background(), f.club.ID, f.club.Treasurer.ID, 0); !errors.Is(err, ErrVippsBookingBusy) {
+	if _, err := f.svc.BookVippsQueue(context.Background(), f.club.ID, f.club.Treasurer.ID, VippsBookingOpts{}); !errors.Is(err, ErrVippsBookingBusy) {
 		t.Errorf("BookVippsQueue while held: %v, want ErrVippsBookingBusy", err)
 	}
 	if n := f.bookedCharges(t, s); n != 0 || f.entries(t) != 0 {
@@ -274,7 +274,7 @@ func TestVippsBookingSlotHeldMakesPeopleWaitThenBusy(t *testing.T) {
 	gone, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 	f.svc.vippsBookingSlotWait = time.Minute
-	if _, err := f.svc.BookVippsQueue(gone, f.club.ID, f.club.Treasurer.ID, 0); !errors.Is(err, context.DeadlineExceeded) || errors.Is(err, ErrVippsBookingBusy) {
+	if _, err := f.svc.BookVippsQueue(gone, f.club.ID, f.club.Treasurer.ID, VippsBookingOpts{}); !errors.Is(err, context.DeadlineExceeded) || errors.Is(err, ErrVippsBookingBusy) {
 		t.Errorf("request ended while waiting: %v, want its own deadline error", err)
 	}
 
@@ -301,10 +301,10 @@ func TestVippsBookingSlotLongWaitOutlastsPersonsBound(t *testing.T) {
 	}
 	long := make(chan out, 1)
 	go func() {
-		res, err := f.svc.BookVippsQueue(context.Background(), f.club.ID, f.club.Treasurer.ID, 30*time.Second)
+		res, err := f.svc.BookVippsQueue(context.Background(), f.club.ID, f.club.Treasurer.ID, VippsBookingOpts{Wait: 30 * time.Second})
 		long <- out{res, err}
 	}()
-	if _, err := f.svc.BookVippsQueue(context.Background(), f.club.ID, f.club.Treasurer.ID, 0); !errors.Is(err, ErrVippsBookingBusy) {
+	if _, err := f.svc.BookVippsQueue(context.Background(), f.club.ID, f.club.Treasurer.ID, VippsBookingOpts{}); !errors.Is(err, ErrVippsBookingBusy) {
 		t.Fatalf("person's wait: %v, want busy", err)
 	}
 	select {
@@ -395,7 +395,7 @@ func TestBankUploadClearsVippsPayoutWhoseChargesAreBooked(t *testing.T) {
 		t.Fatalf("ingest: %v", err)
 	}
 
-	booked, err := f.svc.BookVippsQueue(ctx, f.club.ID, f.club.Treasurer.ID, 0)
+	booked, err := f.svc.BookVippsQueue(ctx, f.club.ID, f.club.Treasurer.ID, VippsBookingOpts{})
 	if err != nil {
 		t.Fatalf("BookVippsQueue: %v", err)
 	}
@@ -474,7 +474,7 @@ func TestBankUploadSweepSkipsSettlementWithMissingOrUnbookedCharge(t *testing.T)
 	f.club.NewVippsRow(t, fin.VippsRowOpts{RowType: "fee", Cents: -2000, Date: d2, MSN: msn})
 	f.club.NewVippsRow(t, fin.VippsRowOpts{RowType: "payout", Cents: -318000, Date: d2, MSN: msn, Settlement: "8000002"})
 
-	if _, err := f.svc.AutoAssignVippsCharges(ctx, f.club.ID, f.club.Treasurer.ID); err != nil {
+	if _, err := f.svc.AutoAssignVippsCharges(ctx, f.club.ID, f.club.Treasurer.ID, VippsAutoAssignOpts{}); err != nil {
 		t.Fatalf("auto-assign: %v", err)
 	}
 	before := f.entries(t)
@@ -511,7 +511,7 @@ func TestBankUploadAndSyncDeferVippsSweepWhileSlotHeld(t *testing.T) {
 	f := newSlotFixture(t)
 	ctx := context.Background()
 	s := f.settlement(t, "5000401", 2, 1, false)
-	if _, err := f.svc.AutoAssignVippsCharges(ctx, f.club.ID, f.club.Treasurer.ID); err != nil {
+	if _, err := f.svc.AutoAssignVippsCharges(ctx, f.club.ID, f.club.Treasurer.ID, VippsAutoAssignOpts{}); err != nil {
 		t.Fatalf("auto-assign: %v", err)
 	}
 	f.exec(t, `DELETE FROM bank_import_rows WHERE id = $1`, s.bankRow)
@@ -593,7 +593,7 @@ func TestBookVippsChargeDecisionLeavesAConcurrentWinnerAlone(t *testing.T) {
 				winner = r.EntryID
 			}
 
-			entry, already, err := f.svc.bookVippsChargeDecision(ctx, f.club.ID, f.club.Treasurer.ID, row, d)
+			entry, already, err := f.svc.bookVippsChargeDecision(ctx, f.club.ID, f.club.Treasurer.ID, "", row, d)
 			if err != nil || !already || entry != winner {
 				t.Fatalf("bookVippsChargeDecision = %q, %v, %v; want the winner's entry %q and alreadyReconciled", entry, already, err, winner)
 			}
@@ -609,7 +609,7 @@ func TestBookVippsChargeDecisionLeavesAConcurrentWinnerAlone(t *testing.T) {
 			}
 
 			// The pass's own bookkeeping treats it as neither booked nor waiting.
-			item, _, err := f.svc.autoAssignOne(ctx, f.club.ID, f.club.Treasurer.ID, cfg, row, "Synthetic Payerone", "", fin.Kr(amount), time.Date(f.club.Year, 6, 1, 0, 0, 0, 0, time.UTC))
+			item, _, err := f.svc.autoAssignOne(ctx, f.club.ID, f.club.Treasurer.ID, "", cfg, row, "Synthetic Payerone", "", fin.Kr(amount), time.Date(f.club.Year, 6, 1, 0, 0, 0, 0, time.UTC))
 			if item != nil || err != nil && !errors.Is(err, errChargeBookedConcurrently) {
 				t.Errorf("autoAssignOne on a booked charge = %+v, %v", item, err)
 			}
@@ -660,7 +660,7 @@ func TestBookingPrimitivesWithoutTheSlotBookOnce(t *testing.T) {
 				mu.Unlock()
 				return
 			}
-			aa, err := f.svc.AutoAssignVippsCharges(ctx, f.club.ID, f.club.Treasurer.ID)
+			aa, err := f.svc.AutoAssignVippsCharges(ctx, f.club.ID, f.club.Treasurer.ID, VippsAutoAssignOpts{})
 			if err != nil {
 				mu.Lock()
 				errs = append(errs, fmt.Errorf("auto-assign: %w", err))
@@ -742,7 +742,7 @@ func TestBookVippsQueueSweepsAfterAFailingStep(t *testing.T) {
 	s := f.settlement(t, "5000701", 2, 1, false)
 	f.exec(t, `ALTER TABLE vipps_imports RENAME COLUMN filename TO filename_unavailable`)
 
-	res, err := f.svc.BookVippsQueue(context.Background(), f.club.ID, f.club.Treasurer.ID, 0)
+	res, err := f.svc.BookVippsQueue(context.Background(), f.club.ID, f.club.Treasurer.ID, VippsBookingOpts{})
 	if err == nil || !strings.Contains(err.Error(), "booking order-linked charges") {
 		t.Fatalf("error = %v, want the order step named", err)
 	}
@@ -799,7 +799,7 @@ func TestBookingPassesStopOnACancelledRequest(t *testing.T) {
 		}
 		lock := testutil.HoldRowLock(t, f.club.Pool, `SELECT id FROM invoices WHERE id = $1 FOR UPDATE`, invs[1].ID)
 		res, err := runCancelledWhileBlocked(t, lock, func(ctx context.Context) (*AutoAssignResult, error) {
-			return f.svc.AutoAssignVippsCharges(ctx, f.club.ID, f.club.Treasurer.ID)
+			return f.svc.AutoAssignVippsCharges(ctx, f.club.ID, f.club.Treasurer.ID, VippsAutoAssignOpts{})
 		})
 		if !errors.Is(err, context.Canceled) {
 			t.Fatalf("error = %v, want context.Canceled", err)
@@ -816,7 +816,7 @@ func TestBookingPassesStopOnACancelledRequest(t *testing.T) {
 			s := f.settlement(t, fmt.Sprintf("50006%02d", i), day, 1, false)
 			settlements = append(settlements, s)
 		}
-		if _, err := f.svc.AutoAssignVippsCharges(context.Background(), f.club.ID, f.club.Treasurer.ID); err != nil {
+		if _, err := f.svc.AutoAssignVippsCharges(context.Background(), f.club.ID, f.club.Treasurer.ID, VippsAutoAssignOpts{}); err != nil {
 			t.Fatalf("auto-assign: %v", err)
 		}
 		lock := testutil.HoldRowLock(t, f.club.Pool,

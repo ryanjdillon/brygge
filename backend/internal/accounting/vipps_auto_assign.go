@@ -66,6 +66,22 @@ func (s *Service) vippsAutoAssignConfig(ctx context.Context, clubID string) (vip
 	return c, nil
 }
 
+// What ran the Vipps auto-assign rules, recorded as details.trigger on each
+// vipps_charge.auto_assigned audit row. The automatic booking run passes its
+// own AutoBookingTriggerBoot or AutoBookingTriggerNightly.
+const (
+	VippsAutoAssignTriggerUpload     = "vipps_upload"
+	VippsAutoAssignTriggerReportSync = "report_sync"
+	VippsAutoAssignTriggerResync     = "vipps_resync"
+)
+
+// VippsAutoAssignOpts says how AutoAssignVippsCharges runs.
+type VippsAutoAssignOpts struct {
+	// Trigger names what ran the rules (VippsAutoAssignTrigger*, or the
+	// automatic run's trigger); it is written on each booking's audit row.
+	Trigger string
+}
+
 // AutoAssignVippsCharges books every unambiguous charge in the queue (see the
 // rules above) and reports what it booked and how many charges still need a
 // human. Charges naming a checkout order are left to
@@ -78,7 +94,7 @@ func (s *Service) vippsAutoAssignConfig(ctx context.Context, clubID string) (vip
 //
 // It never takes the club's Vipps booking slot: a request books through
 // BookVippsQueue, which holds the slot around the three Vipps booking passes.
-func (s *Service) AutoAssignVippsCharges(ctx context.Context, clubID, createdBy string) (*AutoAssignResult, error) {
+func (s *Service) AutoAssignVippsCharges(ctx context.Context, clubID, createdBy string, opts VippsAutoAssignOpts) (*AutoAssignResult, error) {
 	res := &AutoAssignResult{Source: AutoAssignSourceVipps, Assigned: []AutoAssignItem{}, SkippedDetails: []SkippedItem{}}
 	cfg, err := s.vippsAutoAssignConfig(ctx, clubID)
 	if err != nil {
@@ -153,7 +169,7 @@ func (s *Service) AutoAssignVippsCharges(ctx context.Context, clubID, createdBy 
 		if err := ctx.Err(); err != nil {
 			return res, err
 		}
-		item, _, err := s.autoAssignOne(ctx, clubID, createdBy, cfg, c.id, c.customer, c.message, c.amount, c.paidOn)
+		item, _, err := s.autoAssignOne(ctx, clubID, createdBy, opts.Trigger, cfg, c.id, c.customer, c.message, c.amount, c.paidOn)
 		if errors.Is(err, errChargeBookedConcurrently) {
 			// Someone else booked it while this pass decided: it is neither
 			// this pass's booking nor a charge still waiting for a human.
@@ -320,8 +336,9 @@ var errChargeBookedConcurrently = errors.New("charge was booked concurrently")
 // an existing open period and never opens a fiscal year: a charge dated in a
 // year the treasurer has not created stays unbooked (*noFiscalYearError) and
 // is booked in its own year once it exists. A charge a person declined is
-// errAutoDeclined, up front or from the guarded mark.
-func (s *Service) bookVippsChargeDecision(ctx context.Context, clubID, createdBy, rowID string, d *vippsChargeDecision) (entryID string, alreadyReconciled bool, err error) {
+// errAutoDeclined, up front or from the guarded mark. trigger is written on
+// the audit row (details.trigger) when set.
+func (s *Service) bookVippsChargeDecision(ctx context.Context, clubID, createdBy, trigger, rowID string, d *vippsChargeDecision) (entryID string, alreadyReconciled bool, err error) {
 	switch d.Rule {
 	case autoAssignRuleMemberInvoice:
 		r, err := s.assignVippsChargeToInvoice(ctx, clubID, rowID, d.InvoiceID, createdBy, automaticBooking)
@@ -341,14 +358,18 @@ func (s *Service) bookVippsChargeDecision(ctx context.Context, clubID, createdBy
 	if alreadyReconciled {
 		return entryID, true, nil
 	}
-	s.markAutoAssigned(ctx, clubID, createdBy, rowID, d.Rule, d.Target(), entryID)
+	var extra map[string]any
+	if trigger != "" {
+		extra = map[string]any{"trigger": trigger}
+	}
+	s.markAutoAssignedWith(ctx, clubID, createdBy, rowID, d.Rule, d.Target(), entryID, extra)
 	return entryID, false, nil
 }
 
 // autoAssignOne applies the rules to one charge. It returns the booking, or
 // nil with the reason it was left for a human, or errChargeBookedConcurrently
 // when someone else booked the charge first.
-func (s *Service) autoAssignOne(ctx context.Context, clubID, createdBy string, cfg vippsAutoAssignConfig, rowID, customer, message string, amount float64, paidOn time.Time) (*AutoAssignItem, string, error) {
+func (s *Service) autoAssignOne(ctx context.Context, clubID, createdBy, trigger string, cfg vippsAutoAssignConfig, rowID, customer, message string, amount float64, paidOn time.Time) (*AutoAssignItem, string, error) {
 	d, err := s.decideVippsCharge(ctx, clubID, cfg, customer, message, amount, paidOn)
 	if err != nil {
 		return nil, "", err
@@ -356,7 +377,7 @@ func (s *Service) autoAssignOne(ctx context.Context, clubID, createdBy string, c
 	if d.Rule == "" {
 		return nil, d.Reason, nil
 	}
-	entryID, alreadyReconciled, err := s.bookVippsChargeDecision(ctx, clubID, createdBy, rowID, d)
+	entryID, alreadyReconciled, err := s.bookVippsChargeDecision(ctx, clubID, createdBy, trigger, rowID, d)
 	if err != nil {
 		return nil, "", err
 	}
@@ -366,15 +387,27 @@ func (s *Service) autoAssignOne(ctx context.Context, clubID, createdBy string, c
 	return &AutoAssignItem{Source: AutoAssignSourceVipps, RowID: rowID, Rule: d.Rule, Target: d.Target(), EntryID: entryID}, "", nil
 }
 
-// markAutoAssigned records which rule booked the charge and writes the audit
-// row. Failures are logged: the booking itself already stands.
-func (s *Service) markAutoAssigned(ctx context.Context, clubID, actorID, rowID, rule, target, entryID string) {
-	s.markAutoAssignedWith(ctx, clubID, actorID, rowID, rule, target, entryID, nil)
+// postCommitWriteTimeout bounds a write that follows a committed booking
+// (a rule marker, a per-item audit row, a payment back-link). Those writes run
+// on context.WithoutCancel: the booking already stands, so a request or run
+// that ends right after the commit must not leave it without its record.
+const postCommitWriteTimeout = 5 * time.Second
+
+// postCommitContext is ctx without its cancellation, bounded by
+// postCommitWriteTimeout, for the writes that follow a committed booking.
+func postCommitContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), postCommitWriteTimeout)
 }
 
-// markAutoAssignedWith is markAutoAssigned with extra audit details, such as
-// the entry and faktura a rebooking replaced.
+// markAutoAssignedWith records which rule booked the charge and writes the
+// audit row, with extra details such as the trigger, or the entry and faktura
+// a rebooking replaced. Failures are logged: the booking itself already
+// stands. Both writes follow the booking's commit, so they run on
+// postCommitContext: a run cancelled right after the commit still records
+// the rule and the audit row.
 func (s *Service) markAutoAssignedWith(ctx context.Context, clubID, actorID, rowID, rule, target, entryID string, extra map[string]any) {
+	ctx, cancel := postCommitContext(ctx)
+	defer cancel()
 	if _, err := s.db.Exec(ctx,
 		`UPDATE vipps_import_rows SET auto_assign_rule = $3 WHERE id = $1 AND club_id = $2`,
 		rowID, clubID, rule,

@@ -43,6 +43,11 @@ type VippsPayoutSweepResult struct {
 	// noPeriod is the years of deposits skipped because no fiscal period
 	// exists for them, folded into the import or sync's MissingPeriods.
 	noPeriod []int
+	// notNetting is the settlements skipped because their postings do not
+	// net to 0 on the clearing account (BRY-560); they are in Skipped too.
+	// The automatic run reports them with its failed payouts, since only a
+	// person can fix them.
+	notNetting []VippsPayoutSweepItem
 }
 
 // noPeriodYears is the years of deposits the sweep skipped because no
@@ -153,6 +158,9 @@ func (s *Service) ClearReadyVippsPayouts(ctx context.Context, clubID, actor stri
 			}
 			if skip {
 				res.Skipped = append(res.Skipped, item)
+				if errors.Is(err, ErrVippsSettlementNotNetting) {
+					res.notNetting = append(res.notNetting, item)
+				}
 			} else {
 				res.Failed = append(res.Failed, item)
 				s.log.Warn().Err(err).Str("bank_row_id", d.id).Msg("vipps payout sweep: clearing failed")

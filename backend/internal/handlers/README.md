@@ -188,7 +188,7 @@ Online payment goes through the provider-neutral interfaces in [`internal/paymen
 
 ### Vipps bookings from a request (BRY-564)
 
-A handler never calls the Vipps booking primitives (`AutoReconcileOrderCharges`, `AutoAssignVippsCharges`, `ClearReadyVippsPayouts`) itself. It calls `svc.BookVippsQueue(ctx, club, actor, 0)` (CSV upload, **Synk Vipps**; the operator Report API sync reaches it through `SyncVippsReport`) or a service method that sweeps in the club's booking slot (bank upload, bank sync, backlog apply). The slot is bounded for a person (10 s), so the handler maps a held slot in one of two ways, by what the request was for:
+A handler never calls the Vipps booking primitives (`AutoReconcileOrderCharges`, `AutoAssignVippsCharges`, `ClearReadyVippsPayouts`) itself. It calls `svc.BookVippsQueue(ctx, club, actor, accounting.VippsBookingOpts{Trigger: …})` with no `Wait`, so a person's bound (CSV upload with `VippsAutoAssignTriggerUpload`, **Synk Vipps**; the operator Report API sync reaches it through `SyncVippsReport`) or a service method that sweeps in the club's booking slot (bank upload, bank sync, backlog apply). The slot is bounded for a person (10 s), so the handler maps a held slot in one of two ways, by what the request was for:
 - the booking is the whole action (**Synk Vipps**, `HandleResyncVipps`): 409 `{error, code: "vipps_booking_busy"}` through `vippsBookingBusy`, nothing done;
 - the request also ingested or uploaded (Vipps CSV upload, Report API sync, bank upload, bank sync, backlog apply): the work stands, the response carries `booking_deferred: true` (and the audit row the same), and the SPA shows `BookingDeferredNotice`.
 

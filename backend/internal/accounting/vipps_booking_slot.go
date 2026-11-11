@@ -71,10 +71,22 @@ type VippsBookingResult struct {
 	Payouts    *VippsPayoutSweepResult
 }
 
+// VippsBookingOpts says how BookVippsQueue runs.
+type VippsBookingOpts struct {
+	// Wait bounds the wait for the club's booking slot: a person's bound
+	// when <= 0; the automatic run, with no person waiting, passes a longer
+	// one.
+	Wait time.Duration
+	// Trigger names what ran the booking (VippsAutoAssignTrigger*, or the
+	// automatic run's trigger); the auto-assign rules write it on each
+	// booking's audit row.
+	Trigger string
+}
+
 // BookVippsQueue is the one guarded entry point for the Vipps booking tail,
 // in one hold of the club's booking slot: the order-linked charges, the
 // auto-assign rules, then the payout sweep that the first two make ready. It
-// waits for the slot at most wait (a person's bound when wait <= 0; a caller
+// waits for the slot at most opts.Wait (a person's bound when <= 0; a caller
 // with no person waiting passes a longer one) and then returns
 // ErrVippsBookingBusy with nothing done.
 //
@@ -85,8 +97,8 @@ type VippsBookingResult struct {
 // fails the tail (ClearReadyVippsPayoutsReported carries its error in the
 // result). Callers decide for themselves whether the club is on the per-charge
 // model; this does not look.
-func (s *Service) BookVippsQueue(ctx context.Context, clubID, actor string, wait time.Duration) (*VippsBookingResult, error) {
-	release, err := s.acquireVippsBooking(ctx, clubID, wait)
+func (s *Service) BookVippsQueue(ctx context.Context, clubID, actor string, opts VippsBookingOpts) (*VippsBookingResult, error) {
+	release, err := s.acquireVippsBooking(ctx, clubID, opts.Wait)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +114,7 @@ func (s *Service) BookVippsQueue(ctx context.Context, clubID, actor string, wait
 	res.Orders, err = s.AutoReconcileOrderCharges(ctx, clubID, actor)
 	note(err, "booking order-linked charges")
 	if ctx.Err() == nil {
-		res.AutoAssign, err = s.AutoAssignVippsCharges(ctx, clubID, actor)
+		res.AutoAssign, err = s.AutoAssignVippsCharges(ctx, clubID, actor, VippsAutoAssignOpts{Trigger: opts.Trigger})
 		note(err, "auto-assigning charges")
 	}
 	if ctx.Err() == nil {

@@ -114,26 +114,8 @@ func (s *Service) SyncVippsReport(ctx context.Context, src VippsReportSource, cl
 	res.Imported = imp.Imported
 	res.SkippedDup = imp.SkippedDup
 
-	// Book order-linked charges, and clear the payouts they complete, right
-	// away when someone is acting; the nightly run has no user to record as
-	// creator, so it only repairs row types and leaves the booking to the
-	// next operator sync. The booking runs in the club's booking slot; when it
-	// stays busy the import stands and the booking is deferred.
-	if actorID != "" {
-		booked, err := s.BookVippsQueue(ctx, clubID, actorID, 0)
-		switch {
-		case errors.Is(err, ErrVippsBookingBusy):
-			res.BookingDeferred = true
-		case err != nil:
-			if booked != nil {
-				res.Orders, res.AutoAssign = booked.Orders, booked.AutoAssign
-			}
-			return res, err
-		default:
-			res.Orders, res.AutoAssign, res.Payouts = booked.Orders, booked.AutoAssign, booked.Payouts
-		}
-	} else if _, _, err := s.RepairVippsReportRows(ctx, clubID); err != nil {
-		return res, fmt.Errorf("repairing report rows: %w", err)
+	if err := s.bookAfterReportSync(ctx, clubID, actorID, &res); err != nil {
+		return res, err
 	}
 
 	if _, err := s.DB().Exec(ctx,
@@ -142,4 +124,41 @@ func (s *Service) SyncVippsReport(ctx context.Context, src VippsReportSource, cl
 		return res, fmt.Errorf("update import count: %w", err)
 	}
 	return res, nil
+}
+
+// bookAfterReportSync books order-linked charges, and clears the payouts they
+// complete, right after a Report API ingest when someone is acting and the
+// club is on the per-charge model, as the CSV upload and Synk Vipps do; a
+// legacy-model club is never booked here. Without an actor (the automatic
+// run's ingest) it only repairs row types: RunAutomaticBooking books
+// afterwards as the club's system actor, when the club has automatic booking
+// on. The booking runs in the club's booking slot; when it stays busy the
+// import stands and the booking is deferred.
+func (s *Service) bookAfterReportSync(ctx context.Context, clubID, actorID string, res *VippsReportSyncResult) error {
+	perCharge := false
+	if actorID != "" {
+		var err error
+		if perCharge, err = s.VippsPerChargeEnabled(ctx, clubID); err != nil {
+			return fmt.Errorf("checking vipps model: %w", err)
+		}
+	}
+	if !perCharge {
+		if _, _, err := s.RepairVippsReportRows(ctx, clubID); err != nil {
+			return fmt.Errorf("repairing report rows: %w", err)
+		}
+		return nil
+	}
+	booked, err := s.BookVippsQueue(ctx, clubID, actorID, VippsBookingOpts{Trigger: VippsAutoAssignTriggerReportSync})
+	switch {
+	case errors.Is(err, ErrVippsBookingBusy):
+		res.BookingDeferred = true
+	case err != nil:
+		if booked != nil {
+			res.Orders, res.AutoAssign = booked.Orders, booked.AutoAssign
+		}
+		return err
+	default:
+		res.Orders, res.AutoAssign, res.Payouts = booked.Orders, booked.AutoAssign, booked.Payouts
+	}
+	return nil
 }

@@ -428,8 +428,12 @@ func (s *Service) assignVippsChargeToInvoice(ctx context.Context, clubID, vippsR
 	}
 
 	// Back-link the invoice payment. Best-effort: the GL is already correct
-	// if this fails, mirroring the legacy reconcile path.
-	if err := s.linkInvoicePayment(ctx, clubID, invoiceID, b.date); err != nil {
+	// if this fails, mirroring the legacy reconcile path. It follows the
+	// commit, so it runs on postCommitContext: a request or run cancelled
+	// right after the booking still marks the faktura paid.
+	linkCtx, cancel := postCommitContext(ctx)
+	defer cancel()
+	if err := s.linkInvoicePayment(linkCtx, clubID, invoiceID, b.date); err != nil {
 		s.log.Warn().Err(err).
 			Str("invoice_id", invoiceID).
 			Str("vipps_row_id", vippsRowID).
