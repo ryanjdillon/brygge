@@ -178,9 +178,9 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to initialise legal S3 client")
 	}
 	if s3LegalClient.IsConfigured() {
-		log.Info().Str("bucket", cfg.S3BucketLegal).Msg("legal S3 storage enabled (invoices)")
+		log.Info().Str("bucket", cfg.S3BucketLegal).Msg("legal S3 storage enabled (invoices, bilag vouchers)")
 	} else {
-		log.Warn().Msg("S3_BUCKET_LEGAL not configured — invoice PDFs stored in DB only")
+		log.Warn().Msg("S3_BUCKET_LEGAL not configured — invoice PDFs stored in DB only, bilag voucher upload disabled")
 	}
 
 	auditService := audit.NewService(db, log)

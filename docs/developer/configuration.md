@@ -171,7 +171,7 @@ condition, and points at test mode (`/test`) for a test key.
 |----------       |----------   |--------- |-------------               |
 | `S3_ENDPOINT`   | For uploads | —        | S3-compatible endpoint URL |
 | `S3_BUCKET_DOCS`  | No        | `brygge` | Bucket for the document archive and charts |
-| `S3_BUCKET_LEGAL` | No        | —        | Bucket for faktura PDFs kept for the bokføringsloven retention period. Unset → PDFs are stored in the database only (logged as a warning at start-up) |
+| `S3_BUCKET_LEGAL` | No        | —        | Bucket for faktura PDFs and bilag vouchers (the receipts attached to journal entries, `clubs/<club>/receipts/…`, BRY-675) kept for the bokføringsloven retention period. Unset → faktura PDFs are stored in the database only and voucher upload answers 503 (logged as a warning at start-up). The bucket's lifecycle and retention policy (keep at least the legal retention period; no expiry rule that removes vouchers earlier, object lock if wanted) is set by the operator on the bucket itself; neither terraform nor the nix module configures it |
 | `S3_ACCESS_KEY` | For uploads | —        | Access key                 |
 | `S3_SECRET_KEY` | For uploads | —        | Secret key                 |
 

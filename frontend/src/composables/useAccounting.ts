@@ -313,6 +313,10 @@ export function useParseReceipt() {
   })
 }
 
+// Attaches a voucher to a draft bilag (the form uploads it between creating
+// and posting). The server refuses a posted or voided bilag here with 409
+// entry_posted_use_gated: that goes through the money-gated
+// `/attachment/posted`, which never replaces an existing voucher (BRY-675).
 export function useUploadJournalAttachment() {
   const qc = useQueryClient()
   return useMutation({

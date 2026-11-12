@@ -200,7 +200,8 @@ reads admit any admin viewer (see *Board read access* above).
 | `POST /sync/vipps-fallback-reclass` | ✅ (treasurer, admin; BRY-557) | voids and rebooks posted Vipps charges from 3900 to their price-item accounts |
 | `POST /sync/invoices/resplit/preview`, `/sync/vipps-drafts/preview`, `/sync/vipps-fallback-reclass/preview` | — | read-only previews |
 | `POST /journal/parse-receipt` | — | parses an uploaded receipt into suggested fields; writes nothing |
-| `POST /journal/{id}/attachment` | — | uploads a bilag's attachment; not a GL change (gating tracked as a follow-up) |
+| `POST /journal/{id}/attachment` | — | attaches a voucher to a **draft** bilag (may replace it); a posted or voided bilag is refused with 409 `entry_posted_use_gated` (BRY-675). Checks the entry is the caller's club's before anything is uploaded |
+| `POST /journal/{id}/attachment/posted` | ✅ (treasurer, admin; BRY-675) | attaches a voucher to a bilag of any status; a posted or voided bilag's existing voucher is never replaced (409 `entry_has_voucher`); open, closed and locked years alike, refused in a reference year (409 `reference_period`, ACC-15) |
 | `POST /bank-sync`, `/vipps-resync` | ✅ (treasurer, admin; BRY-370) | auto-match and post (KID, Vipps order and auto-assign) |
 | `POST /bank-import` | ✅ (treasurer, admin; BRY-370) | posts import-time KID matches |
 | `PATCH /bank-import/{id}/account` | ✅ (treasurer, admin; BRY-370) | reassigns an import to another account; rewrites posted journal_lines |

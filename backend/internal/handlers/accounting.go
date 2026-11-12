@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -27,7 +29,7 @@ import (
 type AccountingHandler struct {
 	svc    *accounting.Service
 	audit  *audit.Service
-	s3     *storage.Client
+	s3     attachmentStore // nil when no object store was given
 	claude *ai.ClaudeClient
 	vipps  *vipps.Client // nil when the instance has no Vipps credentials
 	// stripe reads the Stripe balance; nil when the instance has no Stripe
@@ -43,14 +45,28 @@ func (h *AccountingHandler) SetStripe(src accounting.StripeBalanceSource) {
 }
 
 func NewAccountingHandler(svc *accounting.Service, auditService *audit.Service, s3 *storage.Client, claude *ai.ClaudeClient, vippsClient *vipps.Client, log zerolog.Logger) *AccountingHandler {
-	return &AccountingHandler{
+	h := &AccountingHandler{
 		svc:    svc,
 		audit:  auditService,
-		s3:     s3,
 		claude: claude,
 		vipps:  vippsClient,
 		log:    log.With().Str("handler", "accounting").Logger(),
 	}
+	if s3 != nil {
+		h.s3 = s3
+	}
+	return h
+}
+
+// attachmentStore is the part of the object store the bilag attachments
+// use; *storage.Client implements it, tests substitute an in-memory one.
+type attachmentStore interface {
+	IsConfigured() bool
+	Upload(ctx context.Context, key string, r interface {
+		Read([]byte) (int, error)
+	}, size int64, contentType string) error
+	Delete(ctx context.Context, key string) error
+	PresignedURLWithParams(ctx context.Context, key string, expiry time.Duration, params url.Values) (string, error)
 }
 
 func (h *AccountingHandler) HandleListAccounts(w http.ResponseWriter, r *http.Request) {
@@ -450,6 +466,8 @@ func (h *AccountingHandler) HandleListJournalEntries(w http.ResponseWriter, r *h
 	JSON(w, http.StatusOK, entries)
 }
 
+// createJournalEntryRequest is the journal create body. AttachmentURL is
+// decoded only to refuse it (400 attachment_url_not_accepted).
 type createJournalEntryRequest struct {
 	FiscalPeriodID string                     `json:"fiscal_period_id"`
 	EntryDate      string                     `json:"entry_date"`
@@ -478,6 +496,15 @@ func (h *AccountingHandler) HandleCreateJournalEntry(w http.ResponseWriter, r *h
 		Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	// A voucher is linked only by the attachment routes, which store it under
+	// the entry's own key; a client-sent key could name any object (BRY-675).
+	if req.AttachmentURL != nil {
+		JSON(w, http.StatusBadRequest, map[string]string{
+			"error": "attachment_url is not accepted; upload the voucher to /journal/{entryID}/attachment",
+			"code":  "attachment_url_not_accepted",
+		})
+		return
+	}
 
 	if req.FiscalPeriodID == "" || req.EntryDate == "" || req.Description == "" || len(req.Lines) == 0 {
 		Error(w, http.StatusBadRequest, "fiscal_period_id, entry_date, description, and at least one line are required")
@@ -503,7 +530,6 @@ func (h *AccountingHandler) HandleCreateJournalEntry(w http.ResponseWriter, r *h
 		FiscalPeriodID: req.FiscalPeriodID,
 		EntryDate:      req.EntryDate,
 		Description:    req.Description,
-		AttachmentURL:  req.AttachmentURL,
 		CreatedBy:      claims.UserID,
 		ClubID:         claims.ClubID,
 		Lines:          lines,
@@ -714,19 +740,75 @@ func (h *AccountingHandler) getClaudeClient(ctx context.Context, clubID string) 
 
 // ── Attachments ─────────────────────────────────────────────
 
+// HandleUploadJournalAttachment attaches a voucher to a draft bilag
+// (POST /journal/{entryID}/attachment, every accounting role). A draft is not
+// in the books yet, so its attachment may be replaced. A posted or voided
+// bilag is refused with 409 entry_posted_use_gated: its voucher is part of
+// the books and goes through HandleAttachPostedJournalVoucher.
 func (h *AccountingHandler) HandleUploadJournalAttachment(w http.ResponseWriter, r *http.Request) {
+	h.uploadJournalAttachment(w, r, false)
+}
+
+// HandleAttachPostedJournalVoucher attaches a voucher to a bilag of any
+// status (POST /journal/{entryID}/attachment/posted, moneyGate). On a draft
+// it replaces like the ungated route; on a posted or voided bilag it only
+// adds a voucher where none is attached and refuses to replace one with 409
+// entry_has_voucher (BRY-675). A wrong voucher on a posted bilag is
+// corrected by voiding and rebooking, as every other posted field is.
+func (h *AccountingHandler) HandleAttachPostedJournalVoucher(w http.ResponseWriter, r *http.Request) {
+	h.uploadJournalAttachment(w, r, true)
+}
+
+// uploadJournalAttachment is both attachment routes. It checks that the
+// entry is the caller's club's and may take the file before anything is
+// uploaded, stores the file under a key no other upload can have (an
+// object is never overwritten, and a replaced draft voucher is kept), and
+// links it only if the entry's status and attachment are still what were
+// checked; otherwise it removes its own new object and answers 409.
+func (h *AccountingHandler) uploadJournalAttachment(w http.ResponseWriter, r *http.Request, moneyGated bool) {
 	claims := middleware.GetClaims(r.Context())
 	if claims == nil {
 		Error(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
 
-	if !h.s3.IsConfigured() {
+	if h.s3 == nil || !h.s3.IsConfigured() {
 		Error(w, http.StatusServiceUnavailable, "object storage not configured")
 		return
 	}
 
 	entryID := chi.URLParam(r, "entryID")
+	if _, err := uuid.Parse(entryID); err != nil {
+		Error(w, http.StatusNotFound, "journal entry not found")
+		return
+	}
+
+	var status string
+	var prevKey *string
+	var reference bool
+	err := h.svc.DB().QueryRow(r.Context(),
+		`SELECT je.status::text, je.attachment_url, NOT `+accounting.NotReferenceEntrySQL("je")+`
+		   FROM journal_entries je WHERE je.id = $1 AND je.club_id = $2`,
+		entryID, claims.ClubID,
+	).Scan(&status, &prevKey, &reference)
+	if errors.Is(err, pgx.ErrNoRows) {
+		Error(w, http.StatusNotFound, "journal entry not found")
+		return
+	}
+	if err != nil {
+		h.log.Error().Err(err).Str("entry_id", entryID).Msg("failed to load journal entry for attachment")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	hasVoucher := prevKey != nil && *prevKey != ""
+	if refusal := attachmentRefusal(status, hasVoucher, moneyGated, reference); refusal != "" {
+		if refusal == referencePeriodCode {
+			writeReferencePeriod(w)
+			return
+		}
+		JSON(w, http.StatusConflict, map[string]string{"error": attachmentRefusalMessage[refusal], "code": refusal})
+		return
+	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
 	if err := r.ParseMultipartForm(10 << 20); err != nil { // #nosec G120 -- body capped by MaxBytesReader above
@@ -740,32 +822,232 @@ func (h *AccountingHandler) HandleUploadJournalAttachment(w http.ResponseWriter,
 	}
 	defer file.Close()
 
-	contentType := header.Header.Get("Content-Type")
-	if !strings.HasPrefix(contentType, "image/") && contentType != "application/pdf" {
-		Error(w, http.StatusBadRequest, "only image and PDF files are accepted")
+	contentType, ok := verifyVoucherType(file, header.Header.Get("Content-Type"))
+	if !ok {
+		JSON(w, http.StatusBadRequest, map[string]string{
+			"error": "only PDF, JPEG, PNG, WebP and HEIC files are accepted, and the file must be what it claims to be",
+			"code":  "unsupported_file_type",
+		})
 		return
 	}
 
-	s3Key := fmt.Sprintf("clubs/%s/receipts/%s/%s", claims.ClubID, entryID, filepath.Base(header.Filename))
+	objectID, name := uuid.NewString(), voucherFilename(header.Filename, contentType)
+	s3Key := journalAttachmentPrefix(claims.ClubID, entryID) + objectID + "-" + name
 	if err := h.s3.Upload(r.Context(), s3Key, file, header.Size, contentType); err != nil {
 		h.log.Error().Err(err).Str("s3_key", s3Key).Msg("failed to upload receipt to S3")
 		Error(w, http.StatusInternalServerError, "upload failed")
 		return
 	}
 
-	_, err = h.svc.DB().Exec(r.Context(),
+	// Link only if nothing changed since the check: a bilag posted in the
+	// meantime, or a voucher another request attached, leaves this upload
+	// unlinked and is answered as a conflict.
+	tag, err := h.svc.DB().Exec(r.Context(),
 		`UPDATE journal_entries SET attachment_url = $1, updated_at = now()
-		 WHERE id = $2 AND club_id = $3`,
-		s3Key, entryID, claims.ClubID,
+		 WHERE id = $2 AND club_id = $3
+		   AND status = $4::journal_status
+		   AND attachment_url IS NOT DISTINCT FROM $5`,
+		s3Key, entryID, claims.ClubID, status, prevKey,
 	)
-	if err != nil {
-		h.log.Error().Err(err).Str("entry_id", entryID).Msg("failed to save attachment_url")
-		_ = h.s3.Delete(r.Context(), s3Key)
-		Error(w, http.StatusInternalServerError, "internal error")
+	if err != nil || tag.RowsAffected() == 0 {
+		// The object was uploaded under a key of its own a moment ago and
+		// nothing links to it, so removing it loses nothing.
+		delCtx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 10*time.Second)
+		delErr := h.s3.Delete(delCtx, s3Key)
+		cancel()
+		if delErr != nil {
+			h.log.Warn().Err(delErr).Str("s3_key", s3Key).Msg("failed to remove unlinked attachment upload")
+		}
+		if err != nil {
+			h.log.Error().Err(err).Str("entry_id", entryID).Msg("failed to save attachment_url")
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
+		JSON(w, http.StatusConflict, map[string]string{
+			"error": "the bilag changed while the file was uploaded; reload and try again",
+			"code":  "attachment_conflict",
+		})
 		return
 	}
 
+	if h.audit != nil {
+		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
+			audit.ActionJournalAttachmentUploaded, "journal_entry", entryID,
+			map[string]any{
+				"entry_status":    status,
+				"object_id":       objectID,
+				"filename":        name,
+				"previous_object": previousObject(prevKey),
+				"content_type":    contentType,
+				"size":            header.Size,
+				"money_gated":     moneyGated,
+			})
+	}
+
 	JSON(w, http.StatusOK, map[string]string{"attachment_url": s3Key})
+}
+
+// attachmentRefusal is the 409 code an attachment upload is refused with,
+// or "" when it may go ahead. A draft takes a new voucher on either route.
+// A posted or voided bilag takes one only on the money-gated route, only
+// outside a reference year (its period is one, or its date lies in one;
+// ACC-15), and only when it has none: its voucher is never replaced. Its
+// year may be open, closed or locked (ACC-15).
+func attachmentRefusal(status string, hasVoucher, moneyGated, reference bool) string {
+	switch {
+	case status == "draft":
+		return ""
+	case !moneyGated:
+		return "entry_posted_use_gated"
+	case reference:
+		return referencePeriodCode
+	case hasVoucher:
+		return "entry_has_voucher"
+	default:
+		return ""
+	}
+}
+
+var attachmentRefusalMessage = map[string]string{
+	"entry_posted_use_gated": "the bilag is posted; a voucher is added to a posted bilag by a treasurer with a fresh TOTP",
+	"entry_has_voucher":      "the posted bilag already has a voucher, which is never replaced; void and rebook the bilag to correct it",
+}
+
+// journalAttachmentPrefix is the folder every voucher of the entry is
+// stored under: clubs/<club>/receipts/<entry>/. An upload adds
+// "<uuid>-<filename>", so every upload is a new object and a second file of
+// the same name never overwrites the first. The GET serves only keys under
+// it, so a key written by an older path can't name another club's object.
+func journalAttachmentPrefix(clubID, entryID string) string {
+	return fmt.Sprintf("clubs/%s/receipts/%s/", clubID, entryID)
+}
+
+// voucherTypes are the voucher content types accepted, with the extension a
+// stored name gets when its own does not match.
+var voucherTypes = map[string][]string{
+	"application/pdf": {".pdf"},
+	"image/jpeg":      {".jpg", ".jpeg"},
+	"image/png":       {".png"},
+	"image/webp":      {".webp"},
+	"image/heic":      {".heic"},
+}
+
+// verifyVoucherType returns the claimed content type when it is one of
+// voucherTypes and the file's first bytes are that type, then rewinds the
+// file. http.DetectContentType knows no HEIC, so a HEIC claim is checked
+// against the ISO-BMFF ftyp box and its brand instead.
+func verifyVoucherType(file io.ReadSeeker, claimed string) (string, bool) {
+	ct := strings.ToLower(strings.TrimSpace(strings.SplitN(claimed, ";", 2)[0]))
+	if _, ok := voucherTypes[ct]; !ok {
+		return "", false
+	}
+	head := make([]byte, 512)
+	n, err := io.ReadFull(file, head)
+	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) {
+		return "", false
+	}
+	head = head[:n]
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return "", false
+	}
+	if ct == "image/heic" {
+		return ct, isHEIC(head)
+	}
+	return ct, http.DetectContentType(head) == ct
+}
+
+// isHEIC reports whether head starts with an ftyp box whose major brand is
+// a HEIF/HEIC brand.
+func isHEIC(head []byte) bool {
+	if len(head) < 12 || string(head[4:8]) != "ftyp" {
+		return false
+	}
+	switch string(head[8:12]) {
+	case "heic", "heix", "heim", "heis", "hevc", "hevx", "mif1", "msf1":
+		return true
+	}
+	return false
+}
+
+// voucherFilename is the stored name of an upload: the base name with
+// everything but [A-Za-z0-9._-] dropped, capped at 100 bytes, ending in an
+// extension of its verified content type.
+func voucherFilename(filename, contentType string) string {
+	name := sanitizeVoucherName(filename)
+	exts := voucherTypes[contentType]
+	lower := strings.ToLower(name)
+	for _, e := range exts {
+		if strings.HasSuffix(lower, e) && len(name) > len(e) {
+			return name
+		}
+	}
+	ext := ".bin"
+	if len(exts) > 0 {
+		ext = exts[0]
+	}
+	stem := strings.TrimSuffix(name, filepath.Ext(name))
+	if stem == "" {
+		stem = "attachment"
+	}
+	if len(stem)+len(ext) > maxVoucherName {
+		stem = stem[:maxVoucherName-len(ext)]
+	}
+	return stem + ext
+}
+
+const maxVoucherName = 100
+
+func sanitizeVoucherName(filename string) string {
+	// Browsers send a base name, but older clients may send a path with
+	// either separator.
+	if i := strings.LastIndexAny(filename, `/\`); i >= 0 {
+		filename = filename[i+1:]
+	}
+	var b strings.Builder
+	for _, c := range filename {
+		if c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '.' || c == '_' || c == '-' {
+			b.WriteRune(c)
+		}
+	}
+	name := strings.TrimLeft(b.String(), ".")
+	if len(name) > maxVoucherName {
+		name = name[len(name)-maxVoucherName:]
+		name = strings.TrimLeft(name, ".")
+	}
+	if name == "" {
+		return "attachment"
+	}
+	return name
+}
+
+// previousObject is the last path element of a voucher key, or nil.
+func previousObject(key *string) any {
+	if key == nil || *key == "" {
+		return nil
+	}
+	return path.Base(*key)
+}
+
+// voucherDisplay is how a stored voucher is served: its name without the
+// upload's uuid prefix, and the content type of its extension. A key with
+// an unknown extension is served as a download of octet-stream.
+func voucherDisplay(key string) (name, contentType string, inline bool) {
+	base := path.Base(key)
+	if len(base) > 37 && base[36] == '-' {
+		if _, err := uuid.Parse(base[:36]); err == nil {
+			base = base[37:]
+		}
+	}
+	name = sanitizeVoucherName(base)
+	ext := strings.ToLower(filepath.Ext(name))
+	for ct, exts := range voucherTypes {
+		for _, e := range exts {
+			if e == ext {
+				return name, ct, true
+			}
+		}
+	}
+	return name, "application/octet-stream", false
 }
 
 func (h *AccountingHandler) HandleGetJournalAttachment(w http.ResponseWriter, r *http.Request) {
@@ -775,7 +1057,16 @@ func (h *AccountingHandler) HandleGetJournalAttachment(w http.ResponseWriter, r 
 		return
 	}
 
+	if h.s3 == nil || !h.s3.IsConfigured() {
+		Error(w, http.StatusServiceUnavailable, "object storage not configured")
+		return
+	}
+
 	entryID := chi.URLParam(r, "entryID")
+	if _, err := uuid.Parse(entryID); err != nil {
+		Error(w, http.StatusNotFound, "journal entry not found")
+		return
+	}
 
 	var s3Key *string
 	err := h.svc.DB().QueryRow(r.Context(),
@@ -794,15 +1085,32 @@ func (h *AccountingHandler) HandleGetJournalAttachment(w http.ResponseWriter, r 
 		Error(w, http.StatusNotFound, "no attachment")
 		return
 	}
+	// Only the entry's own folder is served: a key outside it was not
+	// written by the attachment routes and may name any object.
+	if !strings.HasPrefix(*s3Key, journalAttachmentPrefix(claims.ClubID, entryID)) {
+		h.log.Warn().Str("entry_id", entryID).Msg("journal attachment key outside the entry's folder; not served")
+		Error(w, http.StatusNotFound, "no attachment")
+		return
+	}
 
-	url, err := h.s3.PresignedURL(r.Context(), *s3Key, time.Hour)
-	if err != nil || url == "" {
+	// The response type and disposition are fixed by the presigned URL, so
+	// the browser renders the voucher as what it was verified to be.
+	name, ct, inline := voucherDisplay(*s3Key)
+	disposition := "attachment"
+	if inline {
+		disposition = "inline"
+	}
+	params := url.Values{}
+	params.Set("response-content-type", ct)
+	params.Set("response-content-disposition", fmt.Sprintf("%s; filename=%q", disposition, name))
+	signed, err := h.s3.PresignedURLWithParams(r.Context(), *s3Key, time.Hour, params)
+	if err != nil || signed == "" {
 		h.log.Error().Err(err).Str("s3_key", *s3Key).Msg("failed to presign receipt URL")
 		Error(w, http.StatusInternalServerError, "failed to generate download URL")
 		return
 	}
 
-	JSON(w, http.StatusOK, map[string]string{"url": url})
+	JSON(w, http.StatusOK, map[string]string{"url": signed})
 }
 
 func (h *AccountingHandler) HandleParseReceipt(w http.ResponseWriter, r *http.Request) {

@@ -42,6 +42,10 @@ const parseMutation = useParseReceipt()
 
 const receiptFile = ref<File | null>(null)
 const uploadError = ref('')
+// The draft this form already created, once its receipt upload failed. The
+// fields are then locked and the buttons retry the upload on that draft,
+// so a retry never creates a second bilag.
+const savedDraftId = ref<string | null>(null)
 const parsedReceipt = ref<ReceiptData | null>(null)
 const parseStatus = ref<'idle' | 'parsing' | 'ok' | 'failed' | 'unavailable'>('idle')
 
@@ -53,7 +57,7 @@ function handleFileChange(e: Event) {
   parsedReceipt.value = null
   parseStatus.value = 'idle'
 
-  if (!file) return
+  if (!file || savedDraftId.value) return
 
   parseStatus.value = 'parsing'
   parseMutation.mutate(file, {
@@ -74,14 +78,30 @@ function handleFileChange(e: Event) {
   })
 }
 
-async function uploadReceiptIfSelected(entryId: string): Promise<void> {
-  if (!receiptFile.value) return
-  await new Promise<void>((resolve, reject) => {
-    uploadMutation.mutate(
-      { entryId, file: receiptFile.value! },
-      { onSuccess: () => resolve(), onError: reject },
-    )
-  })
+// The draft to attach to: the one created earlier, or a new one.
+async function ensureDraft(): Promise<string | null> {
+  if (savedDraftId.value) return savedDraftId.value
+  try {
+    const entry = await createMutation.mutateAsync(buildPayload())
+    return entry.id
+  } catch (err) {
+    errorMessage.value = bookingError(err)
+    return null
+  }
+}
+
+// Uploads the selected receipt to the draft. On failure the draft is kept,
+// not posted, and the form stays so the upload can be retried.
+async function uploadReceipt(entryId: string): Promise<boolean> {
+  if (!receiptFile.value) return true
+  try {
+    await uploadMutation.mutateAsync({ entryId, file: receiptFile.value })
+    return true
+  } catch {
+    savedDraftId.value = entryId
+    uploadError.value = t('admin.accounting.journalForm.receiptUploadFailedDraftKept')
+    return false
+  }
 }
 
 const selectedPeriodId = ref('')
@@ -172,45 +192,26 @@ async function handleSaveDraft() {
   if (!(await ensureFreshTotp())) return
   errorMessage.value = ''
   uploadError.value = ''
-  createMutation.mutate(buildPayload(), {
-    onSuccess: async (entry) => {
-      try {
-        await uploadReceiptIfSelected(entry.id)
-      } catch {
-        uploadError.value = t('admin.accounting.journalForm.receiptUploadFailed')
-      }
-      router.push('/admin/accounting/journal')
-    },
-    onError: (err) => {
-      errorMessage.value = bookingError(err)
-    },
-  })
+  const id = await ensureDraft()
+  if (!id || !(await uploadReceipt(id))) return
+  router.push('/admin/accounting/journal')
 }
 
+// A bilag is posted only with its receipt attached: an upload that fails
+// leaves it a draft.
 async function handlePost() {
   if (!(await ensureFreshTotp())) return
   errorMessage.value = ''
   uploadError.value = ''
-  createMutation.mutate(buildPayload(), {
-    onSuccess: async (entry) => {
-      try {
-        await uploadReceiptIfSelected(entry.id)
-      } catch {
-        uploadError.value = t('admin.accounting.journalForm.receiptUploadFailed')
-      }
-      postMutation.mutate(entry.id, {
-        onSuccess: () => {
-          router.push('/admin/accounting/journal')
-        },
-        onError: (err) => {
-          errorMessage.value = `${t('common.error')}: ${bookingError(err)}`
-        },
-      })
-    },
-    onError: (err) => {
-      errorMessage.value = bookingError(err)
-    },
-  })
+  const id = await ensureDraft()
+  if (!id || !(await uploadReceipt(id))) return
+  try {
+    await postMutation.mutateAsync(id)
+    router.push('/admin/accounting/journal')
+  } catch (err) {
+    savedDraftId.value = id
+    errorMessage.value = `${t('common.error')}: ${bookingError(err)}`
+  }
 }
 
 function formatNOK(amount: number): string {
@@ -251,7 +252,7 @@ const accountOptions = computed(() => [
 
     <h1 class="text-2xl font-bold text-gray-900">{{ t('admin.accounting.journalForm.title') }}</h1>
 
-    <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+    <fieldset :disabled="!!savedDraftId" class="mt-6 grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-3">
       <div>
         <label class="mb-1 flex items-center gap-1 text-sm font-medium text-gray-700">
           {{ t('admin.accounting.journalForm.period') }}
@@ -277,7 +278,7 @@ const accountOptions = computed(() => [
           :placeholder="t('admin.accounting.journalForm.descriptionPlaceholder')"
         />
       </div>
-    </div>
+    </fieldset>
 
     <div class="mt-4">
       <label class="mb-1 flex items-center gap-1 text-sm font-medium text-gray-700">
@@ -287,7 +288,8 @@ const accountOptions = computed(() => [
       </label>
       <input
         type="file"
-        accept="image/*,application/pdf"
+        accept="application/pdf,image/jpeg,image/png,image/webp,image/heic"
+        data-testid="receipt-file"
         class="block text-sm text-gray-600 file:mr-3 file:rounded file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200"
         @change="handleFileChange"
       />
@@ -314,11 +316,11 @@ const accountOptions = computed(() => [
       <div v-else-if="parseStatus === 'unavailable'" class="mt-2 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700">
         {{ t('admin.accounting.journalForm.receiptParseUnavailable') }}
       </div>
-      <p v-if="uploadError" class="mt-1 text-xs text-red-600">{{ uploadError }}</p>
+      <p v-if="uploadError" class="mt-1 text-sm text-red-600" data-testid="receipt-upload-error">{{ uploadError }}</p>
       <p v-if="uploadMutation.isPending.value" class="mt-1 text-xs text-brand-600">{{ t('admin.accounting.journalForm.receiptUploading') }}</p>
     </div>
 
-    <div class="mt-6">
+    <fieldset :disabled="!!savedDraftId" class="mt-6 min-w-0">
       <h2 class="mb-3 text-lg font-semibold text-gray-800">{{ t('admin.accounting.journalForm.lines') }}</h2>
       <div class="overflow-x-auto">
         <table class="min-w-full">
@@ -394,7 +396,7 @@ const accountOptions = computed(() => [
         <Plus class="h-4 w-4" />
         {{ t('admin.accounting.journalForm.addLine') }}
       </button>
-    </div>
+    </fieldset>
 
     <div class="mt-6 flex items-center gap-6 rounded-lg border border-gray-200 bg-gray-50 p-4">
       <div class="text-sm">
@@ -423,14 +425,16 @@ const accountOptions = computed(() => [
     <div class="mt-6 flex gap-3">
       <button
         class="rounded-md bg-gray-600 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
-        :disabled="!canSave || createMutation.isPending.value"
+        :disabled="!canSave || createMutation.isPending.value || uploadMutation.isPending.value"
+        data-testid="save-draft"
         @click="handleSaveDraft"
       >
         {{ t('admin.accounting.journalForm.saveDraft') }}
       </button>
       <button
         class="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
-        :disabled="!canSave || !isBalanced || createMutation.isPending.value || postMutation.isPending.value"
+        :disabled="!canSave || !isBalanced || createMutation.isPending.value || uploadMutation.isPending.value || postMutation.isPending.value"
+        data-testid="post-entry"
         @click="handlePost"
       >
         {{ t('admin.accounting.journalForm.postEntry') }}

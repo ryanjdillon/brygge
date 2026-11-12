@@ -110,6 +110,20 @@ func (c *Client) PresignedURL(ctx context.Context, key string, expiry time.Durat
 	return u.String(), nil
 }
 
+// PresignedURLWithParams returns a time-limited GET URL for key with extra
+// query parameters, such as response-content-type and
+// response-content-disposition, which the store applies to its response.
+func (c *Client) PresignedURLWithParams(ctx context.Context, key string, expiry time.Duration, params url.Values) (string, error) {
+	if c.disabled {
+		return "", fmt.Errorf("s3: not configured")
+	}
+	u, err := c.mc.PresignedGetObject(ctx, c.bucket, key, expiry, params)
+	if err != nil {
+		return "", fmt.Errorf("s3: presign %q: %w", key, err)
+	}
+	return u.String(), nil
+}
+
 // PresignedDownloadURL returns a time-limited GET URL for key that forces the
 // browser to download the object as filename rather than render it inline.
 func (c *Client) PresignedDownloadURL(ctx context.Context, key, filename string, expiry time.Duration) (string, error) {

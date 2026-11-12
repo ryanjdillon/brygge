@@ -1365,7 +1365,8 @@
         "tooltipDebit": "Amount to debit (increase assets/expenses)",
         "tooltipCredit": "Amount to credit (increase revenue/liabilities)",
         "tooltipMva": "VAT portion of this expense (for momskompensasjon)",
-        "tooltipLineDesc": "Optional note for this line"
+        "tooltipLineDesc": "Optional note for this line",
+        "receiptUploadFailedDraftKept": "Het bonnetje kon niet worden geüpload, dus de boeking is niet geboekt. Ze is als concept opgeslagen en de velden zijn vergrendeld: probeer het opnieuw, of kies eerst het bestand opnieuw."
       },
       "importedNoOpeningBalance": "Deze factuur is geïmporteerd uit het vorige systeem en de vordering staat nog niet in de openingsbalans van Brygge. Boek de betaling zodra de openingsbalans is geboekt.",
       "clearedSettlement": {

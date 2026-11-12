@@ -399,7 +399,7 @@ func TestJournalWritesOnlyThroughTheGuard(t *testing.T) {
 	allowed := map[string][]string{
 		// The attachment link changes no booking field; the reassign swaps the
 		// bank-side account of posted lines and refuses reference years itself.
-		"internal/handlers/accounting.go": {"SET attachment_url", "SET account_id = $1 WHERE account_id = $2"},
+		"internal/handlers/accounting.go": {"UPDATE journal_entries SET attachment_url = $1, updated_at = now() WHERE id = $2 AND club_id = $3 AND status = $4::journal_status AND attachment_url IS NOT DISTINCT FROM $5", "SET account_id = $1 WHERE account_id = $2"},
 	}
 	write := regexp.MustCompile(`(?is)\b(INSERT\s+INTO|UPDATE)\s+(journal_entries|journal_lines)\b[^` + "`" + `]{0,200}`)
 

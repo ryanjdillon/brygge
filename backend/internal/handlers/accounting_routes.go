@@ -25,7 +25,11 @@ func (h *AccountingHandler) MountLedgerRoutes(r chi.Router, moneyGate ...func(ht
 			Post("/{entryID}/void", h.HandleVoidJournalEntry)
 		r.With(moneyGate...).
 			Delete("/{entryID}", h.HandleDeleteDraftJournalEntry)
+		// The ungated upload takes a draft's voucher only; a posted or
+		// voided bilag's voucher is part of the books (BRY-675).
 		r.Post("/{entryID}/attachment", h.HandleUploadJournalAttachment)
+		r.With(moneyGate...).
+			Post("/{entryID}/attachment/posted", h.HandleAttachPostedJournalVoucher)
 		r.Get("/{entryID}/attachment", h.HandleGetJournalAttachment)
 	})
 

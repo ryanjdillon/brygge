@@ -89,6 +89,10 @@ const (
 	ActionPaymentCreated           = "payment.created"
 	ActionPaymentViewed            = "finance.payment_viewed"
 
+	// ActionJournalAttachmentUploaded is a voucher file linked to a bilag
+	// (BRY-675): a draft's replaced, or a posted or voided bilag's first.
+	ActionJournalAttachmentUploaded = "journal_entry.attachment_uploaded"
+
 	// A faktura recipient taken off the SES suppression list (BRY-590)
 	ActionInvoiceRecipientUnsuppressed = "invoice.recipient_unsuppressed"
 

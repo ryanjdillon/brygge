@@ -1365,7 +1365,8 @@
         "tooltipDebit": "Amount to debit (increase assets/expenses)",
         "tooltipCredit": "Amount to credit (increase revenue/liabilities)",
         "tooltipMva": "VAT portion of this expense (for momskompensasjon)",
-        "tooltipLineDesc": "Optional note for this line"
+        "tooltipLineDesc": "Optional note for this line",
+        "receiptUploadFailedDraftKept": "Non è stato possibile caricare la ricevuta, quindi la registrazione non è stata contabilizzata. È salvata come bozza e i campi sono bloccati: riprova, oppure seleziona di nuovo il file prima."
       },
       "importedNoOpeningBalance": "Questa fattura è stata importata dal sistema precedente e il suo credito non è ancora nel bilancio di apertura di Brygge. Registra il pagamento dopo che il bilancio di apertura è stato contabilizzato.",
       "clearedSettlement": {

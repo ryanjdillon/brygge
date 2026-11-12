@@ -226,6 +226,7 @@ Critical notes on the env file format:
 - **systemd's parser is stricter than docker-compose's.** No `export` prefix, no inline `#` comments on value lines, quoted values only with `"..."` (not `'...'`).
 - **Unix sockets for DB/Redis.** If you copy an old docker-compose `.env`, replace `DATABASE_URL=postgres://brygge:brygge@db:5432/...` with the socket form above. The module does NOT default this — systemd's `EnvironmentFile` overrides any `Environment=` directive set in Nix.
 - **Do not set `DOMAIN`** in this file. The Nix module passes it in from `clubConfig.domain`; the EnvironmentFile would override it.
+- **The legal bucket's retention is yours to set.** `S3_BUCKET_LEGAL` holds faktura PDFs and bilag vouchers, which bokføringsloven requires kept for the retention period. Neither terraform nor the nix module sets a lifecycle or retention policy on it: set one on the bucket by hand (no expiry rule shorter than the legal period; object lock if you want deletes refused) and check it after any bucket change. See [configuration.md](configuration.md).
 
 Kick off the services:
 

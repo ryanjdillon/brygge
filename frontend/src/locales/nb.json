@@ -2121,8 +2121,8 @@
         "receiptParseFailed": "Kunne ikke lese kvitteringen — fyll inn beløp og beskrivelse manuelt",
         "receiptParseUnavailable": "Automatisk lesing av kvitteringer er ikke satt opp (ingen Anthropic API-nøkkel i Nettstedsinnstillinger). Filen er lagt ved; fyll inn beløp og beskrivelse manuelt.",
         "receiptUploading": "Laster opp kvittering…",
-        "receiptUploadFailed": "Opplasting av kvittering feilet — bilaget er lagret, prøv opplastingen på nytt",
-        "receiptUnknownVendor": "Ukjent leverandør"
+        "receiptUnknownVendor": "Ukjent leverandør",
+        "receiptUploadFailedDraftKept": "Kvitteringen kunne ikke lastes opp, så bilaget ble ikke bokført. Det er lagret som utkast og feltene er låst: prøv igjen, eventuelt velg filen på nytt først."
       },
       "importedNoOpeningBalance": "Denne fakturaen er importert fra det forrige systemet, og kundefordringen er ikke med i Brygges inngående balanse ennå. Bokfør betalingen når inngående balanse er postert.",
       "clearedSettlement": {

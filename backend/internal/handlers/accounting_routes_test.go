@@ -20,9 +20,10 @@ import (
 
 // ungatedLedgerWrites are the non-GET ledger routes deliberately left outside
 // moneyGate: previews and receipt parsing only read, and the attachment
-// upload changes no GL entry (it is not a draft; whether it should be gated
-// is tracked as a follow-up). Keep it short: an entry here is a write a board
-// member can make (BRY-673 removed the ungated auto-match).
+// upload takes a draft's voucher only (it answers a posted or voided bilag
+// with 409 entry_posted_use_gated; that voucher goes through the gated
+// /attachment/posted, BRY-675). Keep it short: an entry here is a write a
+// board member can make (BRY-673 removed the ungated auto-match).
 var ungatedLedgerWrites = map[string]bool{
 	"POST /journal/parse-receipt":               true,
 	"POST /journal/{entryID}/attachment":        true,
@@ -86,6 +87,9 @@ func TestLedgerRoutesGateMoneyMovesForBoard(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("walk: %v", err)
+	}
+	if !walked["POST /journal/{entryID}/attachment/posted"] {
+		t.Errorf("POST /journal/{entryID}/attachment/posted not walked: not mounted under the gate")
 	}
 	if !walked["POST /sync/vipps-fallback-reclass"] {
 		t.Errorf("POST /sync/vipps-fallback-reclass not walked: not mounted under the gate")

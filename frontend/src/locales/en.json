@@ -2125,8 +2125,8 @@
         "receiptParseFailed": "Could not read the receipt — please fill in the amount and description manually",
         "receiptParseUnavailable": "Automatic receipt reading isn’t set up (no Anthropic API key in Site settings). The file is attached; fill in the amount and description manually.",
         "receiptUploading": "Uploading receipt…",
-        "receiptUploadFailed": "Receipt upload failed — entry saved, please retry the upload",
-        "receiptUnknownVendor": "Unknown vendor"
+        "receiptUnknownVendor": "Unknown vendor",
+        "receiptUploadFailedDraftKept": "The receipt could not be uploaded, so the entry was not posted. It is saved as a draft and the fields are locked: try again, or pick the file again first."
       },
       "importedNoOpeningBalance": "This faktura was imported from the previous system and its receivable isn't in Brygge's opening balance yet. Book the payment after the opening balance is posted.",
       "clearedSettlement": {

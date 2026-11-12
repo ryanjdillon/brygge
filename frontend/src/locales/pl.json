@@ -1339,7 +1339,8 @@
         "tooltipDebit": "Amount to debit (increase assets/expenses)",
         "tooltipCredit": "Amount to credit (increase revenue/liabilities)",
         "tooltipMva": "VAT portion of this expense (for momskompensasjon)",
-        "tooltipLineDesc": "Optional note for this line"
+        "tooltipLineDesc": "Optional note for this line",
+        "receiptUploadFailedDraftKept": "Nie udało się przesłać paragonu, więc zapis nie został zaksięgowany. Został zapisany jako szkic, a pola są zablokowane: spróbuj ponownie lub najpierw wybierz plik jeszcze raz."
       },
       "importedNoOpeningBalance": "Ta faktura została zaimportowana z poprzedniego systemu, a jej należność nie jest jeszcze ujęta w bilansie otwarcia Brygge. Zaksięguj płatność po zaksięgowaniu bilansu otwarcia.",
       "clearedSettlement": {

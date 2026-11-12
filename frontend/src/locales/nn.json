@@ -2011,7 +2011,8 @@
         "tooltipDebit": "Beløp å debitere (aukar eigedelar/kostnader)",
         "tooltipCredit": "Beløp å kreditere (aukar inntekter/gjeld)",
         "tooltipMva": "MVA-andel av denne kostnaden (for momskompensasjon)",
-        "tooltipLineDesc": "Valfri merknad for denne linja"
+        "tooltipLineDesc": "Valfri merknad for denne linja",
+        "receiptUploadFailedDraftKept": "Kvitteringa kunne ikkje lastast opp, så bilaget vart ikkje bokført. Det er lagra som utkast og felta er låste: prøv igjen, eventuelt vel fila på nytt først."
       },
       "importedNoOpeningBalance": "Denne fakturaen er importert frå det førre systemet, og kundefordringa er ikkje med i den inngåande balansen til Brygge enno. Bokfør betalinga når inngåande balanse er postert.",
       "clearedSettlement": {
