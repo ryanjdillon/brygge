@@ -641,32 +641,6 @@ func TestStickyUndoTransfers(t *testing.T) {
 	}
 }
 
-// Mapping rules (AutoMatchImport) leave a declined row alone.
-func TestStickyUndoAutoMatchImport(t *testing.T) {
-	svc, c := newStickyClub(t)
-	ctx := context.Background()
-	if _, err := svc.CreateRule(ctx, c.ID, CreateRuleInput{
-		Name: "Synthetic rent", Priority: 1, MatchField: "description", MatchValue: "%Synthetic rent%",
-		MatchOperator: "like", DebitAccountCode: "1920", CreditAccountCode: "3900", MVAEligible: MVANotApplicable,
-	}); err != nil {
-		t.Fatalf("rule: %v", err)
-	}
-	imp := c.NewBankImport(t)
-	row := c.NewBankRow(t, imp, fin.BankRowOpts{Cents: 50000, Description: "Synthetic rent June"})
-	if n, err := svc.AutoMatchImport(ctx, c.ID, imp, c.PeriodID, c.Treasurer.ID); err != nil || n != 1 {
-		t.Fatalf("first match = %d (err %v), want 1", n, err)
-	}
-	if _, _, err := svc.UnassignBankRow(ctx, c.ID, c.Treasurer.ID, row); err != nil {
-		t.Fatalf("unassign: %v", err)
-	}
-	if !declinedBank(t, c, row) {
-		t.Fatal("unassign did not decline the row")
-	}
-	if n, err := svc.AutoMatchImport(ctx, c.ID, imp, c.PeriodID, c.Treasurer.ID); err != nil || n != 0 || stickyBankEntry(t, c, row) != "" {
-		t.Fatalf("match after the undo = %d (err %v), want the row left", n, err)
-	}
-}
-
 // The Stripe payout sweep skips a deposit a person undid (in its plan, in
 // Tildel's reason and under the clearing's row lock); a person's manual
 // clearing books it and lifts the decline.

@@ -458,7 +458,7 @@ Single fakturas go through the same draft → send → paid flow.
 
 When you upload a bank statement (`Admin → Accounting → Bank & Vipps`), the KID auto-matcher links each incoming row to the corresponding invoice and back-links `invoices.payment_id` so the faktura-status widgets update. After deploying improvements to the matcher, click **Synk Vipps** (Vipps drafts) or **Synk bank** (KID matches) to retroactively re-run the cascade over already-imported rows.
 
-**Synk bank** also marks a faktura paid when an earlier booking already paid it but the faktura wasn't marked. It trusts only a bank row whose booking is posted and credits 1500 Kundefordringer, and whose KID is the faktura's own (a row without a KID, or one already assigned to another faktura, is never used). A row a mapping rule booked to another account, or a draft or voided booking, doesn't count. Imported fakturas have no KID, so this never marks one paid.
+**Synk bank** also marks a faktura paid when an earlier booking already paid it but the faktura wasn't marked. It trusts only a bank row whose booking is posted and credits 1500 Kundefordringer, and whose KID is the faktura's own (a row without a KID, or one already assigned to another faktura, is never used). A row booked to another account, or a draft or voided booking, doesn't count. Imported fakturas have no KID, so this never marks one paid.
 
 ### Payments for fakturas from the previous system
 
@@ -484,7 +484,7 @@ Some members pay by plain transfer, without the KID. Turn on **Bokfør entydige 
 
 It never books a payment that mentions a KID or a faktura number (the normal matching handles those), a payment from the club's own accounts, two payments for the same faktura, a row that seems to belong with another row (**Mogleg par**), an imported faktura from the old system, or a payment in a closed year. Everything else stays in **Tildel**.
 
-The upload and **Synk bank** results list what was booked, and each line has **Angre**, which puts the payment back in Tildel and reopens the faktura. Once you have undone a booking, Brygge never books that payment by itself again: it waits in Tildel until you book it yourself, and the results count it as undone by a person. This goes for every booking Brygge makes by itself (KID payments, transfers between the club's accounts, mapping rules, Vipps payouts too). The setting is separate from the Vipps one and is off until you turn it on. Until then, Brygge keeps using its older rule that books a payment whose sender has the same full name as one member with one open faktura of that amount.
+The upload and **Synk bank** results list what was booked, and each line has **Angre**, which puts the payment back in Tildel and reopens the faktura. Once you have undone a booking, Brygge never books that payment by itself again: it waits in Tildel until you book it yourself, and the results count it as undone by a person. This goes for every booking Brygge makes by itself (KID payments, transfers between the club's accounts, Vipps payouts too). The setting is separate from the Vipps one and is off until you turn it on. Until then, Brygge keeps using its older rule that books a payment whose sender has the same full name as one member with one open faktura of that amount.
 
 ### Teaching Brygge who a payer is (Hugs betalaren)
 

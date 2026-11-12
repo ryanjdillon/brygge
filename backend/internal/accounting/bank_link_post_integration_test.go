@@ -150,8 +150,8 @@ func TestImportBankRowsPostFailureAfterLinkUnwinds(t *testing.T) {
 
 // A row a crashed KID match left linked to its unposted draft is released by
 // bank sync and matched again. A fresh draft (an import still in flight), an
-// intra-bank transfer draft (no receivable) and a mapping-rule draft that
-// credits 1500 (AutoMatchImport; it waits for a gated post) are left alone.
+// intra-bank transfer draft (no receivable) and any other draft that credits
+// 1500 under the row's own description are left alone.
 func TestBankSyncReleasesStrandedKIDDraft(t *testing.T) {
 	f := newBankLinkFixture(t)
 	ctx := context.Background()
@@ -162,8 +162,8 @@ func TestBankSyncReleasesStrandedKIDDraft(t *testing.T) {
 
 	// draft links rowID to an unposted bank_import entry. kidShaped gives it
 	// the shape the payment-match paths write (kidMatchDescription, sourced
-	// to the row); otherwise it carries the row's own description, as a
-	// mapping rule's draft does.
+	// to the row); otherwise it carries the row's own description, as
+	// the mapping rules removed in BRY-673 did.
 	draft := func(rowID, creditCode string, age time.Duration, kidShaped bool) string {
 		t.Helper()
 		var kidNumber, rowDesc string

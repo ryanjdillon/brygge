@@ -254,30 +254,6 @@ func TestTransferDetectionSkipsReferencePair(t *testing.T) {
 	}
 }
 
-// The mapping rules do not draft a reference-year row, in the caller's
-// period or any other.
-func TestAutoMatchImportSkipsReferenceRows(t *testing.T) {
-	f := newRefFixture(t, true)
-	ctx := context.Background()
-	if _, err := f.svc.CreateRule(ctx, f.club.ID, CreateRuleInput{
-		Name: "Synthetic fee rule", Priority: 1, MatchField: "description", MatchOperator: "like", MatchValue: "%SYNTHFEE%",
-		DebitAccountCode: "6200", CreditAccountCode: "1920", MVAEligible: MVANotApplicable,
-	}); err != nil {
-		t.Fatalf("rule: %v", err)
-	}
-	imp := f.club.NewBankImport(t)
-	refRow := f.club.NewBankRow(t, imp, fin.BankRowOpts{Date: f.refDay(4, 4), Cents: -12000, Description: "SYNTHFEE one"})
-	f.club.NewBankRow(t, imp, fin.BankRowOpts{Date: f.curDay(4, 4), Cents: -13000, Description: "SYNTHFEE two"})
-
-	matched, err := f.svc.AutoMatchImport(ctx, f.club.ID, imp, f.club.PeriodID, f.club.Treasurer.ID)
-	if err != nil || matched != 1 {
-		t.Fatalf("auto-match matched %d (%v), want only the current year's row", matched, err)
-	}
-	if n := f.scalar(t, `SELECT count(*) FROM bank_import_rows WHERE id = $1 AND journal_entry_id IS NULL`, refRow); n != 1 {
-		t.Errorf("reference row was drafted")
-	}
-}
-
 // The bank-side reassign handler and the posted-line updates it makes live
 // outside journal.go; the passes that delete a draft and rebook it must leave
 // a reference year's drafts alone.

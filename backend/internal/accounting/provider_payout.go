@@ -16,8 +16,8 @@ import (
 // provider's own postings already booked to a clearing account, so the only
 // correct booking is the payout clearing (ClearVippsPayout,
 // clearStripePayout). Every path that books or suggests bank rows on other
-// evidence leaves such a row alone: partner hints, mapping rules, bank
-// auto-assign and price-item suggestions all ask providerPayouts.
+// evidence leaves such a row alone: partner hints, bank auto-assign and
+// price-item suggestions all ask providerPayouts.
 //
 // The Vipps half also has a SQL form (vippsPayoutRowSQL), because its
 // pattern is fixed and translates to Postgres exactly. The Stripe half is a

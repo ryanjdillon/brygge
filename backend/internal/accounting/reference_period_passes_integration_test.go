@@ -308,7 +308,6 @@ func TestWholePeriodOperationsRefuseReferencePeriod(t *testing.T) {
 	f := newRefFixture(t, true)
 	ctx := context.Background()
 	actor := f.club.Treasurer.ID
-	imp := f.club.NewBankImport(t)
 
 	checks := map[string]func() error{
 		"sync payments": func() error { _, err := f.svc.SyncPayments(ctx, f.club.ID, f.refPeriod, actor); return err },
@@ -329,7 +328,6 @@ func TestWholePeriodOperationsRefuseReferencePeriod(t *testing.T) {
 			_, err := f.svc.PostVippsDraftBacklog(ctx, f.club.ID, f.refPeriod, actor, true, nil)
 			return err
 		},
-		"auto-match": func() error { _, err := f.svc.AutoMatchImport(ctx, f.club.ID, imp, f.refPeriod, actor); return err },
 	}
 	for name, run := range checks {
 		if err := run(); !errors.Is(err, ErrReferencePeriod) {

@@ -56,7 +56,6 @@ func (h *AccountingHandler) MountLedgerRoutes(r chi.Router, moneyGate ...func(ht
 			Post("/account-reimport", h.HandleReimportAccountBankStatement)
 		r.Get("/{importID}", h.HandleGetBankImport)
 		r.Get("/{importID}/unmatched", h.HandleListUnmatchedRows)
-		r.Post("/{importID}/auto-match", h.HandleAutoMatchImport)
 		r.With(moneyGate...).
 			Patch("/{importID}/account", h.HandleReassignBankImport)
 		r.With(moneyGate...).

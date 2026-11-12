@@ -19,15 +19,16 @@ import (
 )
 
 // ungatedLedgerWrites are the non-GET ledger routes deliberately left outside
-// moneyGate: they only read, preview, or create drafts and attachments that
-// a gated post has to pick up later.
+// moneyGate: previews and receipt parsing only read, and the attachment
+// upload changes no GL entry (it is not a draft; whether it should be gated
+// is tracked as a follow-up). Keep it short: an entry here is a write a board
+// member can make (BRY-673 removed the ungated auto-match).
 var ungatedLedgerWrites = map[string]bool{
 	"POST /journal/parse-receipt":               true,
 	"POST /journal/{entryID}/attachment":        true,
 	"POST /sync/invoices/resplit/preview":       true,
 	"POST /sync/vipps-drafts/preview":           true,
 	"POST /sync/vipps-fallback-reclass/preview": true,
-	"POST /bank-import/{importID}/auto-match":   true,
 }
 
 // A board member can read the books and run previews but every route that
@@ -62,11 +63,13 @@ func TestLedgerRoutesGateMoneyMovesForBoard(t *testing.T) {
 
 	gated := 0
 	walked := map[string]bool{}
+	mounted := map[string]bool{}
 	err := chi.Walk(r, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
 		route = strings.TrimSuffix(route, "/")
 		if route == "" {
 			route = "/"
 		}
+		mounted[method+" "+route] = true
 		if method == http.MethodGet || ungatedLedgerWrites[method+" "+route] {
 			return nil
 		}
@@ -91,6 +94,14 @@ func TestLedgerRoutesGateMoneyMovesForBoard(t *testing.T) {
 		if r := "POST /stripe/transactions/{txnID}/" + a; !walked[r] {
 			t.Errorf("%s not walked: not mounted under the gate", r)
 		}
+	}
+	for k := range ungatedLedgerWrites {
+		if !mounted[k] {
+			t.Errorf("allowlisted %s is no longer mounted; drop it from ungatedLedgerWrites", k)
+		}
+	}
+	if mounted["POST /bank-import/{importID}/auto-match"] {
+		t.Error("POST /bank-import/{importID}/auto-match is mounted again; it was removed in BRY-673")
 	}
 	if gated < 15 {
 		t.Errorf("walked %d gated routes; the router lost routes", gated)

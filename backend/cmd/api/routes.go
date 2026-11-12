@@ -1274,13 +1274,6 @@ func newRouter(d routeDeps) *chi.Mux {
 							middleware.RequireFreshTOTPDefault()).
 							Post("/bank-rows/{rowID}/pair-refund", bankRowsHandler.HandlePairRefund)
 
-						r.Route("/rules", func(r chi.Router) {
-							r.Get("/", accountingHandler.HandleListRules)
-							r.Post("/", accountingHandler.HandleCreateRule)
-							r.Put("/{ruleID}", accountingHandler.HandleUpdateRule)
-							r.Delete("/{ruleID}", accountingHandler.HandleDeleteRule)
-						})
-
 						r.Route("/reports", func(r chi.Router) {
 							r.Get("/income-statement", accountingHandler.HandleIncomeStatement)
 							r.Get("/income-statement/pdf", accountingHandler.HandleIncomeStatementPDF)

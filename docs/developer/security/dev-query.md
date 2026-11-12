@@ -120,7 +120,7 @@ Unqualified names (`users`) resolve to the view through the role's search_path;
 | `journal_lines` | description | — |
 | `payments` | description | — |
 | `invoice_lines` | description, sub_description | — |
-| `account_mapping_rules` | name, match_value (rules can match on a payer's name) | — |
+| `account_mapping_rules` (unused since BRY-673) | name, match_value (rules can match on a payer's name) | — |
 | `vipps_message_rules` | pattern (same) | — |
 | `slips`, `dock_fingers` | notes | — |
 

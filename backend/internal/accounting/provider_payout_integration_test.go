@@ -55,38 +55,6 @@ func TestStripeDepositHasNoPartners(t *testing.T) {
 	}
 }
 
-// A mapping rule on a provider's text never draft-books its payout
-// deposit; it still books an outgoing row naming Stripe and other rows.
-func TestMappingRulesSkipProviderPayouts(t *testing.T) {
-	f := newStripeFixture(t)
-	ctx := context.Background()
-	markUsesStripe(t, f.club)
-	imp := f.club.NewBankImport(t)
-	stripeRow := f.club.NewBankRow(t, imp, fin.BankRowOpts{Cents: 20000, Description: "STRIPE PAYOUT"})
-	vippsRow := f.club.NewBankRow(t, imp, fin.BankRowOpts{Cents: 30000, Description: "Utb. 3000100 Vippsnr 548005"})
-	stripeBill := f.club.NewBankRow(t, imp, fin.BankRowOpts{Cents: -2000, Description: "Stripe faktura"})
-	for _, pattern := range []string{"%stripe%", "%vippsnr%"} {
-		if _, err := f.svc.CreateRule(ctx, f.club.ID, CreateRuleInput{
-			Name: "Synthetic " + pattern, Priority: 1, MatchField: "description", MatchValue: pattern,
-			MatchOperator: "like", DebitAccountCode: "1920", CreditAccountCode: "3900", MVAEligible: MVANotApplicable,
-		}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	n, err := f.svc.AutoMatchImport(ctx, f.club.ID, imp, f.club.PeriodID, f.club.Treasurer.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != 1 || bankRowEntry(t, f.club, stripeBill) == "" {
-		t.Errorf("matched %d, want only the outgoing Stripe bill", n)
-	}
-	for _, id := range []string{stripeRow, vippsRow} {
-		if bankRowEntry(t, f.club, id) != "" {
-			t.Errorf("provider payout %s was booked by a mapping rule", id)
-		}
-	}
-}
-
 // Bank auto-assign leaves a Stripe payout deposit alone even when its
 // counterpart and amount would settle a member's faktura.
 func TestBankAutoAssignSkipsStripePayout(t *testing.T) {

@@ -334,9 +334,9 @@ const strandedDraftGrace = 15 * time.Minute
 // Only entries the payment-match paths created qualify: tied to the row by
 // source (per row, or per import for drafts written before both paths used
 // the row), crediting 1500, and carrying exactly kidMatchDescription for
-// that row. Mapping-rule drafts from AutoMatchImport, which may also credit
-// 1500 and are meant to wait for a gated post, never have that description;
-// transfer drafts and a person's bookings are left alone too.
+// that row. Any other draft that credits 1500 (such as the mapping-rule
+// drafts removed in BRY-673) never has that description; transfer drafts
+// and a person's bookings are left alone too.
 func (s *Service) healStrandedKIDDrafts(ctx context.Context, clubID string) (int, error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
@@ -409,8 +409,8 @@ func (s *Service) healStrandedKIDDrafts(ctx context.Context, clubID string) (int
 // that faktura's payment, not this one's.
 //
 // The row's own booking must be a posted payment of a receivable (CR 1500),
-// as in backfillInvoiceNumberPayments: a KID row a mapping rule booked to
-// another account, or whose entry is still a draft or was voided, paid
+// as in backfillInvoiceNumberPayments: a KID row booked to another
+// account, or whose entry is still a draft or was voided, paid
 // nothing off the faktura (BRY-417).
 func (s *Service) backfillUnlinkedPayments(ctx context.Context, clubID string) (int, error) {
 	rows, err := s.db.Query(ctx,

@@ -671,6 +671,12 @@ in `backend/migrations/` for the source of truth. The high-level shape:
 - `bank_imports`, `bank_import_rows` — statement uploads + per-row tagging. `bank_imports.period_from`/`period_to` record the statement's span; `bank_import_rows.reseen_at` marks a bare row a later statement showed again, so it is not provisional (BRY-378)
   (KID auto-match writes `journal_entry_id`; reassign endpoint cascades
   to journal_lines).
+- `account_mapping_rules` (migration 000006) — **unused since BRY-673.** It
+  held operator-defined match rules that `AutoMatchImport` applied to an
+  import's unbooked rows. BRY-673 removed that engine, its ungated
+  `POST /bank-import/{id}/auto-match` route and the `/accounting/rules` CRUD
+  routes (no UI called either); production had no rows (checked 2026-11-12). The table stays
+  (still masked in `dev_masked`) and may be dropped by a later migration.
 - `vipps_import_rows` — Vipps payout CSV ingestion. `journal_entry_id` is
   set by `ReconcileVippsConfirm` after the cascade resolves (which also
   records the settled faktura in `invoice_id`, under the faktura lock);

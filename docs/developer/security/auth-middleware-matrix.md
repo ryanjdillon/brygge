@@ -199,9 +199,10 @@ reads admit any admin viewer (see *Board read access* above).
 | `POST /sync/payments`, `/sync/invoices` (Avstem periode), `/sync/invoices/resplit`, `/sync/vipps-drafts` | ✅ (treasurer, admin; BRY-370) | book posted entries |
 | `POST /sync/vipps-fallback-reclass` | ✅ (treasurer, admin; BRY-557) | voids and rebooks posted Vipps charges from 3900 to their price-item accounts |
 | `POST /sync/invoices/resplit/preview`, `/sync/vipps-drafts/preview`, `/sync/vipps-fallback-reclass/preview` | — | read-only previews |
+| `POST /journal/parse-receipt` | — | parses an uploaded receipt into suggested fields; writes nothing |
+| `POST /journal/{id}/attachment` | — | uploads a bilag's attachment; not a GL change (gating tracked as a follow-up) |
 | `POST /bank-sync`, `/vipps-resync` | ✅ (treasurer, admin; BRY-370) | auto-match and post (KID, Vipps order and auto-assign) |
 | `POST /bank-import` | ✅ (treasurer, admin; BRY-370) | posts import-time KID matches |
-| `/bank-import/{id}/auto-match` | — | creates drafts only (the manual `/rows/{row}/match` was removed in BRY-672) |
 | `PATCH /bank-import/{id}/account` | ✅ (treasurer, admin; BRY-370) | reassigns an import to another account; rewrites posted journal_lines |
 | `POST /bank-import/account-reimport`, `/bank-import/{id}/reimport` | ✅ (treasurer, admin; BRY-370) | rerun the import cascade, which posts KID matches |
 | `POST /vipps-imports` | ✅ (treasurer, admin; BRY-370) | posts order-linked and auto-assigned charges |
@@ -210,19 +211,18 @@ reads admit any admin viewer (see *Board read access* above).
 | `bank-rows/{id}` suggestions/potential-invoices/partners, `vipps-charges/{id}` suggestions/potential-invoices | — | reads |
 | `assign-invoice[-multi]`, assign-account, assign-account-group, `pair-transfer`, dismiss, unassign | ✅ (treasurer, admin) | manual reconcile (Tildel); `pair-transfer` (BRY-672) posts a transfer between the club's own bank accounts and uses `moneyGate`. `TestBankRowWritesNeedMoneyRoleAndFreshTOTP` walks every non-GET `/accounting/bank-rows/*` route as a board session |
 | `POST /bank-rows/{rowID}/undismiss` | ✅ (treasurer, admin; BRY-418) | returns a dismissed reference-year row to the Referanseår list |
-| `/rules/*` | — | reconciliation rules |
 | `/reports/*` (incl. momskomp save/status) | — | reporting |
 
 **Rule (BRY-370):** every route that can create or change a *posted* GL
 entry, whether directly or by auto-matching during an import or sync,
 requires the treasurer or admin role **and** a fresh step-up (`moneyGate` in
-`cmd/api/main.go`). Every board role keeps read access to the books (BRY-372). The SPA asks
+`cmd/api/routes.go`). Every board role keeps read access to the books (BRY-372). The SPA asks
 for the step-up at click time (`ensureFreshTotp()`). The journal, sync,
 bank-import and bank-reconciliation routes are mounted by
 `AccountingHandler.MountLedgerRoutes` (`internal/handlers/accounting_routes.go`);
 `TestLedgerRoutesGateMoneyMovesForBoard` walks them and fails on any non-GET
 route that answers a board session with anything but 403, outside a short
-allowlist of previews, attachments and draft-only matches.
+allowlist of previews, receipt parsing and attachment upload.
 
 ## Findings (DIL-245)
 

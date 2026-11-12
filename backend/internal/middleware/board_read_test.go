@@ -18,7 +18,7 @@ func boardReadRouter() http.Handler {
 	r.Route("/accounting", func(r chi.Router) {
 		r.Use(RequireRoleOrBoardRead("treasurer", "board", "admin"))
 		r.Get("/journal", noopHandler().ServeHTTP)
-		r.Post("/rules", noopHandler().ServeHTTP)
+		r.Post("/accounts", noopHandler().ServeHTTP)
 		r.With(RequireRole("treasurer", "admin")).Post("/journal/{id}/post", noopHandler().ServeHTTP)
 	})
 	r.Route("/pricing", func(r chi.Router) {
@@ -35,7 +35,7 @@ func TestRequireRoleOrBoardReadRouteWalk(t *testing.T) {
 		method, path string
 	}
 	journal := call{http.MethodGet, "/accounting/journal"}
-	rules := call{http.MethodPost, "/accounting/rules"}
+	accounts := call{http.MethodPost, "/accounting/accounts"}
 	post := call{http.MethodPost, "/accounting/journal/x/post"}
 	pricing := call{http.MethodGet, "/pricing/"}
 	pricingWrite := call{http.MethodPost, "/pricing/"}
@@ -47,22 +47,22 @@ func TestRequireRoleOrBoardReadRouteWalk(t *testing.T) {
 	}{
 		{[]string{"member", "chair"}, map[call]int{
 			journal: 200, pricing: 200,
-			rules: 403, post: 403, pricingWrite: 403, devTokens: 403,
+			accounts: 403, post: 403, pricingWrite: 403, devTokens: 403,
 		}},
 		{[]string{"deputy"}, map[call]int{
-			journal: 200, pricing: 200, rules: 403, post: 403, pricingWrite: 403, devTokens: 403,
+			journal: 200, pricing: 200, accounts: 403, post: 403, pricingWrite: 403, devTokens: 403,
 		}},
 		{[]string{"board"}, map[call]int{
-			journal: 200, pricing: 200, rules: 200, post: 403, pricingWrite: 403, devTokens: 403,
+			journal: 200, pricing: 200, accounts: 200, post: 403, pricingWrite: 403, devTokens: 403,
 		}},
 		{[]string{"treasurer"}, map[call]int{
-			journal: 200, pricing: 200, rules: 200, post: 200, pricingWrite: 200, devTokens: 403,
+			journal: 200, pricing: 200, accounts: 200, post: 200, pricingWrite: 200, devTokens: 403,
 		}},
 		{[]string{"admin"}, map[call]int{
-			journal: 200, pricing: 200, rules: 200, post: 200, pricingWrite: 200, devTokens: 200,
+			journal: 200, pricing: 200, accounts: 200, post: 200, pricingWrite: 200, devTokens: 200,
 		}},
 		{[]string{"member", "slip_holder"}, map[call]int{
-			journal: 403, pricing: 403, rules: 403, post: 403, devTokens: 403,
+			journal: 403, pricing: 403, accounts: 403, post: 403, devTokens: 403,
 		}},
 	}
 
