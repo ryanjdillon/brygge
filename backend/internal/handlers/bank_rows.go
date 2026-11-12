@@ -535,6 +535,79 @@ func (h *BankRowsHandler) HandleAssignAccountGroup(w http.ResponseWriter, r *htt
 	JSON(w, http.StatusOK, res)
 }
 
+type pairTransferReq struct {
+	RowIDs      []string `json:"row_ids"`
+	Description string   `json:"description"`
+}
+
+// HandlePairTransfer books two rows as one transfer between the club's own
+// bank accounts (Tildel's «Par som overføring», BRY-672): a person's posted
+// booking that lifts the rows' decline. Refusals are 409 {error, code}:
+// reference_period, provider_payout, then the TransferRefusalError codes.
+func (h *BankRowsHandler) HandlePairTransfer(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	claims := middleware.GetClaims(ctx)
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+	var req pairTransferReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	for _, id := range req.RowIDs {
+		if _, err := uuid.Parse(id); err != nil {
+			Error(w, http.StatusBadRequest, "row_ids must be bank row ids")
+			return
+		}
+	}
+	res, err := h.svc.PairBankTransfer(ctx, claims.ClubID, claims.UserID, req.RowIDs, req.Description)
+	if referencePeriodConflict(w, err) {
+		return
+	}
+	if providerPayoutConflict(w, err) {
+		return
+	}
+	var refusal *accounting.TransferRefusalError
+	switch {
+	case errors.As(err, &refusal):
+		JSON(w, http.StatusConflict, map[string]string{"error": refusal.Msg, "code": refusal.Code})
+		return
+	case errors.Is(err, accounting.ErrTransferRowCount):
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	case errors.Is(err, accounting.ErrBankRowNotFound):
+		Error(w, http.StatusNotFound, err.Error())
+		return
+	case err != nil:
+		h.log.Error().Err(err).Strs("row_ids", req.RowIDs).Msg("pair transfer")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if h.audit != nil {
+		lifted := map[string]bool{}
+		for _, id := range res.LiftedDecline {
+			lifted[id] = true
+		}
+		for _, side := range [][2]string{{res.OutboundRowID, res.InboundRowID}, {res.InboundRowID, res.OutboundRowID}} {
+			h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
+				audit.ActionBankRowTransferPaired, "bank_import_row", side[0],
+				map[string]any{
+					"other_row_id":     side[1],
+					"journal_entry_id": res.JournalEntryID,
+					"debit_account":    res.DebitAccount,
+					"credit_account":   res.CreditAccount,
+					"amount":           res.Amount,
+					"entry_date":       res.EntryDate,
+					"lifted_decline":   lifted[side[0]],
+					"description":      req.Description,
+				})
+		}
+	}
+	JSON(w, http.StatusOK, res)
+}
+
 type dismissReq struct {
 	Reason string `json:"reason"`
 }

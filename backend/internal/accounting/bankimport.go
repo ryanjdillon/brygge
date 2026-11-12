@@ -931,9 +931,10 @@ const transferRowEligibleSQL = `journal_entry_id IS NULL AND auto_declined_at IS
 // pairIntraBankTransfer books one transfer pair as a draft bilag and links
 // both rows to it, in one transaction: the rows are locked in id order, the
 // period is read on that transaction (existing and open only, BRY-578), and
-// the draft and the guarded link of both rows commit together. A row taken
-// meanwhile is errTransferRowTaken and nothing is kept, so neither a lost
-// race nor a cancelled context leaves an orphan draft behind.
+// the draft and the guarded link of both rows commit together
+// (bookTransferPairTx, transferLinkAutomatic). A row taken meanwhile is
+// errTransferRowTaken and nothing is kept, so neither a lost race nor a
+// cancelled context leaves an orphan draft behind.
 func (s *Service) pairIntraBankTransfer(ctx context.Context, clubID, createdBy, periodOverride string, p intraBankPair) error {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
@@ -964,16 +965,52 @@ func (s *Service) pairIntraBankTransfer(ctx context.Context, clubID, createdBy, 
 	if err != nil {
 		return err
 	}
+	if _, err := bookTransferPairTx(ctx, tx, clubID, createdBy, p, periodID, transferLinkAutomatic,
+		fmt.Sprintf("Intra-bank transfer: %s", p.desc)); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("committing transfer: %w", err)
+	}
+	return nil
+}
+
+// transferLink is how bookTransferPairTx links a transfer's two rows.
+type transferLink int
+
+const (
+	// transferLinkAutomatic is transfer pairing by an upload, Synkroniser
+	// and the automatic run: the entry stays a draft a person posts, both
+	// rows are marked auto_matched, and the link is guarded by
+	// transferRowEligibleSQL, so it never links a row a person declined.
+	transferLinkAutomatic transferLink = iota
+	// transferLinkPerson is Tildel's Par som overføring (PairBankTransfer,
+	// BRY-672): a person's booking, so the entry is posted at once, both
+	// rows get auto_matched = false and their decline is lifted
+	// (linkAndPostBankRowsTx).
+	transferLinkPerson
+)
+
+// bookTransferPairTx is the one transaction core both transfer paths book
+// through. The caller has locked both rows in id order and resolved periodID
+// on tx, each by its own rules. It creates the entry (debit the receiving
+// bank account, credit the sending one, sourced to p.r1ID, dated p.date) and
+// links both rows with a guarded update that must hit both: otherwise
+// errTransferRowTaken (automatic) or errBankRowRaced (person), and the
+// caller's rollback keeps nothing.
+func bookTransferPairTx(ctx context.Context, tx pgx.Tx, clubID, actorID string, p intraBankPair, periodID string, link transferLink, description string) (string, error) {
+	ids := []string{p.r1ID, p.r2ID}
+	sort.Strings(ids)
 	sourceID := p.r1ID
 	sourceTable := "bank_import_rows"
 	entry, err := createJournalEntryTx(ctx, tx, CreateJournalEntryInput{
 		FiscalPeriodID: periodID,
 		EntryDate:      p.date.Format("2006-01-02"),
-		Description:    fmt.Sprintf("Intra-bank transfer: %s", p.desc),
+		Description:    description,
 		Source:         "bank_import",
 		SourceID:       &sourceID,
 		SourceTable:    &sourceTable,
-		CreatedBy:      createdBy,
+		CreatedBy:      actorID,
 		ClubID:         clubID,
 		Lines: []CreateJournalLineInput{
 			{AccountCode: p.debitCode, Debit: p.amount, Credit: 0},
@@ -981,7 +1018,13 @@ func (s *Service) pairIntraBankTransfer(ctx context.Context, clubID, createdBy, 
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("creating transfer draft: %w", err)
+		return "", fmt.Errorf("creating transfer entry: %w", err)
+	}
+	if link == transferLinkPerson {
+		if err := linkAndPostBankRowsTx(ctx, tx, clubID, actorID, entry.ID, ids, nil, false); err != nil {
+			return "", err
+		}
+		return entry.ID, nil
 	}
 	tag, err := tx.Exec(ctx,
 		`UPDATE bank_import_rows SET journal_entry_id = $1, auto_matched = true
@@ -989,15 +1032,12 @@ func (s *Service) pairIntraBankTransfer(ctx context.Context, clubID, createdBy, 
 		entry.ID, ids, clubID,
 	)
 	if err != nil {
-		return fmt.Errorf("linking transfer rows: %w", err)
+		return "", fmt.Errorf("linking transfer rows: %w", err)
 	}
 	if tag.RowsAffected() != 2 {
-		return errTransferRowTaken
+		return "", errTransferRowTaken
 	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("committing transfer: %w", err)
-	}
-	return nil
+	return entry.ID, nil
 }
 
 // addYears adds years to set.
@@ -1045,70 +1085,6 @@ func (s *Service) discardDraft(ctx context.Context, clubID, entryID string) {
 	); err != nil {
 		s.log.Error().Err(err).Str("entry_id", entryID).Msg("failed to discard orphan draft")
 	}
-}
-
-// MatchBankRow manually creates a journal entry for an unmatched bank import row.
-func (s *Service) MatchBankRow(ctx context.Context, clubID, periodID, rowID, debitCode, creditCode, matchedBy string, mvaAmount float64) error {
-	var rowDate time.Time
-	var description string
-	var amount float64
-	var existingEntry *string
-
-	err := s.db.QueryRow(ctx,
-		`SELECT bir.row_date, bir.description, bir.amount, bir.journal_entry_id
-		 FROM bank_import_rows bir
-		 JOIN bank_imports bi ON bi.id = bir.bank_import_id
-		 WHERE bir.id = $1 AND bi.club_id = $2`,
-		rowID, clubID,
-	).Scan(&rowDate, &description, &amount, &existingEntry)
-	if err != nil {
-		return fmt.Errorf("getting bank row: %w", err)
-	}
-	if existingEntry != nil {
-		return fmt.Errorf("row already matched")
-	}
-
-	debit := amount
-	credit := amount
-	if amount < 0 {
-		debit = -amount
-		credit = -amount
-	}
-
-	sourceID := rowID
-	sourceTable := "bank_import_rows"
-	entry, err := s.CreateJournalEntry(ctx, CreateJournalEntryInput{
-		FiscalPeriodID: periodID,
-		EntryDate:      rowDate.Format("2006-01-02"),
-		Description:    description,
-		Source:         "bank_import",
-		SourceID:       &sourceID,
-		SourceTable:    &sourceTable,
-		CreatedBy:      matchedBy,
-		ClubID:         clubID,
-		Lines: []CreateJournalLineInput{
-			{AccountCode: debitCode, Debit: debit, Credit: 0, MVAAmount: mvaAmount},
-			{AccountCode: creditCode, Debit: 0, Credit: credit},
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("creating journal entry: %w", err)
-	}
-
-	// A person's booking: it lifts a decline (auto_declined_at).
-	tag, err := s.db.Exec(ctx,
-		`UPDATE bank_import_rows SET journal_entry_id = $1, auto_declined_at = NULL
-		  WHERE id = $2 AND club_id = $3 AND journal_entry_id IS NULL`,
-		entry.ID, rowID, clubID,
-	)
-	if err != nil || tag.RowsAffected() != 1 {
-		s.discardDraft(ctx, clubID, entry.ID)
-		if err != nil {
-			return fmt.Errorf("linking row: %w", err)
-		}
-		return fmt.Errorf("row already matched")
-	}
-	return nil
 }
 
 func parseNorwegianNumber(s string) float64 {

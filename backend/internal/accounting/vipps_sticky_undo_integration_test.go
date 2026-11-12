@@ -631,9 +631,10 @@ func TestStickyUndoTransfers(t *testing.T) {
 	if s := sync(); s.TransfersLinked != 0 {
 		t.Fatalf("sync with one side declined linked %d transfers; want none", s.TransfersLinked)
 	}
-	// A person's booking of a side lifts its decline.
-	if err := svc.MatchBankRow(ctx, c.ID, c.PeriodID, rowA, "1925", "1920", c.Treasurer.ID, 0); err != nil {
-		t.Fatalf("MatchBankRow: %v", err)
+	// A person's booking of a side lifts its decline. Pairing both rows by
+	// hand (PairBankTransfer) is covered in bank_row_transfer_integration_test.go.
+	if _, err := svc.AssignBankRowToAccount(ctx, c.ID, c.Treasurer.ID, rowA, "6200", "expense", ""); err != nil {
+		t.Fatalf("AssignBankRowToAccount: %v", err)
 	}
 	if declinedBank(t, c, rowA) {
 		t.Error("a person's booking left the row declined")

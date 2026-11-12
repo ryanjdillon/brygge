@@ -1932,7 +1932,28 @@
       "yearReference": "{year} (anno di riferimento)",
       "yearReferenceEmpty": "{year} è un anno di riferimento e non compare nella coda. Le righe bancarie in uscita si possono registrare con il filtro «Anno di riferimento».",
       "referenceDismissedEmpty": "Nessuna riga bancaria in uscita scartata di un anno di riferimento può essere ripristinata.",
-      "undismissRefused": "La riga non può essere ripristinata: non è più scartata, oppure lo scarto è definitivo (duplicato o riga sostituita)."
+      "undismissRefused": "La riga non può essere ripristinata: non è più scartata, oppure lo scarto è definitivo (duplicato o riga sostituita).",
+      "clearSelection": "Annulla selezione",
+      "transfer": {
+        "button": "Abbina come giroconto",
+        "confirmTitle": "Registrare il giroconto?",
+        "confirmBody": "Registrare un giroconto di {amount} da {credit} a {debit}, il {date}? Il documento viene registrato subito.",
+        "success": "Il giroconto è registrato",
+        "refused": {
+          "row_booked": "Una delle righe è già registrata. L'elenco è aggiornato.",
+          "row_dismissed": "Una delle righe è scartata; le righe scartate non possono essere abbinate come giroconto.",
+          "row_refund_paired": "Una delle righe è abbinata come rimborso.",
+          "row_provisional": "Una delle righe è provvisoria. Esporta di nuovo l'estratto conto.",
+          "row_has_kid": "Il pagamento porta il KID di una fattura. Assegnalo alla fattura.",
+          "transfer_same_account": "Le righe devono essere su conti bancari diversi.",
+          "transfer_same_sign": "Una riga deve uscire e l'altra entrare.",
+          "transfer_amount_mismatch": "Gli importi devono essere uguali.",
+          "transfer_dates_apart": "Le righe distano più di 14 giorni.",
+          "transfer_crosses_period": "Le righe sono in esercizi diversi. Registrale separatamente.",
+          "period_closed": "L'esercizio è chiuso.",
+          "period_locked": "L'esercizio è bloccato."
+        }
+      }
     },
     "sidebarTitle": "Portale admin",
     "inbox": {

@@ -9,6 +9,7 @@ const { icon } = vi.hoisted(() => ({ icon: { template: '<span />' } }))
 vi.mock('lucide-vue-next', () => ({
   ArrowDownLeft: icon,
   ArrowUpRight: icon,
+  ArrowLeftRight: icon,
   Sparkles: icon,
   Search: icon,
   FileText: icon,

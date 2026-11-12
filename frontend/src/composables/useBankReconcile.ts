@@ -466,6 +466,72 @@ export async function fetchBankRowPartners(rowId: string): Promise<PartnerSugges
   return body.items
 }
 
+// ── Par som overføring (BRY-672) ─────────────────────────────
+
+/** The codes PairBankTransfer refuses with (409, `code`). */
+export const TRANSFER_REFUSAL_CODES = [
+  'row_booked',
+  'row_dismissed',
+  'row_refund_paired',
+  'row_provisional',
+  'row_has_kid',
+  'transfer_same_account',
+  'transfer_same_sign',
+  'transfer_amount_mismatch',
+  'transfer_dates_apart',
+  'transfer_crosses_period',
+  'period_closed',
+  'period_locked',
+] as const
+export type TransferRefusalCode = (typeof TRANSFER_REFUSAL_CODES)[number]
+
+/** The refusal code of a pair-transfer 409, or null for any other error. */
+export function transferRefusal(e: unknown): TransferRefusalCode | null {
+  if (!(e instanceof ApiError) || e.status !== 409 || !e.code) return null
+  return (TRANSFER_REFUSAL_CODES as readonly string[]).includes(e.code) ? (e.code as TransferRefusalCode) : null
+}
+
+/** The widest gap between a transfer's two dates the server pairs. */
+export const TRANSFER_MAX_DAYS_APART = 14
+
+function dayNumber(isoDate: string): number {
+  return Math.round(Date.parse(isoDate.slice(0, 10) + 'T00:00:00Z') / 86_400_000)
+}
+
+/**
+ * Whether the selection looks like one transfer between the club's own bank
+ * accounts, so Tildel offers «Par som overføring»: exactly two rows on
+ * different accounts, one out and one in for the same amount, at most 14 days
+ * apart and in the same year, neither a reference-year, provisional or
+ * provider-payout row, and no KID on the incoming row (a faktura payment).
+ * The server checks again (the fiscal period, and whether the KID is a
+ * faktura's).
+ */
+export function transferPairCandidate(rows: BankRowSummary[]): boolean {
+  if (rows.length !== 2) return false
+  const [a, b] = rows
+  if (a.bank_account_code === b.bank_account_code) return false
+  const ca = Math.round(a.amount * 100)
+  const cb = Math.round(b.amount * 100)
+  if (ca === 0 || ca !== -cb) return false
+  if (Math.abs(dayNumber(a.row_date) - dayNumber(b.row_date)) > TRANSFER_MAX_DAYS_APART) return false
+  if (a.row_date.slice(0, 4) !== b.row_date.slice(0, 4)) return false
+  const incoming = ca > 0 ? a : b
+  if (incoming.kid_number?.trim()) return false
+  return !rows.some((r) => r.reference_period || r.provisional || r.provider_payout || r.vipps_payout)
+}
+
+export interface TransferPairResult {
+  journal_entry_id: string
+  outbound_row_id: string
+  inbound_row_id: string
+  debit_account: string
+  credit_account: string
+  entry_date: string
+  amount: number
+  lifted_decline: string[]
+}
+
 /** True when assign-account refused a row because it has a strong partner. */
 export function isHasPartnerError(e: unknown): boolean {
   return e instanceof ApiError && e.status === 409 && e.message === 'has_partner'
@@ -543,7 +609,18 @@ export function useReconcileMutations() {
     onSuccess: invalidate,
   })
 
-  return { assignInvoice, assignAccount, assignAccountGroup, dismiss, unassign, undismiss, invalidate }
+  // Two rows booked as one transfer between the club's own bank accounts,
+  // posted at once (BRY-672).
+  const pairTransfer = useMutation({
+    mutationFn: ({ rowIds, description }: { rowIds: string[]; description?: string }) =>
+      useApi().fetchApi<TransferPairResult>(`${BASE}/pair-transfer`, {
+        method: 'POST',
+        body: JSON.stringify({ row_ids: rowIds, description }),
+      }),
+    onSuccess: invalidate,
+  })
+
+  return { assignInvoice, assignAccount, assignAccountGroup, dismiss, unassign, undismiss, pairTransfer, invalidate }
 }
 
 export function useAssignMultiInvoiceMutation() {

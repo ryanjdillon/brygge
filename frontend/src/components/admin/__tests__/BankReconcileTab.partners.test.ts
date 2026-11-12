@@ -36,6 +36,7 @@ const { icon, rows, partners, assignAccount, assignAccountGroup } = vi.hoisted((
 vi.mock('lucide-vue-next', () => ({
   ArrowDownLeft: icon,
   ArrowUpRight: icon,
+  ArrowLeftRight: icon,
   Sparkles: icon,
   Search: icon,
   FileText: icon,

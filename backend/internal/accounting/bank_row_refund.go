@@ -173,7 +173,7 @@ func lockRefundPairRows(ctx context.Context, tx pgx.Tx, clubID, inboundRowID, ou
 		   JOIN bank_imports bi ON bi.id = bir.bank_import_id
 		  WHERE bir.id = ANY($1::uuid[]) AND bir.club_id = $2
 		  ORDER BY bir.id
-		    FOR UPDATE OF bir`,
+		    FOR UPDATE OF bir FOR SHARE OF bi`,
 		[]string{inboundRowID, outboundRowID}, clubID,
 	)
 	if err != nil {

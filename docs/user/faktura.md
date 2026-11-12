@@ -523,20 +523,32 @@ Some bank rows only make sense together: a harbour-share buy-back paid out and t
 - **Bokfør saman** makes one bilag for the net (e.g. −63 000 and +1 000 → −62 000), with one bank line and the net on the account you pick. Any account except a bank account or Kundefordringer (1500) can be picked, so a buy-back can go to a balance account rather than revenue.
 - Selecting both rows and pressing **Lag bilag** does the same. A selection that leaves a likely partner out asks you to confirm that the rows should be booked separately.
 - **Angre** on either row unbooks both.
-- The two rows must be on the same bank account and in the same fiscal year, and must not net to zero (that is a transfer between the club's own accounts: use **Synk bank** or dismiss them).
+- The two rows must be on the same bank account and in the same fiscal year, and must not net to zero (that is a transfer between the club's own accounts: use **Synk bank** or **Par som overføring**, below).
 
 ### Transfers between the club's own accounts
 
-**Synk bank** pairs a transfer between two of the club's bank accounts by itself (the row going out of one account and the row coming into the other, same day and amount) and books one bilag for both. If you press **Angre** on such a transfer, both rows go back to **Tildel** and **Synk bank** no longer pairs them: an undo is final for the automatic booking. Tildel cannot pair the two rows again by hand (**Lag bilag** offers no bank accounts). To book the transfer yourself:
+**Synk bank** pairs a transfer between two of the club's bank accounts by itself (the row going out of one account and the row coming into the other, same day and amount) and books one bilag for both, as a draft. If you press **Angre** on such a transfer, both rows go back to **Tildel** and **Synk bank** no longer pairs them: an undo is final for the automatic booking. To pair them again, or to book a transfer **Synk bank** did not pair (the two rows are dated a few days apart, or the statement has no account numbers):
 
-1. On the **Bilag** page, make one **Nytt bilag** for the pair, on the transfer date: debit the account the money went into, credit the account it came from, the transfer amount. The bilag must be in an open period. Write the two rows' date, amount and bank text in its description, so the bilag can be traced to them (a dismissal in Tildel has no note of its own).
-2. In **Tildel**, dismiss both rows with **Avvis** and the reason **Intern overføring**.
+1. In **Tildel**, clear the filters (a direction filter hides one side of the transfer) and tick the two rows: the one going out and the one coming in.
+2. Press **Par som overføring**. You are asked to confirm your identity, then to confirm the transfer: the amount, the account it goes from, the account it goes into and the date.
 
-Brygge never pairs dismissed rows again, by **Synk bank** or by automatic booking.
+Brygge then books one bilag, debit the account the money went into and credit the account it came from, and **posts it at once**: it is your booking, not a draft. The button only appears when the two rows can be a transfer, and Brygge checks again when you confirm:
 
-The transfer bilag Brygge makes is a **draft**: post it on the **Bilag** page. Until it is posted it counts nowhere, and a year that still holds drafts cannot be closed. When the club has [automatic booking](#automatisk-bokføring) on, Brygge also pairs transfers by itself at every start and every night, as **Automatisk bokføring**. Those bilag are drafts too and wait for you to post them.
+- the rows are on two different bank accounts of the club;
+- one goes out and the other comes in, for exactly the same amount;
+- they are at most 14 days apart and in the same fiscal year. The bilag is dated on the later of the two dates. A pair dated 31 December and 2 January cannot be booked as one transfer; and while Tildel is filtered by year you cannot select both rows of such a pair either;
+- the fiscal year is open. A year that does not exist yet is created, as when you book a row with **Lag bilag**; a closed or locked year is refused;
+- neither row is booked, dismissed (a dismissed row cannot be paired as a transfer), paired as a refund, an in-flight row from a statement exported on the day of the transfer (export the statement again), or a Vipps or Stripe payout. An incoming payment carrying the KID of one of the club's fakturas is a faktura payment, not a transfer: assign it to the faktura. The button is not shown for an incoming row with a KID, or for two rows in different years.
+
+**Angre** on either row undoes the transfer: the bilag is voided, both rows go back to **Tildel**, and **Synk bank** leaves them alone again until you pair them.
+
+Transfers you booked earlier with a **Nytt bilag** and dismissed in Tildel as **Intern overføring** stay as they are: Brygge never pairs dismissed rows again, by **Synk bank**, by automatic booking or with **Par som overføring**.
+
+The transfer bilag **Synk bank** makes is a **draft**: post it on the **Bilag** page. Until it is posted it counts nowhere, and a year that still holds drafts cannot be closed. When the club has [automatic booking](#automatisk-bokføring) on, Brygge also pairs transfers by itself at every start and every night, as **Automatisk bokføring**. Those bilag are drafts too and wait for you to post them.
 
 Make only one bilag for the pair; don't also make a **Nytt bilag** per row, and don't book each row on its own to the other bank account: either books the transfer twice.
+
+Changing which bank account a statement upload belongs to (**Flytt** on the upload) is refused when one of its transfers already uses the new account: both sides of the transfer would land on the same account. Undo that transfer in **Tildel** first.
 
 ### Vipps reconciliation cascade
 

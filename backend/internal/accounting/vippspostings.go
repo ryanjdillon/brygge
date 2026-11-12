@@ -596,10 +596,11 @@ func (s *Service) clearVippsPayout(ctx context.Context, clubID, bankRowID, creat
 		return nil, err
 	}
 	// A clear that held the lock first may have booked the deposit and the
-	// payout row since they were read above.
+	// payout row since they were read above. The deposit is locked here,
+	// before the period and the bilag number (the booking lock order).
 	var winner *string
 	if err := tx.QueryRow(ctx,
-		`SELECT journal_entry_id::text FROM bank_import_rows WHERE id = $1 AND club_id = $2`,
+		`SELECT journal_entry_id::text FROM bank_import_rows WHERE id = $1 AND club_id = $2 FOR UPDATE`,
 		bankRowID, clubID,
 	).Scan(&winner); err != nil {
 		return nil, fmt.Errorf("re-reading bank row: %w", err)

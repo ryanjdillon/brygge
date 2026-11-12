@@ -1932,7 +1932,28 @@
       "yearReference": "{year} (Referenzjahr)",
       "yearReferenceEmpty": "{year} ist ein Referenzjahr und erscheint nicht in der Warteschlange. Ausgehende Bankzeilen lassen sich unter dem Filter „Referenzjahr“ buchen.",
       "referenceDismissedEmpty": "Keine abgewiesenen ausgehenden Bankzeilen aus Referenzjahren, die sich wiederherstellen lassen.",
-      "undismissRefused": "Die Zeile lässt sich nicht wiederherstellen: Sie ist nicht mehr abgewiesen, oder die Abweisung ist endgültig (Duplikat oder ersetzte Zeile)."
+      "undismissRefused": "Die Zeile lässt sich nicht wiederherstellen: Sie ist nicht mehr abgewiesen, oder die Abweisung ist endgültig (Duplikat oder ersetzte Zeile).",
+      "clearSelection": "Auswahl aufheben",
+      "transfer": {
+        "button": "Als Umbuchung paaren",
+        "confirmTitle": "Umbuchung buchen?",
+        "confirmBody": "Umbuchung von {amount} von {credit} nach {debit} am {date} buchen? Der Beleg wird sofort gebucht.",
+        "success": "Die Umbuchung ist gebucht",
+        "refused": {
+          "row_booked": "Eine der Zeilen ist bereits gebucht. Die Liste wurde aktualisiert.",
+          "row_dismissed": "Eine der Zeilen ist verworfen; verworfene Zeilen können nicht als Umbuchung gepaart werden.",
+          "row_refund_paired": "Eine der Zeilen ist als Rückzahlung gepaart.",
+          "row_provisional": "Eine der Zeilen ist vorläufig. Exportieren Sie den Kontoauszug erneut.",
+          "row_has_kid": "Die Zahlung trägt die KID einer Rechnung. Ordnen Sie sie der Rechnung zu.",
+          "transfer_same_account": "Die Zeilen müssen auf verschiedenen Bankkonten liegen.",
+          "transfer_same_sign": "Eine Zeile muss ausgehen, die andere eingehen.",
+          "transfer_amount_mismatch": "Die Beträge müssen gleich sein.",
+          "transfer_dates_apart": "Die Zeilen liegen mehr als 14 Tage auseinander.",
+          "transfer_crosses_period": "Die Zeilen liegen in verschiedenen Geschäftsjahren. Buchen Sie sie einzeln.",
+          "period_closed": "Das Geschäftsjahr ist geschlossen.",
+          "period_locked": "Das Geschäftsjahr ist gesperrt."
+        }
+      }
     },
     "sidebarTitle": "Admin-Portal",
     "inbox": {

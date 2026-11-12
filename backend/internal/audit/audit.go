@@ -103,6 +103,9 @@ const (
 	ActionBankRowRefreshed       = "bank_row.refreshed"
 	ActionBankRowUnassigned      = "bank_row.unassigned"
 	ActionBankRowRefundPaired    = "bank_row.refund_paired"
+	// A person paired two rows as a transfer between the club's own
+	// accounts in Tildel (BRY-672): one row per bank row.
+	ActionBankRowTransferPaired = "bank_row.transfer_paired"
 
 	// Per-charge Vipps reconciliation (BRY-227)
 	ActionVippsChargeAssignedInvoice = "vipps_charge.assigned_invoice"

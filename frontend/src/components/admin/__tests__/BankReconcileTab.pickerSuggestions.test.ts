@@ -44,6 +44,7 @@ const { icon, rows, suggestionsByRow } = vi.hoisted(() => {
 vi.mock('lucide-vue-next', () => ({
   ArrowDownLeft: icon,
   ArrowUpRight: icon,
+  ArrowLeftRight: icon,
   Sparkles: icon,
   Search: icon,
   FileText: icon,

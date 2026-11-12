@@ -336,7 +336,7 @@ const strandedDraftGrace = 15 * time.Minute
 // the row), crediting 1500, and carrying exactly kidMatchDescription for
 // that row. Mapping-rule drafts from AutoMatchImport, which may also credit
 // 1500 and are meant to wait for a gated post, never have that description;
-// transfer drafts and manual matches are left alone too.
+// transfer drafts and a person's bookings are left alone too.
 func (s *Service) healStrandedKIDDrafts(ctx context.Context, clubID string) (int, error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {

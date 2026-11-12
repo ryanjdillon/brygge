@@ -937,7 +937,7 @@ func lockStripeDepositTx(ctx context.Context, tx pgx.Tx, clubID, bankRowID strin
 		   FROM bank_import_rows bir
 		   JOIN bank_imports bi ON bi.id = bir.bank_import_id
 		  WHERE bir.id = $1 AND bir.club_id = $2
-		  FOR UPDATE OF bir`,
+		  FOR UPDATE OF bir FOR SHARE OF bi`,
 		bankRowID, clubID,
 	).Scan(&d.date, &d.cents, &d.bankAccount, &d.description, &d.counterpart, &d.eligible, &d.declined)
 	if errors.Is(err, pgx.ErrNoRows) {

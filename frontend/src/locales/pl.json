@@ -1903,7 +1903,28 @@
       "yearReference": "{year} (rok referencyjny)",
       "yearReferenceEmpty": "{year} jest rokiem referencyjnym i nie pojawia się w kolejce. Wychodzące wiersze bankowe można księgować pod filtrem „Rok referencyjny”.",
       "referenceDismissedEmpty": "Żaden odrzucony wychodzący wiersz bankowy z roku referencyjnego nie może zostać przywrócony.",
-      "undismissRefused": "Wiersza nie można przywrócić: nie jest już odrzucony albo odrzucenie jest ostateczne (duplikat lub zastąpiony wiersz)."
+      "undismissRefused": "Wiersza nie można przywrócić: nie jest już odrzucony albo odrzucenie jest ostateczne (duplikat lub zastąpiony wiersz).",
+      "clearSelection": "Wyczyść zaznaczenie",
+      "transfer": {
+        "button": "Połącz jako przelew własny",
+        "confirmTitle": "Zaksięgować przelew?",
+        "confirmBody": "Zaksięgować przelew {amount} z {credit} na {debit}, {date}? Dowód zostanie od razu zaksięgowany.",
+        "success": "Przelew jest zaksięgowany",
+        "refused": {
+          "row_booked": "Jeden z wierszy jest już zaksięgowany. Lista została odświeżona.",
+          "row_dismissed": "Jeden z wierszy jest odrzucony; odrzuconych wierszy nie można połączyć jako przelewu.",
+          "row_refund_paired": "Jeden z wierszy jest połączony jako zwrot.",
+          "row_provisional": "Jeden z wierszy jest tymczasowy. Wyeksportuj wyciąg ponownie.",
+          "row_has_kid": "Wpłata ma KID faktury. Przypisz ją do faktury.",
+          "transfer_same_account": "Wiersze muszą być na różnych kontach bankowych.",
+          "transfer_same_sign": "Jeden wiersz musi wychodzić, a drugi wpływać.",
+          "transfer_amount_mismatch": "Kwoty muszą być równe.",
+          "transfer_dates_apart": "Wiersze dzieli więcej niż 14 dni.",
+          "transfer_crosses_period": "Wiersze są w różnych latach obrachunkowych. Zaksięguj je osobno.",
+          "period_closed": "Rok obrachunkowy jest zamknięty.",
+          "period_locked": "Rok obrachunkowy jest zablokowany."
+        }
+      }
     },
     "sidebarTitle": "Portal administratora",
     "inbox": {

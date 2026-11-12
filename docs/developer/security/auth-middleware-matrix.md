@@ -201,14 +201,14 @@ reads admit any admin viewer (see *Board read access* above).
 | `POST /sync/invoices/resplit/preview`, `/sync/vipps-drafts/preview`, `/sync/vipps-fallback-reclass/preview` | — | read-only previews |
 | `POST /bank-sync`, `/vipps-resync` | ✅ (treasurer, admin; BRY-370) | auto-match and post (KID, Vipps order and auto-assign) |
 | `POST /bank-import` | ✅ (treasurer, admin; BRY-370) | posts import-time KID matches |
-| `/bank-import/{id}/rows/{row}/match`, `/auto-match` | — | create drafts only |
+| `/bank-import/{id}/auto-match` | — | creates drafts only (the manual `/rows/{row}/match` was removed in BRY-672) |
 | `PATCH /bank-import/{id}/account` | ✅ (treasurer, admin; BRY-370) | reassigns an import to another account; rewrites posted journal_lines |
 | `POST /bank-import/account-reimport`, `/bank-import/{id}/reimport` | ✅ (treasurer, admin; BRY-370) | rerun the import cascade, which posts KID matches |
 | `POST /vipps-imports` | ✅ (treasurer, admin; BRY-370) | posts order-linked and auto-assigned charges |
 | `POST /bank-rows/{id}/reconcile-vipps/confirm` | ✅ (treasurer, admin; BRY-370) | posts the payout reconciliation |
 | `/vipps-imports` list | — | |
 | `bank-rows/{id}` suggestions/potential-invoices/partners, `vipps-charges/{id}` suggestions/potential-invoices | — | reads |
-| `assign-invoice[-multi]`, assign-account, assign-account-group, dismiss, unassign | ✅ (treasurer, admin) | manual reconcile (Tildel) |
+| `assign-invoice[-multi]`, assign-account, assign-account-group, `pair-transfer`, dismiss, unassign | ✅ (treasurer, admin) | manual reconcile (Tildel); `pair-transfer` (BRY-672) posts a transfer between the club's own bank accounts and uses `moneyGate`. `TestBankRowWritesNeedMoneyRoleAndFreshTOTP` walks every non-GET `/accounting/bank-rows/*` route as a board session |
 | `POST /bank-rows/{rowID}/undismiss` | ✅ (treasurer, admin; BRY-418) | returns a dismissed reference-year row to the Referanseår list |
 | `/rules/*` | — | reconciliation rules |
 | `/reports/*` (incl. momskomp save/status) | — | reporting |

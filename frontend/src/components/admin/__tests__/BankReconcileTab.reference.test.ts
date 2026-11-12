@@ -45,7 +45,7 @@ const { icon, state, assignAccount, undismiss, toastError, baseRows, makeRow } =
 let capturedYear: { value: number | null } | null = null
 
 vi.mock('lucide-vue-next', () => ({
-  ArrowDownLeft: icon, ArrowUpRight: icon, Sparkles: icon, Search: icon, FileText: icon, Ban: icon,
+  ArrowDownLeft: icon, ArrowUpRight: icon, ArrowLeftRight: icon, Sparkles: icon, Search: icon, FileText: icon, Ban: icon,
   Undo2: icon, CheckSquare: icon, X: icon, ChevronDown: icon, Check: icon,
 }))
 vi.mock('@/composables/useToast', () => ({ useToast: () => ({ error: toastError, success: vi.fn() }) }))

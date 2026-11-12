@@ -278,25 +278,6 @@ func TestAutoMatchImportSkipsReferenceRows(t *testing.T) {
 	}
 }
 
-// Nothing books 2025 income into another year by naming that year: a manual
-// match, a mapping rule with another period and an import override all carry
-// the row's own date, which the guard reads.
-func TestMatchBankRowIntoOpenYearRefusesReferenceDate(t *testing.T) {
-	f := newRefFixture(t, true)
-	ctx := context.Background()
-	imp := f.club.NewBankImport(t)
-	deposit := f.club.NewBankRow(t, imp, fin.BankRowOpts{Date: f.refDay(8, 8), Cents: 70000})
-	outgoing := f.club.NewBankRow(t, imp, fin.BankRowOpts{Date: f.refDay(8, 9), Cents: -9000})
-
-	err := f.svc.MatchBankRow(ctx, f.club.ID, f.club.PeriodID, deposit, "1920", "3100", f.club.Treasurer.ID, 0)
-	if !errors.Is(err, ErrReferencePeriod) {
-		t.Fatalf("match a reference deposit into the open year: err = %v, want ErrReferencePeriod", err)
-	}
-	if err := f.svc.MatchBankRow(ctx, f.club.ID, f.club.PeriodID, outgoing, "6200", "1920", f.club.Treasurer.ID, 0); err != nil {
-		t.Fatalf("match a reference outgoing row to a cost account: %v", err)
-	}
-}
-
 // The bank-side reassign handler and the posted-line updates it makes live
 // outside journal.go; the passes that delete a draft and rebook it must leave
 // a reference year's drafts alone.

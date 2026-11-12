@@ -487,6 +487,22 @@ func (s *Service) reconcileVippsConfirm(ctx context.Context, clubID, bankRowID, 
 			return "", ErrSettlementInvoiceOverpaid
 		}
 	}
+	// Then the bank row, before the period and the bilag number (the booking
+	// lock order), re-checked under the lock.
+	var lockedBooked, lockedDeclined bool
+	if err := tx.QueryRow(ctx,
+		`SELECT journal_entry_id IS NOT NULL, auto_declined_at IS NOT NULL
+		   FROM bank_import_rows WHERE id = $1 AND club_id = $2 FOR UPDATE`,
+		bankRowID, clubID,
+	).Scan(&lockedBooked, &lockedDeclined); err != nil {
+		return "", fmt.Errorf("locking bank row: %w", err)
+	}
+	if lockedBooked {
+		return "", fmt.Errorf("bank row already linked to journal entry")
+	}
+	if mode.auto && lockedDeclined {
+		return "", errAutoDeclined
+	}
 
 	// On tx, which holds the faktura locks (BRY-433).
 	var periodID string

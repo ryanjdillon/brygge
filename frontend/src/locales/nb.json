@@ -2861,7 +2861,28 @@
       "yearReference": "{year} (referanseår)",
       "yearReferenceEmpty": "{year} er et referanseår og vises ikke i køen. Utgående bankrader kan bokføres under filteret «Referanseår».",
       "referenceDismissedEmpty": "Ingen avviste utgående bankrader i referanseår som kan gjenopprettes.",
-      "undismissRefused": "Raden kan ikke gjenopprettes: den er ikke avvist lenger, eller avvisningen er endelig (duplikat eller erstattet rad)."
+      "undismissRefused": "Raden kan ikke gjenopprettes: den er ikke avvist lenger, eller avvisningen er endelig (duplikat eller erstattet rad).",
+      "clearSelection": "Fjern utvalget",
+      "transfer": {
+        "button": "Par som overføring",
+        "confirmTitle": "Bokføre overføringen?",
+        "confirmBody": "Bokfør overføring {amount} fra {credit} til {debit}, {date}? Bilaget bokføres med en gang.",
+        "success": "Overføringen er bokført",
+        "refused": {
+          "row_booked": "En av radene er allerede bokført. Listen er oppdatert.",
+          "row_dismissed": "En av radene er avvist; avviste rader kan ikke pares som overføring.",
+          "row_refund_paired": "En av radene er paret som tilbakebetaling.",
+          "row_provisional": "En av radene er foreløpig. Eksporter kontoutskriften på nytt.",
+          "row_has_kid": "Innbetalingen har KID fra en faktura. Tildel den til fakturaen.",
+          "transfer_same_account": "Radene må høre til ulike bankkontoer.",
+          "transfer_same_sign": "Den ene raden må gå ut og den andre inn.",
+          "transfer_amount_mismatch": "Beløpene må være like store.",
+          "transfer_dates_apart": "Radene ligger mer enn 14 dager fra hverandre.",
+          "transfer_crosses_period": "Radene ligger i ulike regnskapsår. Bokfør dem hver for seg.",
+          "period_closed": "Regnskapsåret er lukket.",
+          "period_locked": "Regnskapsåret er låst."
+        }
+      }
     },
     "sidebarTitle": "Adminportal",
     "refund": {

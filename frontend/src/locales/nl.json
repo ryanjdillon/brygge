@@ -1932,7 +1932,28 @@
       "yearReference": "{year} (referentiejaar)",
       "yearReferenceEmpty": "{year} is een referentiejaar en staat niet in de wachtrij. Uitgaande bankregels kunnen worden geboekt onder het filter ‘Referentiejaar’.",
       "referenceDismissedEmpty": "Geen afgewezen uitgaande bankregels uit referentiejaren kunnen worden hersteld.",
-      "undismissRefused": "De regel kan niet worden hersteld: hij is niet meer afgewezen, of de afwijzing is definitief (dubbel of vervangen regel)."
+      "undismissRefused": "De regel kan niet worden hersteld: hij is niet meer afgewezen, of de afwijzing is definitief (dubbel of vervangen regel).",
+      "clearSelection": "Selectie wissen",
+      "transfer": {
+        "button": "Koppel als overboeking",
+        "confirmTitle": "Overboeking boeken?",
+        "confirmBody": "Overboeking van {amount} van {credit} naar {debit} op {date} boeken? De boeking wordt direct verwerkt.",
+        "success": "De overboeking is geboekt",
+        "refused": {
+          "row_booked": "Een van de regels is al geboekt. De lijst is bijgewerkt.",
+          "row_dismissed": "Een van de regels is afgewezen; afgewezen regels kunnen niet als overboeking worden gekoppeld.",
+          "row_refund_paired": "Een van de regels is gekoppeld als terugbetaling.",
+          "row_provisional": "Een van de regels is voorlopig. Exporteer het rekeningafschrift opnieuw.",
+          "row_has_kid": "De betaling heeft het KID van een factuur. Wijs haar toe aan de factuur.",
+          "transfer_same_account": "De regels moeten op verschillende bankrekeningen staan.",
+          "transfer_same_sign": "De ene regel moet uitgaan en de andere binnenkomen.",
+          "transfer_amount_mismatch": "De bedragen moeten gelijk zijn.",
+          "transfer_dates_apart": "De regels liggen meer dan 14 dagen uit elkaar.",
+          "transfer_crosses_period": "De regels liggen in verschillende boekjaren. Boek ze apart.",
+          "period_closed": "Het boekjaar is afgesloten.",
+          "period_locked": "Het boekjaar is vergrendeld."
+        }
+      }
     },
     "sidebarTitle": "Beheerportaal",
     "inbox": {

@@ -2865,7 +2865,28 @@
       "yearReference": "{year} (reference year)",
       "yearReferenceEmpty": "{year} is a reference year and is not shown in the queue. Outgoing bank rows can be booked under the “Reference year” filter.",
       "referenceDismissedEmpty": "No dismissed outgoing rows from reference years can be restored.",
-      "undismissRefused": "The row cannot be restored: it is no longer dismissed, or the dismissal is final (a duplicate or a replaced row)."
+      "undismissRefused": "The row cannot be restored: it is no longer dismissed, or the dismissal is final (a duplicate or a replaced row).",
+      "clearSelection": "Clear selection",
+      "transfer": {
+        "button": "Pair as transfer",
+        "confirmTitle": "Book the transfer?",
+        "confirmBody": "Book a transfer of {amount} from {credit} to {debit}, {date}? The voucher is posted at once.",
+        "success": "The transfer is booked",
+        "refused": {
+          "row_booked": "One of the rows is already booked. The list is updated.",
+          "row_dismissed": "One of the rows is dismissed; dismissed rows cannot be paired as a transfer.",
+          "row_refund_paired": "One of the rows is paired as a refund.",
+          "row_provisional": "One of the rows is provisional. Export the bank statement again.",
+          "row_has_kid": "The incoming payment carries a faktura's KID. Assign it to the faktura.",
+          "transfer_same_account": "The rows must be on different bank accounts.",
+          "transfer_same_sign": "One row must go out and the other come in.",
+          "transfer_amount_mismatch": "The amounts must be equal.",
+          "transfer_dates_apart": "The rows are more than 14 days apart.",
+          "transfer_crosses_period": "The rows are in different fiscal years. Book them separately.",
+          "period_closed": "The fiscal year is closed.",
+          "period_locked": "The fiscal year is locked."
+        }
+      }
     },
     "sidebarTitle": "Admin portal",
     "refund": {

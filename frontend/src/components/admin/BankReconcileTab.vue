@@ -2,7 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowDownLeft, ArrowUpRight, Sparkles, Search, FileText, Ban, Undo2, CheckSquare } from 'lucide-vue-next'
+import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Sparkles, Search, FileText, Ban, Undo2, CheckSquare } from 'lucide-vue-next'
 import Modal from '@/components/ui/Modal.vue'
 import BankRowPartnerChoice from '@/components/admin/BankRowPartnerChoice.vue'
 import PayerAliasToggle from '@/components/admin/PayerAliasToggle.vue'
@@ -37,6 +37,8 @@ import {
   useUnreconciledVippsCharges,
   useVippsChargeMutations,
   fetchVippsChargePotentialInvoices,
+  transferPairCandidate,
+  transferRefusal,
   DISMISS_REASONS,
   BANK_ROW_DIRECTIONS,
   BANK_ROW_SOURCES,
@@ -208,8 +210,16 @@ const missingSettlementsTotal = computed(() =>
   (missingSettlements.value ?? []).reduce((sum, m) => sum + Number(m.amount), 0),
 )
 
-const { assignInvoice, assignAccount, assignAccountGroup, dismiss, unassign, undismiss, invalidate: refetchBankRows } =
-  useReconcileMutations()
+const {
+  assignInvoice,
+  assignAccount,
+  assignAccountGroup,
+  dismiss,
+  unassign,
+  undismiss,
+  pairTransfer,
+  invalidate: refetchBankRows,
+} = useReconcileMutations()
 const assignMultiInvoice = useAssignMultiInvoiceMutation()
 
 // ── Per-charge Vipps model (BRY-227) ─────────────────────────
@@ -773,6 +783,52 @@ async function doAssignAccount(rowId: string, accountCode: string, k: 'expense' 
   accountPickerOpen.value = false
   clearSelection()
 }
+
+// ── Par som overføring (BRY-672) ─────────────────────────────
+// Two selected rows that look like one transfer between the club's own bank
+// accounts. The server decides; the button only shows for a plausible pair.
+const canPairTransfer = computed(() => transferPairCandidate(selectedRows.value))
+
+function accountLabel(code: string): string {
+  const name = (accounts.value ?? []).find((a) => a.code === code)?.name
+  return name ? `${code} ${name}` : code
+}
+
+// The bilag is posted at once, so the step-up comes first (click time), then
+// the confirm, then the booking.
+async function doPairTransfer() {
+  const pair = [...selectedRows.value]
+  if (!transferPairCandidate(pair)) return
+  if (!(await ensureFreshTotp())) return
+  const [out, inn] = pair[0].amount < 0 ? [pair[0], pair[1]] : [pair[1], pair[0]]
+  const later = out.row_date > inn.row_date ? out.row_date : inn.row_date
+  const ok = await askConfirm({
+    title: t('admin.bankReconcile.transfer.confirmTitle'),
+    body: t('admin.bankReconcile.transfer.confirmBody', {
+      amount: formatNOKBase(Math.abs(out.amount)),
+      credit: accountLabel(out.bank_account_code),
+      debit: accountLabel(inn.bank_account_code),
+      date: formatDate(later),
+    }),
+    confirmLabel: t('admin.bankReconcile.transfer.button'),
+  })
+  if (!ok) return
+  try {
+    await pairTransfer.mutateAsync({ rowIds: pair.map((r) => r.id) })
+  } catch (e) {
+    if (refusedAsReference(e) || refusedAsProviderPayout(e)) return
+    const code = transferRefusal(e)
+    toast.error(
+      code ? t('admin.bankReconcile.transfer.refused.' + code) : `${t('common.error')}: ${(e as Error).message}`,
+      10000,
+    )
+    refetchBankRows()
+    return
+  }
+  clearSelection()
+  toast.success(t('admin.bankReconcile.transfer.success'))
+}
+
 async function doUndismiss(rowId: string) {
   try {
     await undismiss.mutateAsync({ rowId })
@@ -1341,7 +1397,8 @@ async function doUnassign(rowId: string) {
     >
       <div
         v-if="selectedRows.length > 0"
-        class="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-5 py-3 shadow-xl"
+        class="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 flex max-w-[calc(100vw-1rem)] flex-wrap items-center justify-center gap-3 rounded-xl border border-gray-200 bg-white px-5 py-3 shadow-xl"
+        data-testid="multi-select-bar"
       >
         <CheckSquare class="h-4 w-4 text-brand-600" />
         <span class="text-sm font-semibold text-gray-800">
@@ -1351,7 +1408,7 @@ async function doUnassign(rowId: string) {
         <span class="h-4 w-px bg-gray-300" />
         <button
           type="button"
-          class="inline-flex items-center gap-1.5 rounded-md bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200"
+          class="inline-flex min-h-11 items-center gap-1.5 rounded-md bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200"
           @click="openAccountPicker(selectedRows[0])"
         >
           <FileText class="h-3.5 w-3.5" />
@@ -1360,15 +1417,27 @@ async function doUnassign(rowId: string) {
         <button
           v-if="selectedRows.length >= 2 && !selectedRows.some((r) => r.reference_period)"
           type="button"
-          class="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
+          class="inline-flex min-h-11 items-center gap-1.5 rounded-md bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
           @click="openMultiInvoice()"
         >
           <Search class="h-3.5 w-3.5" />
           {{ t('admin.bankReconcile.assignInvoice') }}
         </button>
         <button
+          v-if="canPairTransfer"
           type="button"
-          class="text-xs text-gray-400 hover:text-gray-600"
+          class="inline-flex min-h-11 items-center gap-1.5 rounded-md bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+          data-testid="pair-transfer"
+          :disabled="pairTransfer.isPending.value"
+          @click="doPairTransfer()"
+        >
+          <ArrowLeftRight class="h-3.5 w-3.5" />
+          {{ t('admin.bankReconcile.transfer.button') }}
+        </button>
+        <button
+          type="button"
+          class="inline-flex min-h-11 min-w-11 items-center justify-center text-xs text-gray-400 hover:text-gray-600"
+          :aria-label="t('admin.bankReconcile.clearSelection')"
           @click="clearSelection()"
         >
           ✕

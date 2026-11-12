@@ -54,6 +54,7 @@ const { icon, rows, invoice, assignInvoice, fetchPotential, toast, invalidateBan
 vi.mock('lucide-vue-next', () => ({
   ArrowDownLeft: icon,
   ArrowUpRight: icon,
+  ArrowLeftRight: icon,
   Sparkles: icon,
   Search: icon,
   FileText: icon,

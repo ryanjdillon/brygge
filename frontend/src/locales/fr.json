@@ -1931,7 +1931,28 @@
       "yearReference": "{year} (année de référence)",
       "yearReferenceEmpty": "{year} est une année de référence et n’apparaît pas dans la file. Les lignes bancaires sortantes peuvent être comptabilisées sous le filtre « Année de référence ».",
       "referenceDismissedEmpty": "Aucune ligne bancaire sortante rejetée d’une année de référence ne peut être rétablie.",
-      "undismissRefused": "La ligne ne peut pas être rétablie : elle n’est plus rejetée, ou le rejet est définitif (doublon ou ligne remplacée)."
+      "undismissRefused": "La ligne ne peut pas être rétablie : elle n’est plus rejetée, ou le rejet est définitif (doublon ou ligne remplacée).",
+      "clearSelection": "Effacer la sélection",
+      "transfer": {
+        "button": "Associer comme virement",
+        "confirmTitle": "Comptabiliser le virement ?",
+        "confirmBody": "Comptabiliser un virement de {amount} de {credit} vers {debit}, le {date} ? La pièce est validée immédiatement.",
+        "success": "Le virement est comptabilisé",
+        "refused": {
+          "row_booked": "L'une des lignes est déjà comptabilisée. La liste est actualisée.",
+          "row_dismissed": "L'une des lignes est écartée ; les lignes écartées ne peuvent pas être associées comme virement.",
+          "row_refund_paired": "L'une des lignes est associée à un remboursement.",
+          "row_provisional": "L'une des lignes est provisoire. Exportez à nouveau le relevé.",
+          "row_has_kid": "Le paiement porte le KID d'une facture. Affectez-le à la facture.",
+          "transfer_same_account": "Les lignes doivent être sur des comptes bancaires différents.",
+          "transfer_same_sign": "Une ligne doit sortir et l'autre entrer.",
+          "transfer_amount_mismatch": "Les montants doivent être égaux.",
+          "transfer_dates_apart": "Les lignes sont espacées de plus de 14 jours.",
+          "transfer_crosses_period": "Les lignes sont dans des exercices différents. Comptabilisez-les séparément.",
+          "period_closed": "L'exercice est clôturé.",
+          "period_locked": "L'exercice est verrouillé."
+        }
+      }
     },
     "sidebarTitle": "Portail admin",
     "inbox": {

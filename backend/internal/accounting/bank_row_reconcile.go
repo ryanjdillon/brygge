@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/brygge-klubb/brygge/internal/finance"
@@ -103,7 +104,7 @@ func assignableBankRow(booked, dismissed, declined bool) error {
 	case booked:
 		return errBankRowRaced
 	case dismissed:
-		return errors.New("bank row is dismissed")
+		return errBankRowDismissed
 	case declined:
 		return errAutoDeclined
 	}
@@ -142,7 +143,8 @@ func (s *Service) assignBankRowToInvoice(
 		        bir.auto_declined_at IS NOT NULL
 		   FROM bank_import_rows bir
 		   JOIN bank_imports bi ON bi.id = bir.bank_import_id
-		  WHERE bir.id = $1 AND bir.club_id = $2`,
+		  WHERE bir.id = $1 AND bir.club_id = $2
+		    FOR SHARE OF bi`,
 		bankRowID, clubID,
 	).Scan(&rowDate, &rowAmount, &rowDesc, &counterpart, &bankAcct, &alreadyJrnl, &dismissed, &declined); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -166,7 +168,7 @@ func (s *Service) assignBankRowToInvoice(
 	if opts.auto {
 		lockOpts = invoiceLockOpts{mode: lockAutoAssign, rowCents: toCents(rowAmount)}
 	}
-	if _, err := lockInvoiceForAssign(ctx, tx, clubID, invoiceID, lockOpts); err != nil {
+	if _, err := lockInvoiceThenRowsTx(ctx, tx, clubID, invoiceID, lockOpts, []string{bankRowID}, opts.auto); err != nil {
 		return "", nil, err
 	}
 
@@ -592,7 +594,8 @@ func (s *Service) AssignBankRowToAccount( //nolint:cyclop // validate, lock and 
 		        bir.dismissed_at IS NOT NULL
 		   FROM bank_import_rows bir
 		   JOIN bank_imports bi ON bi.id = bir.bank_import_id
-		  WHERE bir.id = $1 AND bir.club_id = $2`,
+		  WHERE bir.id = $1 AND bir.club_id = $2
+		    FOR SHARE OF bi`,
 		bankRowID, clubID,
 	).Scan(&rowDate, &rowAmount, &rowDesc, &counterpart, &bankAcct, &alreadyJrnl, &dismissed); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -600,11 +603,8 @@ func (s *Service) AssignBankRowToAccount( //nolint:cyclop // validate, lock and 
 		}
 		return "", fmt.Errorf("load bank row: %w", err)
 	}
-	if alreadyJrnl {
-		return "", errBankRowRaced
-	}
-	if dismissed {
-		return "", errors.New("bank row is dismissed")
+	if err := assignableBankRow(alreadyJrnl, dismissed, false); err != nil {
+		return "", err
 	}
 	if err := refuseProviderPayouts(ctx, tx, clubID,
 		assignRowText{id: bankRowID, description: rowDesc, counterpart: counterpart, cents: toCents(rowAmount)}); err != nil {
@@ -616,8 +616,13 @@ func (s *Service) AssignBankRowToAccount( //nolint:cyclop // validate, lock and 
 	if kind == "revenue" && rowAmount <= 0 {
 		return "", errors.New("revenue kind requires a positive (incoming) amount")
 	}
-
-	periodID, periodStatus, perr := s.resolvePeriod(ctx, clubID, rowDate, "")
+	// The booking lock order: the import (FOR SHARE, above), the row, then
+	// the period and the bilag number, all on this one transaction (BRY-433:
+	// nothing here waits for a second pool connection).
+	if err := lockBookableBankRowsTx(ctx, tx, clubID, []string{bankRowID}, false); err != nil {
+		return "", err
+	}
+	periodID, periodStatus, perr := resolvePeriodIn(ctx, tx, clubID, rowDate, "")
 	if perr != nil {
 		return "", fmt.Errorf("resolve period: %w", perr)
 	}
@@ -641,16 +646,14 @@ func (s *Service) AssignBankRowToAccount( //nolint:cyclop // validate, lock and 
 	if absAmount < 0 {
 		absAmount = -absAmount
 	}
-	var lines []CreateJournalLineInput
+	lines := []CreateJournalLineInput{
+		{AccountCode: bankAcct, Debit: absAmount, Credit: 0},
+		{AccountCode: accountCode, Debit: 0, Credit: absAmount},
+	}
 	if kind == "expense" {
 		lines = []CreateJournalLineInput{
 			{AccountCode: accountCode, Debit: absAmount, Credit: 0},
 			{AccountCode: bankAcct, Debit: 0, Credit: absAmount},
-		}
-	} else {
-		lines = []CreateJournalLineInput{
-			{AccountCode: bankAcct, Debit: absAmount, Credit: 0},
-			{AccountCode: accountCode, Debit: 0, Credit: absAmount},
 		}
 	}
 
@@ -660,7 +663,7 @@ func (s *Service) AssignBankRowToAccount( //nolint:cyclop // validate, lock and 
 	if description != "" {
 		desc = truncate(description, 220)
 	}
-	entry, cerr := s.CreateJournalEntry(ctx, CreateJournalEntryInput{
+	entry, cerr := createJournalEntryTx(ctx, tx, CreateJournalEntryInput{
 		FiscalPeriodID: periodID,
 		EntryDate:      rowDate.Format("2006-01-02"),
 		Description:    desc,
@@ -674,8 +677,13 @@ func (s *Service) AssignBankRowToAccount( //nolint:cyclop // validate, lock and 
 	if cerr != nil {
 		return "", fmt.Errorf("create journal: %w", cerr)
 	}
-	if err := s.linkAndPostBankRow(ctx, clubID, actorID, entry.ID, bankRowID, nil); err != nil {
+	// Link, post and lift the decline on this transaction: a failure rolls
+	// it all back, so there is no draft to discard.
+	if err := linkAndPostBankRowsTx(ctx, tx, clubID, actorID, entry.ID, []string{bankRowID}, nil, false); err != nil {
 		return "", err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return "", fmt.Errorf("commit account assign: %w", err)
 	}
 	return entry.ID, nil
 }
@@ -683,21 +691,46 @@ func (s *Service) AssignBankRowToAccount( //nolint:cyclop // validate, lock and 
 // errBankRowRaced means another booking linked the row first.
 var errBankRowRaced = errors.New("bank row already reconciled — unassign first")
 
-// linkAndPostBankRow links a manual assignment's draft to its bank row and
-// then posts it. The link is guarded on the row still being unbooked and
-// not dismissed, so of two concurrent assigns exactly one links; the loser's
-// draft is discarded. Posting comes after the link so a posted entry never
-// exists without its row (a later bank sync would book the money again);
-// a failed post unlinks the row and deletes the draft. invoiceID, when set,
-// is recorded on the row as the faktura it settles. A person's decline
-// (auto_declined_at) is lifted only after the post succeeded, so a failed
-// post that unlinks the row leaves it declined.
-func (s *Service) linkAndPostBankRow(ctx context.Context, clubID, actorID, entryID, bankRowID string, invoiceID *string) error {
-	return s.linkAndPostBankRows(ctx, clubID, actorID, entryID, []string{bankRowID}, invoiceID)
+// errBankRowDismissed means the row is dismissed (also when a person
+// dismissed it while the booking waited for its lock).
+var errBankRowDismissed = errors.New("bank row is dismissed")
+
+// ErrDuplicateBankRows refuses a multi-row booking that names one row more
+// than once: each row would get its own entry, booking it twice. Handlers
+// answer 400.
+var ErrDuplicateBankRows = errors.New("a bank row is named more than once")
+
+// canonicalBankRowIDs parses every id (so one id in two spellings is one id)
+// and refuses fewer than minRows ids, a malformed id (ErrBankRowNotFound) or
+// a repeated one (ErrDuplicateBankRows).
+func canonicalBankRowIDs(rowIDs []string, minRows int) ([]string, error) {
+	if len(rowIDs) < minRows {
+		return nil, errors.New("use assign-invoice for single rows")
+	}
+	seen := make(map[string]bool, len(rowIDs))
+	out := make([]string, 0, len(rowIDs))
+	for _, id := range rowIDs {
+		u, err := uuid.Parse(id)
+		if err != nil {
+			return nil, ErrBankRowNotFound
+		}
+		c := u.String()
+		if seen[c] {
+			return nil, ErrDuplicateBankRows
+		}
+		seen[c] = true
+		out = append(out, c)
+	}
+	return out, nil
 }
 
-// linkAndPostBankRows is linkAndPostBankRow for rows booked together on one
-// entry: all of them link or none do.
+// linkAndPostBankRows links a manual booking's draft to its bank rows and
+// then posts it (the group booking). The link is guarded on each row still
+// being unbooked and not dismissed, so of two concurrent bookings exactly one
+// links; the loser's draft is discarded. Posting comes after the link so a
+// posted entry never exists without its rows; a failed post unlinks them and
+// deletes the draft. A person's decline is lifted only after the post
+// succeeded. All rows link or none do.
 func (s *Service) linkAndPostBankRows(ctx context.Context, clubID, actorID, entryID string, bankRowIDs []string, invoiceID *string) error {
 	// A person's booking (account assigns, group booking): no decline guard.
 	if err := s.linkBankRows(ctx, clubID, entryID, bankRowIDs, invoiceID, false); err != nil {
@@ -738,6 +771,77 @@ func linkAndPostBankRowsTx(ctx context.Context, tx pgx.Tx, clubID, actorID, entr
 		return fmt.Errorf("post journal: %w", err)
 	}
 	return liftBankRowsDeclineIn(ctx, tx, clubID, entryID)
+}
+
+// lockBookableBankRowsTx locks the bank rows a booking will link (FOR UPDATE,
+// in id order) and re-checks, under the lock, that each is still unbooked and
+// not dismissed (the link's own guard) and, for auto, not declined by a
+// person. A row that is not is errBankRowRaced (errAutoDeclined for a
+// declined one).
+//
+// Every booking that links bank rows takes its locks in one order: the
+// faktura (lockInvoiceForAssign) if it settles one, then the bank rows, then
+// the period (resolve or create) and the bilag number (createJournalEntryTx).
+// The bilag number is held by its unique index until the transaction ends,
+// so a booking that numbered its entry before it locked its rows deadlocks
+// with one that locked the rows first and then waits for a number (BRY-672).
+func lockBookableBankRowsTx(ctx context.Context, tx pgx.Tx, clubID string, bankRowIDs []string, auto bool) error {
+	ids := slices.Clone(bankRowIDs)
+	slices.Sort(ids)
+	ids = slices.Compact(ids)
+	q := `SELECT id::text FROM bank_import_rows
+	       WHERE id = ANY($1::uuid[]) AND club_id = $2
+	         AND journal_entry_id IS NULL AND dismissed_at IS NULL`
+	if auto {
+		q += ` AND auto_declined_at IS NULL`
+	}
+	rows, err := tx.Query(ctx, q+` ORDER BY id FOR UPDATE`, ids, clubID)
+	if err != nil {
+		return fmt.Errorf("lock bank rows: %w", err)
+	}
+	locked, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return fmt.Errorf("lock bank rows: %w", err)
+	}
+	if len(locked) == len(ids) {
+		return nil
+	}
+	var booked, dismissed bool
+	if err := tx.QueryRow(ctx,
+		`SELECT COALESCE(bool_or(journal_entry_id IS NOT NULL), false), COALESCE(bool_or(dismissed_at IS NOT NULL), false)
+		   FROM bank_import_rows WHERE id = ANY($1::uuid[]) AND club_id = $2`,
+		ids, clubID,
+	).Scan(&booked, &dismissed); err != nil {
+		return fmt.Errorf("re-reading bank rows: %w", err)
+	}
+	if dismissed && !booked {
+		return errBankRowDismissed
+	}
+	if auto && !booked {
+		if declined, derr := bankRowDeclinedIn(ctx, tx, clubID, ids); derr != nil {
+			return derr
+		} else if declined {
+			return errAutoDeclined
+		}
+	}
+	return errBankRowRaced
+}
+
+// lockInvoiceThenRowsTx is the start of every faktura assign of bank rows,
+// in the booking lock order: the faktura (lockInvoiceForAssign, whose total
+// in øre it returns), then the rows (lockBookableBankRowsTx). The period and
+// the bilag number come after it.
+func lockInvoiceThenRowsTx(
+	ctx context.Context, tx pgx.Tx, clubID, invoiceID string, opts invoiceLockOpts, bankRowIDs []string, auto bool,
+) (int64, error) {
+	cents, err := lockInvoiceForAssign(ctx, tx, clubID, invoiceID, opts)
+	if err != nil {
+		return 0, err
+	}
+	if err := lockBookableBankRowsTx(ctx, tx, clubID, bankRowIDs, auto); err != nil {
+		return 0, err
+	}
+	return cents, nil
 }
 
 // linkBankRows points every row at the entry in one transaction, guarded on
@@ -1225,8 +1329,9 @@ func (s *Service) AssignMultipleBankRowsToInvoice(
 func (s *Service) AssignMultipleBankRowsToInvoiceRemembering(
 	ctx context.Context, clubID, actorID string, rowIDs []string, invoiceID string, alias PayerAliasRequest,
 ) ([]string, *TaughtAlias, error) {
-	if len(rowIDs) < 2 {
-		return nil, nil, errors.New("use assign-invoice for single rows")
+	rowIDs, err := canonicalBankRowIDs(rowIDs, 2)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
@@ -1252,7 +1357,8 @@ func (s *Service) AssignMultipleBankRowsToInvoiceRemembering(
 	// Held until the rows are linked and their entries posted (the commit
 	// below), like the single-row path; every entry is created and posted
 	// in this tx, so they all commit or none do.
-	invCents, err := lockInvoiceForAssign(ctx, tx, clubID, invoiceID, invoiceLockOpts{mode: lockManual, bookingDate: earliestDate})
+	invCents, err := lockInvoiceThenRowsTx(ctx, tx, clubID, invoiceID,
+		invoiceLockOpts{mode: lockManual, bookingDate: earliestDate}, rowIDs, false)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1357,7 +1463,8 @@ func loadMultiAssignRows(ctx context.Context, tx pgx.Tx, clubID string, rowIDs [
 			        bir.dismissed_at IS NOT NULL
 			   FROM bank_import_rows bir
 			   JOIN bank_imports bi ON bi.id = bir.bank_import_id
-			  WHERE bir.id = $1 AND bir.club_id = $2`,
+			  WHERE bir.id = $1 AND bir.club_id = $2
+			    FOR SHARE OF bi`,
 			rid, clubID,
 		).Scan(&rd.date, &rd.amount, &rd.desc, &rd.counterpart, &rd.bankAcct, &alreadyJrnl, &dismissed); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {

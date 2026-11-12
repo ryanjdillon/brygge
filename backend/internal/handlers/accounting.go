@@ -1560,51 +1560,6 @@ func (h *AccountingHandler) HandleListUnmatchedRows(w http.ResponseWriter, r *ht
 	JSON(w, http.StatusOK, result)
 }
 
-type matchRowRequest struct {
-	PeriodID          string  `json:"period_id"`
-	DebitAccountCode  string  `json:"debit_account_code"`
-	CreditAccountCode string  `json:"credit_account_code"`
-	MVAAmount         float64 `json:"mva_amount"`
-}
-
-func (h *AccountingHandler) HandleMatchBankRow(w http.ResponseWriter, r *http.Request) {
-	claims := middleware.GetClaims(r.Context())
-	if claims == nil {
-		Error(w, http.StatusUnauthorized, "authentication required")
-		return
-	}
-
-	rowID := chi.URLParam(r, "rowID")
-	var req matchRowRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		Error(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-	if req.PeriodID == "" || req.DebitAccountCode == "" || req.CreditAccountCode == "" {
-		Error(w, http.StatusBadRequest, "period_id, debit_account_code, and credit_account_code are required")
-		return
-	}
-
-	err := h.svc.MatchBankRow(r.Context(), claims.ClubID, req.PeriodID, rowID,
-		req.DebitAccountCode, req.CreditAccountCode, claims.UserID, req.MVAAmount)
-	if referencePeriodConflict(w, err) {
-		return
-	}
-	if err != nil {
-		h.log.Error().Err(err).Msg("failed to match bank row")
-		Error(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	if h.audit != nil {
-		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
-			"accounting.bank_row_matched", "bank_import_row", rowID,
-			map[string]any{"debit": req.DebitAccountCode, "credit": req.CreditAccountCode})
-	}
-
-	JSON(w, http.StatusOK, map[string]string{"message": "row matched"})
-}
-
 // ── Mapping Rules ───────────────────────────────────────────
 
 func (h *AccountingHandler) HandleListRules(w http.ResponseWriter, r *http.Request) {
@@ -1779,6 +1734,10 @@ type reassignBankImportRequest struct {
 	BankAccountCode string `json:"bank_account_code"`
 }
 
+// reassignCollidesTransferCode is the 409 code for a bank-account reassign
+// that would put both lines of a transfer on the same account (BRY-672).
+const reassignCollidesTransferCode = "reassign_collides_transfer"
+
 // HandleReassignBankImport changes which GL bank account an existing
 // import belongs to and cascades the change through every journal
 // line that was matched against rows of this import. The bank-side
@@ -1809,9 +1768,21 @@ func (h *AccountingHandler) HandleReassignBankImport(w http.ResponseWriter, r *h
 		return
 	}
 
+	tx, err := h.svc.DB().BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		h.log.Error().Err(err).Msg("begin tx")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	// The import is locked first and every check and the swap run on this
+	// transaction. A booking that links one of the import's rows reads the
+	// import FOR SHARE, so it books either before the swap (and is swapped
+	// with the rest) or after it, on the new account, never in between.
 	var oldCode string
-	if err := h.svc.DB().QueryRow(ctx,
-		`SELECT bank_account_code FROM bank_imports WHERE id = $1 AND club_id = $2`,
+	if err := tx.QueryRow(ctx,
+		`SELECT bank_account_code FROM bank_imports WHERE id = $1 AND club_id = $2 FOR UPDATE`,
 		importID, claims.ClubID,
 	).Scan(&oldCode); err != nil {
 		Error(w, http.StatusNotFound, "bank import not found")
@@ -1821,14 +1792,6 @@ func (h *AccountingHandler) HandleReassignBankImport(w http.ResponseWriter, r *h
 		JSON(w, http.StatusOK, map[string]any{"status": "unchanged"})
 		return
 	}
-
-	tx, err := h.svc.DB().BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		h.log.Error().Err(err).Msg("begin tx")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-	defer tx.Rollback(ctx)
 
 	// Resolve both account ids (old + new) for this club.
 	var oldAccountID, newAccountID string
@@ -1880,10 +1843,41 @@ func (h *AccountingHandler) HandleReassignBankImport(w http.ResponseWriter, r *h
 		return
 	}
 
+	// Refuse when an affected entry already has a line on the target
+	// account as well as the old one: a transfer between the club's own
+	// accounts (paired automatically or by Par som overføring, BRY-672)
+	// from this import's account to the target would become DR target /
+	// CR target, which books nothing.
+	var collides bool
+	if err := tx.QueryRow(ctx,
+		`SELECT EXISTS (
+		   SELECT 1 FROM journal_lines jl_new
+		     JOIN journal_lines jl_old ON jl_old.journal_entry_id = jl_new.journal_entry_id AND jl_old.account_id = $2
+		    WHERE jl_new.account_id = $1
+		      AND jl_new.journal_entry_id IN (
+		        SELECT bir.journal_entry_id FROM bank_import_rows bir
+		         WHERE bir.bank_import_id = $3 AND bir.journal_entry_id IS NOT NULL))`,
+		newAccountID, oldAccountID, importID,
+	).Scan(&collides); err != nil {
+		h.log.Error().Err(err).Msg("scan reassign collisions")
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if collides {
+		JSON(w, http.StatusConflict, map[string]string{
+			"error": "cannot reassign: a linked bilag already has a line on the target account " + req.BankAccountCode +
+				"; undo that bilag in Tildel first",
+			"code": reassignCollidesTransferCode,
+		})
+		return
+	}
+
 	// Cascade: rewrite the bank-side line of every affected journal
-	// entry from the old account to the new account. There is exactly
-	// one such line per entry (created by MatchBankRow), so this is a
-	// straight account_id swap, not a re-balance.
+	// entry from the old account to the new account. A single-row booking
+	// has one such line; a transfer's entry has one line per bank account,
+	// and only this import's is swapped (the collision check above keeps
+	// the two apart), so this is a straight account_id swap, not a
+	// re-balance.
 	cascadeTag, err := tx.Exec(ctx,
 		`UPDATE journal_lines
 		    SET account_id = $1

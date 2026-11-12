@@ -1247,6 +1247,11 @@ func newRouter(d routeDeps) *chi.Mux {
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTPDefault()).
 							Post("/bank-rows/assign-account-group", bankRowsHandler.HandleAssignAccountGroup)
+						// BRY-672: Tildel's «Par som overføring» posts a
+						// bilag, so it takes the same money gate as the
+						// ledger routes.
+						r.With(moneyGate...).
+							Post("/bank-rows/pair-transfer", bankRowsHandler.HandlePairTransfer)
 						r.With(middleware.RequireRole("treasurer", "admin"),
 							middleware.RequireFreshTOTPDefault()).
 							Post("/bank-rows/{rowID}/assign-invoice", bankRowsHandler.HandleAssignInvoice)

@@ -172,16 +172,20 @@ func (s *Service) bookKIDCascadeMatch(ctx context.Context, clubID string, m kidC
 	// The booking we waited for may have been this very row (a second sync,
 	// or an import during a sync): then the faktura reads settled, but the
 	// row is booked, not a double payment. Checked in a statement after the
-	// lock, so it sees what the lock holder committed.
+	// lock, so it sees what the lock holder committed. The row is locked
+	// here, before the entry is created: a booking that locks the row first
+	// and then numbers its entry (transfer pairing, Par som overføring)
+	// would otherwise deadlock with this one on the bilag number.
 	var eligible bool
-	if err := tx.QueryRow(ctx,
-		`SELECT EXISTS (SELECT 1 FROM bank_import_rows WHERE id = $1 AND club_id = $2 AND `+kidCascadeEligibleSQL("")+`)`,
+	err = tx.QueryRow(ctx,
+		`SELECT true FROM bank_import_rows WHERE id = $1 AND club_id = $2 AND `+kidCascadeEligibleSQL("")+` FOR UPDATE`,
 		m.rowID, clubID,
-	).Scan(&eligible); err != nil {
-		return fmt.Errorf("re-checking row: %w", err)
-	}
-	if !eligible {
+	).Scan(&eligible)
+	if errors.Is(err, pgx.ErrNoRows) {
 		return errKIDRowTaken
+	}
+	if err != nil {
+		return fmt.Errorf("re-checking row: %w", err)
 	}
 	if lockErr != nil {
 		return lockErr

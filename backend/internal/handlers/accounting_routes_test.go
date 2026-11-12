@@ -22,13 +22,12 @@ import (
 // moneyGate: they only read, preview, or create drafts and attachments that
 // a gated post has to pick up later.
 var ungatedLedgerWrites = map[string]bool{
-	"POST /journal/parse-receipt":                     true,
-	"POST /journal/{entryID}/attachment":              true,
-	"POST /sync/invoices/resplit/preview":             true,
-	"POST /sync/vipps-drafts/preview":                 true,
-	"POST /sync/vipps-fallback-reclass/preview":       true,
-	"POST /bank-import/{importID}/rows/{rowID}/match": true,
-	"POST /bank-import/{importID}/auto-match":         true,
+	"POST /journal/parse-receipt":               true,
+	"POST /journal/{entryID}/attachment":        true,
+	"POST /sync/invoices/resplit/preview":       true,
+	"POST /sync/vipps-drafts/preview":           true,
+	"POST /sync/vipps-fallback-reclass/preview": true,
+	"POST /bank-import/{importID}/auto-match":   true,
 }
 
 // A board member can read the books and run previews but every route that

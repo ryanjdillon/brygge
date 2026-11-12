@@ -58,6 +58,7 @@ const { icon, rows, state, resolvesHere, invoice, assignInvoice, assignMulti, ro
 vi.mock('lucide-vue-next', () => ({
   ArrowDownLeft: icon,
   ArrowUpRight: icon,
+  ArrowLeftRight: icon,
   Sparkles: icon,
   Search: icon,
   FileText: icon,

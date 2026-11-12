@@ -130,7 +130,7 @@ A second, orthogonal dimension is the boolean `fiscal_periods.reference_only` (m
 
 `GET /accounting/periods` also returns `reference_blocked` per period: why the toggle is unavailable (`current_year`, `opening_balance` when marking; `period_closed` when unmarking), and `open_invoice_bookings`. `POST /accounting/periods/{id}/reference` answers 409 `reference_current_year`, `reference_has_opening_balance` or `period_closed`.
 
-Booking refusals: any booking a reference period does not take (or one dated in it) answers 409 `reference_period` with a Norwegian `error` (`accounting.ErrReferencePeriod`) on the journal create, post and void routes, the bank-row assigns, unassign and pair-refund, the manual match, the Vipps charge assigns and unassign, and the faktura void. The manual Stripe assigns and unassign carry it as `StripeTxnRefusal.Code` `reference_period`, and the manual payout clearing as `StripeClearRefusal.Code` `reference_period`.
+Booking refusals: any booking a reference period does not take (or one dated in it) answers 409 `reference_period` with a Norwegian `error` (`accounting.ErrReferencePeriod`) on the journal create, post and void routes, the bank-row assigns, unassign, pair-refund and pair-transfer, the Vipps charge assigns and unassign, and the faktura void. The manual Stripe assigns and unassign carry it as `StripeTxnRefusal.Code` `reference_period`, and the manual payout clearing as `StripeClearRefusal.Code` `reference_period`.
 
 ### `transaction_source` — `journal_entries.source`
 
@@ -451,7 +451,30 @@ Stripe's payout status, refreshed from `GET /v1/payouts/{id}`. It never moves ba
 | `reference_period` | The bank date lies in a reference year (BRY-418): the deposit is never booked there. The sweep reports it as waiting with a Norwegian reason |
 | `busy` | Another Stripe sync or booking of the club still holds its slot after a 5 s wait (`ErrStripeSyncBusy`) |
 
-The manual assigns (assign-invoice, assign-invoice-multi, assign-account, assign-account-group) answer 409 `provider_payout`, with `provider` (`vipps` / `stripe`) and `bank_row_id`, for a provider payout deposit.
+The manual assigns (assign-invoice, assign-invoice-multi, assign-account, assign-account-group) and pair-transfer answer 409 `provider_payout`, with `provider` (`vipps` / `stripe`) and `bank_row_id`, for a provider payout deposit.
+
+### Par som overføring refusals (`POST /accounting/bank-rows/pair-transfer`, BRY-672)
+
+409 `{error, code}`, `accounting.TransferRefusalError`; `error` is a Norwegian (nynorsk) sentence, and the SPA words each code as `admin.bankReconcile.transfer.refused.<code>`. Checked in this order, after `provider_payout`; nothing is kept on any of them.
+
+| Code | Meaning |
+|------|---------|
+| `row_booked` | One row is already booked (also the loser of a race with another booking) |
+| `row_dismissed` | One row is dismissed; a dismissed row cannot be paired as a transfer |
+| `row_refund_paired` | One row is paired as a refund |
+| `row_provisional` | One row is a provisional in-flight row; export the statement again |
+| `transfer_same_account` | Both rows are on the same bank account |
+| `transfer_same_sign` | Both rows go out, or both come in |
+| `row_has_kid` | The incoming row carries the KID of one of the club's fakturas (`kid_number` or in its text, any faktura state): a faktura payment, not a transfer |
+| `transfer_amount_mismatch` | The amounts differ (compared in øre) |
+| `transfer_dates_apart` | The dates are more than 14 days apart |
+| `transfer_crosses_period` | The later date's fiscal period does not cover the earlier date |
+| `period_closed` | That period is closed |
+| `period_locked` | That period is locked |
+
+Then 409 `reference_period` from the journal guard (a bank-to-bank entry is never a cost). 400 for anything but two distinct row ids, 404 for a row that is not the club's.
+
+`PATCH /accounting/bank-import/{importID}/account` answers 409 `reassign_collides_transfer` when an entry linked from the import already has a line on the target account (a transfer between the two would book DR and CR on one account).
 
 The faktura assigns of a bank row (assign-invoice, assign-invoice-multi) and of a Vipps charge (`POST /accounting/vipps-charges/{rowID}/assign-invoice`), and the legacy Vipps reconcile confirm, answer 409 `invoice_credited` with a Norwegian `error` when the faktura is credited in full (`accounting.ErrInvoiceCredited`, BRY-508), 409 `invoice_not_debt` when it is a credit note (`accounting.ErrInvoiceNotDebt`) and 409 `invoice_voided` when it is voided (`accounting.ErrInvoiceVoided`, BRY-523); nothing is booked. The confirm also answers 409 `vipps_row_booked` when one of its Vipps rows is already booked or gone (`accounting.ErrVippsRowAlreadyBooked`), and 409 `settlement_invoice_overpaid` when its lines link one faktura more than once or credit it above its total plus 1 kr (`accounting.ErrSettlementInvoiceOverpaid`). A faktura already paid or with a booked row recorded against it is a plain 400 carrying the message. `POST /accounting/vipps-charges/{rowID}/unassign` answers 409 `charge_in_settlement` (`accounting.ErrVippsChargeInSettlement`) for a charge booked with its Vipps settlement: undo the settlement from the bank row. It answers 409 `charge_in_cleared_settlement` (`accounting.ErrVippsChargeInClearedSettlement`, BRY-555) for a posted charge whose settlement has a posted clearing (payout row or deposit on a posted entry); the body carries `error` (a Norwegian sentence naming the clearing to undo first), `settlement_number`, `msn` and `bank_row_id` (the deposit whose `POST /bank-rows/{rowID}/unassign` undoes the clearing; omitted when no bank row carries it), and nothing is changed. `POST /accounting/journal/{entryID}/void` answers the same code for such a charge's entry, and 409 `vipps_settlement_entry` (`accounting.ErrVippsSettlementEntry`) for a Vipps settlement's fee entry (a payout entry is bank-linked: 409 `bank_entry`); the body carries `error`, a Norwegian sentence. Voiding the entry of a Vipps charge that is not refused releases the charge to the Vipps queue. The Stripe assign answers `invoice_credited` and `invoice_not_debt` in its `StripeTxnRefusal` (table above); a voided faktura is its `invoice_settled`. Imported fakturas without an opening balance answer 409 `imported_no_opening_balance` on the same routes.
 

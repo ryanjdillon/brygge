@@ -45,7 +45,6 @@ func newRefEnv(t *testing.T) (*refEnv, *accounting.Service, string, int) {
 		r.Post("/bank-rows/{rowID}/dismiss", bh.HandleDismiss)
 		r.Get("/bank-rows/unmatched", bh.HandleListUnmatched)
 		r.Get("/bank-rows/unmatched/count", bh.HandleCountUnmatched)
-		r.Post("/bank-import/{importID}/rows/{rowID}/match", h.HandleMatchBankRow)
 		r.Patch("/bank-import/{importID}/account", h.HandleReassignBankImport)
 	})
 	re := &refEnv{aliasTestEnv: env, nowYear: time.Now().Year()}
@@ -281,15 +280,13 @@ func TestCashFlowLeavesOutReferenceYear(t *testing.T) {
 }
 
 // The bank-account reassign rewrites posted journal lines directly, so it
-// refuses a reference year itself (and an entry dated in one), and a manual
-// match answers the guard's 409.
-func TestReferenceYearRefusesReassignAndMatch(t *testing.T) {
+// refuses a reference year itself (and an entry dated in one).
+func TestReferenceYearRefusesReassign(t *testing.T) {
 	env, svc, periodID, year := newRefEnv(t)
 	club := env.club
 	ctx := context.Background()
 	imp := club.NewBankImport(t)
 	row := club.NewBankRow(t, imp, fin.BankRowOpts{Date: time.Date(year, 6, 2, 0, 0, 0, 0, time.UTC), Cents: -20000})
-	deposit := club.NewBankRow(t, imp, fin.BankRowOpts{Date: time.Date(year, 6, 3, 0, 0, 0, 0, time.UTC), Cents: 30000})
 
 	rec := env.serve([]string{"treasurer"}, http.MethodPost, "/bank-rows/"+row+"/assign-account",
 		map[string]any{"account_code": "6200", "kind": "expense", "confirm_alone": true})
@@ -314,13 +311,6 @@ func TestReferenceYearRefusesReassignAndMatch(t *testing.T) {
 		t.Errorf("import's bank account = %q (%v), want it unchanged", bank, err)
 	}
 
-	rec = env.serve([]string{"treasurer"}, http.MethodPost, "/bank-import/"+imp+"/rows/"+deposit+"/match", map[string]any{
-		"period_id": env.currentPeriod, "debit_account_code": "1920", "credit_account_code": "3100",
-	})
-	var body map[string]string
-	if rec.Code != http.StatusConflict || json.Unmarshal(rec.Body.Bytes(), &body) != nil || body["code"] != "reference_period" {
-		t.Errorf("match a reference deposit into the current year: %d %s, want 409 reference_period", rec.Code, rec.Body)
-	}
 }
 
 // The Referanseår chip lists and counts the outgoing reference rows through
