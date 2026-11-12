@@ -170,17 +170,23 @@ func (s *Service) assignBankRowToInvoice(
 		return "", nil, err
 	}
 
-	var periodID, periodStatus string
+	var periodID string
 	if opts.auto {
-		periodID, periodStatus, err = existingPeriodIn(ctx, tx, clubID, rowDate, opts.periodOverride)
+		// Never opens a year: a missing year is *noFiscalYearError and a
+		// closed or locked period *periodNotOpenError, which bank
+		// auto-assign reports in MissingPeriods / ClosedPeriods.
+		if periodID, err = openPeriodIn(ctx, tx, clubID, rowDate, opts.periodOverride); err != nil {
+			return "", nil, err
+		}
 	} else {
+		var periodStatus string
 		periodID, periodStatus, err = resolvePeriodIn(ctx, tx, clubID, rowDate, opts.periodOverride)
-	}
-	if err != nil {
-		return "", nil, fmt.Errorf("resolve period: %w", err)
-	}
-	if periodStatus != "open" {
-		return "", nil, fmt.Errorf("fiscal period for %s is closed; reopen first", rowDate.Format("2006-01-02"))
+		if err != nil {
+			return "", nil, fmt.Errorf("resolve period: %w", err)
+		}
+		if periodStatus != "open" {
+			return "", nil, fmt.Errorf("fiscal period for %s is closed; reopen first", rowDate.Format("2006-01-02"))
+		}
 	}
 
 	// In the lock tx, so a failed link or post rolls the alias back with

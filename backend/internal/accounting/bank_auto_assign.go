@@ -200,9 +200,9 @@ func (s *Service) AutoAssignBankDeposits(ctx context.Context, clubID, actorID st
 		if err != nil {
 			s.log.Warn().Err(err).Str("bank_row_id", d.row.id).Msg("bank auto-assign: booking failed; row stays in Tildel")
 			res.ByReason[reasonBookingFailed]++
-			if errors.Is(err, errNoFiscalPeriod) {
-				res.addNoPeriodYear(d.row.date.Year())
-			}
+			// A period deleted, closed or locked between the decision and
+			// the booking: its year is reported like a decided one.
+			res.addPeriodYearFor(err, d.row.date.Year())
 			res.SkippedDetails = append(res.SkippedDetails, SkippedItem{
 				Ref:    fmt.Sprintf("%s %.2f kr", d.row.date.Format("2006-01-02"), float64(d.row.cents)/100),
 				Reason: err.Error(),
@@ -313,9 +313,11 @@ func (s *Service) loadBankDeposits(ctx context.Context, clubID string, opts Bank
 }
 
 // decideBankDeposits applies the checks in order; the first a row fails
-// leaves it in Tildel and counts the reason in res.ByReason (a no_period row
-// also records its year for the import or sync's MissingPeriods). It returns
-// the rows to book.
+// leaves it in Tildel and counts the reason in res.ByReason. A no_period row
+// also records its year for the import, sync or run's MissingPeriods, and a
+// period_closed row (closed or locked) its year for their ClosedPeriods; the
+// year is the row's own, also when an import override chose the period. It
+// returns the rows to book.
 func (s *Service) decideBankDeposits(ctx context.Context, clubID string, rows []bankDeposit, res *AutoAssignResult) ([]bankDepositDecision, error) {
 	byReason := res.ByReason
 	cands, err := loadMemberCands(ctx, s.db, clubID)
@@ -338,6 +340,8 @@ func (s *Service) decideBankDeposits(ctx context.Context, clubID string, rows []
 			switch reason {
 			case reasonNoPeriod:
 				res.addNoPeriodYear(r.date.Year())
+			case reasonPeriodClosed:
+				res.addClosedPeriodYear(r.date.Year())
 			case reasonDeclined:
 				res.DeclinedSkipped++
 			}

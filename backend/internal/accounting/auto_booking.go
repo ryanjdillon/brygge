@@ -333,6 +333,8 @@ func (s *Service) RunAutomaticBooking(ctx context.Context, clubID string, opts A
 		if booked != nil {
 			addYears(missing, booked.AutoAssign.noPeriodYears())
 			addYears(missing, booked.Payouts.noPeriodYears())
+			addYears(closed, booked.AutoAssign.closedPeriodYears())
+			addYears(closed, booked.Payouts.closedPeriodYears())
 		}
 	}
 	res.ClosedPeriods = yearLabels(closed)
@@ -418,6 +420,7 @@ func (s *Service) runAutomaticBankPasses(ctx context.Context, clubID, actor stri
 	if bankAuto {
 		res.BankAutoAssign = s.AutoAssignBankDepositsReported(ctx, clubID, actor, BankAutoAssignOpts{Trigger: trigger})
 		addYears(missing, res.BankAutoAssign.noPeriodYears())
+		addYears(closed, res.BankAutoAssign.closedPeriodYears())
 		stop()
 	}
 }

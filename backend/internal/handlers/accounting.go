@@ -1058,6 +1058,8 @@ func (h *AccountingHandler) importBankStatement(w http.ResponseWriter, r *http.R
 	if overwrite {
 		auditAction = "accounting.bank_account_reimported"
 	}
+	// period_override is the period a person forced every row into ("" when
+	// each row's own date decides): it is what decides where rows land.
 	if h.audit != nil {
 		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
 			auditAction, "bank_import", importID,
@@ -1070,7 +1072,9 @@ func (h *AccountingHandler) importBankStatement(w http.ResponseWriter, r *http.R
 				"skipped_dup":            result.SkippedDup,
 				"matched":                result.Matched,
 				"transfers":              result.Transfers,
+				"closed_periods":         result.ClosedPeriods,
 				"missing_periods":        result.MissingPeriods,
+				"period_override":        periodID,
 				"deleted":                result.Deleted,
 				"skipped_booked":         result.SkippedBooked,
 				"row_errors":             len(result.RowErrors),
@@ -1241,14 +1245,20 @@ func (h *AccountingHandler) HandleReimportBankStatement(w http.ResponseWriter, r
 		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
 			"accounting.bank_reimported", "bank_import", importID,
 			map[string]any{
-				"filename":       header.Filename,
-				"format":         formatName,
-				"deleted":        result.Deleted,
-				"reimported":     result.Imported,
-				"matched":        result.Matched,
-				"skipped_dup":    result.SkippedDup,
-				"skipped_booked": result.SkippedBooked,
-				"auto_assigned":  autoAssignedCount(result.AutoAssign),
+				"filename":            header.Filename,
+				"format":              formatName,
+				"deleted":             result.Deleted,
+				"reimported":          result.Imported,
+				"matched":             result.Matched,
+				"skipped_dup":         result.SkippedDup,
+				"skipped_booked":      result.SkippedBooked,
+				"auto_assigned":       autoAssignedCount(result.AutoAssign),
+				"transfers":           result.Transfers,
+				"closed_periods":      result.ClosedPeriods,
+				"missing_periods":     result.MissingPeriods,
+				"row_errors":          len(result.RowErrors),
+				"kid_skipped_settled": result.KIDSkippedSettled,
+				"period_override":     periodID,
 			})
 	}
 
@@ -1259,6 +1269,9 @@ func (h *AccountingHandler) HandleReimportBankStatement(w http.ResponseWriter, r
 		"skipped_dup":         result.SkippedDup,
 		"skipped_booked":      result.SkippedBooked,
 		"matched":             result.Matched,
+		"transfers":           result.Transfers,
+		"closed_periods":      result.ClosedPeriods,
+		"missing_periods":     result.MissingPeriods,
 		"row_errors":          result.RowErrors,
 		"kid_skipped_settled": result.KIDSkippedSettled,
 		"auto_assign":         result.AutoAssign,

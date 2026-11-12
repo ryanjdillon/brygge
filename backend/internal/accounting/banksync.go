@@ -251,6 +251,7 @@ func (s *Service) BankSync(ctx context.Context, clubID, createdBy string) (*Bank
 	// KID passes have taken every row that carries a reference.
 	res.AutoAssign = s.AutoAssignBankDepositsReported(ctx, clubID, createdBy, BankAutoAssignOpts{Trigger: BankAutoAssignTriggerSync})
 	addYears(missingYears, res.AutoAssign.noPeriodYears())
+	addYears(closedYears, res.AutoAssign.closedPeriodYears())
 
 	// Pass 5: per-charge model only — clear every Vipps payout deposit whose
 	// settlement has all its charges booked. Legacy clubs get an empty sweep.
@@ -264,6 +265,7 @@ func (s *Service) BankSync(ctx context.Context, clubID, createdBy string) (*Bank
 			res.VippsReconciled += len(sweep.Cleared)
 		}
 		addYears(missingYears, sweep.noPeriodYears())
+		addYears(closedYears, sweep.closedPeriodYears())
 	}
 
 	// Pass 6: book the Stripe charges and fees that are ready, then clear

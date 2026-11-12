@@ -41,8 +41,12 @@ type VippsPayoutSweepResult struct {
 	// then whatever it got through before stopping.
 	Error string `json:"error,omitempty"`
 	// noPeriod is the years of deposits skipped because no fiscal period
-	// exists for them, folded into the import or sync's MissingPeriods.
+	// exists for them, folded into the import, sync or run's MissingPeriods.
 	noPeriod []int
+	// closedPeriod is the years of the closed or locked periods a clearing
+	// was refused for (the fee's or the deposit's), folded into the import,
+	// sync or run's ClosedPeriods. The deposit stays in Failed as well.
+	closedPeriod []int
 	// notNetting is the settlements skipped because their postings do not
 	// net to 0 on the clearing account (BRY-560); they are in Skipped too.
 	// The automatic run reports them with its failed payouts, since only a
@@ -57,6 +61,41 @@ func (r *VippsPayoutSweepResult) noPeriodYears() []int {
 		return nil
 	}
 	return r.noPeriod
+}
+
+// closedPeriodYears is the years of the closed or locked periods the sweep
+// could not clear a deposit into; nil for a nil result.
+func (r *VippsPayoutSweepResult) closedPeriodYears() []int {
+	if r == nil {
+		return nil
+	}
+	return r.closedPeriod
+}
+
+// addPeriodYearFor records the year of a clearing refused for its fiscal
+// period: a missing year (*noFiscalYearError) in noPeriod; a closed or
+// locked one (*periodNotOpenError, labelled with the fee's or the deposit's
+// year, whichever was refused) in closedPeriod. A period closed between the
+// check and the entry insert (ErrPeriodClosed) is labelled with the
+// deposit's year.
+func (r *VippsPayoutSweepResult) addPeriodYearFor(err error, depositYear int) {
+	var noYear *noFiscalYearError
+	var notOpen *periodNotOpenError
+	switch {
+	case errors.As(err, &noYear):
+		if !slices.Contains(r.noPeriod, noYear.year) {
+			r.noPeriod = append(r.noPeriod, noYear.year)
+		}
+		return
+	case errors.As(err, &notOpen):
+		depositYear = notOpen.year
+	case errors.Is(err, ErrVippsPeriodClosed), errors.Is(err, ErrPeriodClosed):
+	default:
+		return
+	}
+	if !slices.Contains(r.closedPeriod, depositYear) {
+		r.closedPeriod = append(r.closedPeriod, depositYear)
+	}
 }
 
 // sweepFailedText is shown when the sweep could not run at all. The cause is
@@ -152,10 +191,7 @@ func (s *Service) ClearReadyVippsPayouts(ctx context.Context, clubID, actor stri
 		case err != nil:
 			reason, skip := payoutSweepReason(err)
 			item.Reason = reason
-			var noYear *noFiscalYearError
-			if errors.As(err, &noYear) && !slices.Contains(res.noPeriod, noYear.year) {
-				res.noPeriod = append(res.noPeriod, noYear.year)
-			}
+			res.addPeriodYearFor(err, d.date.Year())
 			if skip {
 				res.Skipped = append(res.Skipped, item)
 				if errors.Is(err, ErrVippsSettlementNotNetting) {
@@ -271,6 +307,7 @@ func (s *Service) payoutsWithoutOpenDeposit(ctx context.Context, clubID string, 
 
 type vippsPayoutDeposit struct {
 	id, settlement, msn string
+	date                time.Time
 	booked, dismissed   bool
 	// declined: a person undid the deposit's clearing (auto_declined_at).
 	// It still names its settlement, so the payout is not reported as having
@@ -285,7 +322,7 @@ func (d vippsPayoutDeposit) key() string { return d.msn + "/" + d.settlement }
 // VippsSettlementPattern; imported values never become part of a SQL regex.
 func (s *Service) vippsPayoutDeposits(ctx context.Context, clubID string) ([]vippsPayoutDeposit, error) {
 	rows, err := s.db.Query(ctx,
-		`SELECT id, description, journal_entry_id IS NOT NULL, dismissed_at IS NOT NULL,
+		`SELECT id, row_date, description, journal_entry_id IS NOT NULL, dismissed_at IS NOT NULL,
 		        auto_declined_at IS NOT NULL
 		   FROM bank_import_rows
 		  WHERE club_id = $1
@@ -302,7 +339,7 @@ func (s *Service) vippsPayoutDeposits(ctx context.Context, clubID string) ([]vip
 	for rows.Next() {
 		var d vippsPayoutDeposit
 		var desc string
-		if err := rows.Scan(&d.id, &desc, &d.booked, &d.dismissed, &d.declined); err != nil {
+		if err := rows.Scan(&d.id, &d.date, &desc, &d.booked, &d.dismissed, &d.declined); err != nil {
 			return nil, fmt.Errorf("scanning vipps payout deposit: %w", err)
 		}
 		m := VippsSettlementPattern.FindStringSubmatch(desc)

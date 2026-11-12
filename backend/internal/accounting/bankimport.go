@@ -700,6 +700,7 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 		PeriodOverride: periodOverride,
 	})
 	addYears(missingYears, res.AutoAssign.noPeriodYears())
+	addYears(closedYears, res.AutoAssign.closedPeriodYears())
 
 	// Book the Stripe charges and fees that are ready and clear the payouts
 	// this upload brought the deposits of, as the bank sync does, so an
@@ -717,6 +718,7 @@ func (s *Service) ImportBankRows(ctx context.Context, clubID, importID, periodOv
 		} else if perCharge {
 			res.VippsPayouts, res.BookingDeferred = s.sweepVippsPayoutsInSlot(ctx, clubID, importedBy)
 			addYears(missingYears, res.VippsPayouts.noPeriodYears())
+			addYears(closedYears, res.VippsPayouts.closedPeriodYears())
 		}
 	}
 

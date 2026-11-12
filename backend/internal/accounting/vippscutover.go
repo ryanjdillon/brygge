@@ -77,15 +77,15 @@ func (s *Service) RegenerateOpenPeriodVippsReconciliations(ctx context.Context, 
 		               (SELECT vipps_clearing_account FROM clubs WHERE id = $1), ''), '2900')
 		    )`
 
-	// Count closed-period legacy bilags so the operator sees what is being
-	// deliberately left on the old model.
+	// Count closed- and locked-period legacy bilags so the operator sees what
+	// is being deliberately left on the old model.
 	if err := s.db.QueryRow(ctx,
 		`SELECT count(*) FROM journal_entries je
 		   JOIN fiscal_periods fp ON fp.id = je.fiscal_period_id
 		  WHERE je.club_id = $1 AND je.source = 'vipps'
 		    AND je.source_table = 'bank_import_rows' AND je.source_id IS NOT NULL
 		    AND je.status IN ('draft','posted')
-		    AND fp.status = 'closed'`+notPerChargeEntry,
+		    AND fp.status IN ('closed', 'locked')`+notPerChargeEntry,
 		clubID,
 	).Scan(&res.SkippedClosedPeriod); err != nil {
 		return nil, fmt.Errorf("counting closed-period bilags: %w", err)

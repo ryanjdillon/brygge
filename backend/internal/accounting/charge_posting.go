@@ -195,8 +195,11 @@ func postChargeTx(ctx context.Context, tx pgx.Tx, p *chargePosting) (string, err
 		if err != nil {
 			return "", fmt.Errorf("resolving fiscal period: %w", err)
 		}
-		if periodStatus == "closed" {
-			return "", fmt.Errorf("fiscal period %d is closed — reopen it or pick a different period", p.date.Year())
+		// A person's booking (Søk faktura, rebook, cutover): a closed
+		// or locked period is refused here with its own reason, before
+		// the entry insert would refuse both with ErrPeriodClosed.
+		if periodStatus != "open" {
+			return "", periodNotOpenConfirmError(p.date.Year(), periodStatus)
 		}
 		periodID = id
 	default:

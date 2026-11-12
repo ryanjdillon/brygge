@@ -591,11 +591,17 @@ func (s *Service) applyFallbackReclassOne(ctx context.Context, clubID, actor str
 		return
 	}
 	out, err := s.reclassifyFallbackCharge(ctx, clubID, actor, plan.clearing, c, it.To, it.PriceItem)
+	var notOpen *manualPeriodNotOpenError
 	switch {
 	case errors.Is(err, errFallbackMoved):
 		it.skip(reasonCodeAlreadyMoved, "the charge was already moved or its bilag changed")
 	case errors.Is(err, ErrPeriodClosed):
 		it.fail(fmt.Errorf("the fiscal period is not open: %w", err))
+		it.ReasonCode = reasonCodePeriodNotOpen
+	case errors.As(err, &notOpen):
+		// The rebook's own refusal (postChargeTx), for a period closed or
+		// locked after the check above; it carries the locked text.
+		it.fail(err)
 		it.ReasonCode = reasonCodePeriodNotOpen
 	case errors.Is(err, ErrReferencePeriod):
 		it.fail(err)

@@ -607,14 +607,28 @@ func (s *Service) reconcileVippsConfirm(ctx context.Context, clubID, bankRowID, 
 	return entry.ID, nil
 }
 
-// periodNotOpenConfirmError is a person's settlement confirm refused for a
-// period that is not open. A closed period can be reopened; a locked one
-// cannot be reopened in Brygge, so its message does not suggest it.
+// periodNotOpenConfirmError is a person's booking refused for a period that
+// is not open: the settlement confirm, a manual Vipps charge (Lag bilag, Søk
+// faktura, rebook, cutover) and a refund pair. A closed period can be
+// reopened; a locked one cannot be reopened in Brygge, so its message does
+// not suggest it. The error is a *manualPeriodNotOpenError, so a caller can
+// tell it apart with errors.As. It deliberately does not wrap ErrPeriodClosed:
+// the person paths answer it with 400 and its text, not the 409 period_closed.
 func periodNotOpenConfirmError(year int, status string) error {
-	if status == "locked" {
-		return fmt.Errorf("fiscal period %d is locked and cannot be reopened in Brygge — pick a different period", year)
+	return &manualPeriodNotOpenError{year: year, status: status}
+}
+
+// manualPeriodNotOpenError is periodNotOpenConfirmError's refusal.
+type manualPeriodNotOpenError struct {
+	year   int
+	status string
+}
+
+func (e *manualPeriodNotOpenError) Error() string {
+	if e.status == "locked" {
+		return fmt.Sprintf("fiscal period %d is locked and cannot be reopened in Brygge — pick a different period", e.year)
 	}
-	return fmt.Errorf("fiscal period %d is %s — reopen it or pick a different period", year, status)
+	return fmt.Sprintf("fiscal period %d is %s — reopen it or pick a different period", e.year, e.status)
 }
 
 // matchVippsAmountToPriceArticle returns the GL revenue account and a

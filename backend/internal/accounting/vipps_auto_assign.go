@@ -184,6 +184,10 @@ func (s *Service) AutoAssignVippsCharges(ctx context.Context, clubID, createdBy 
 		if err != nil {
 			res.SkippedDetails = append(res.SkippedDetails, SkippedItem{Ref: fmt.Sprintf("%s %.2f kr", c.date, c.amount), Reason: err.Error()})
 			res.NeedsReview++
+			// A charge dated in a year with no fiscal period, or one closed
+			// or locked: the run lists the year in MissingPeriods or
+			// ClosedPeriods.
+			res.addPeriodYearFor(err, c.paidOn.Year())
 			continue
 		}
 		if item == nil { // ambiguous: a human decides in Tildel

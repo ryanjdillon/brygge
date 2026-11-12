@@ -61,13 +61,24 @@ type AutoAssignResult struct {
 	Error string `json:"error,omitempty"`
 	// noPeriod is the years of payments left because no fiscal
 	// period exists for them (bank rule: no_period), folded into the
-	// import or sync's MissingPeriods.
+	// import, sync or run's MissingPeriods.
 	noPeriod []int
+	// closedPeriod is the years of payments left because their fiscal
+	// period is closed or locked (bank rule: period_closed, or a period
+	// closed between the decision and the booking), folded into the
+	// import, sync or run's ClosedPeriods.
+	closedPeriod []int
 }
 
 func (r *AutoAssignResult) addNoPeriodYear(year int) {
 	if !slices.Contains(r.noPeriod, year) {
 		r.noPeriod = append(r.noPeriod, year)
+	}
+}
+
+func (r *AutoAssignResult) addClosedPeriodYear(year int) {
+	if !slices.Contains(r.closedPeriod, year) {
+		r.closedPeriod = append(r.closedPeriod, year)
 	}
 }
 
@@ -78,6 +89,28 @@ func (r *AutoAssignResult) noPeriodYears() []int {
 		return nil
 	}
 	return r.noPeriod
+}
+
+// closedPeriodYears is the years of payments the run left because their
+// fiscal period is closed or locked; nil for a nil result.
+func (r *AutoAssignResult) closedPeriodYears() []int {
+	if r == nil {
+		return nil
+	}
+	return r.closedPeriod
+}
+
+// addPeriodYearFor records the year of a booking that failed for its fiscal
+// period: missing (errNoFiscalPeriod) or not open (ErrVippsPeriodClosed from
+// the pass's own check, ErrPeriodClosed when the period was closed between
+// that check and the entry insert). Other errors record nothing.
+func (r *AutoAssignResult) addPeriodYearFor(err error, year int) {
+	switch {
+	case errors.Is(err, errNoFiscalPeriod):
+		r.addNoPeriodYear(year)
+	case errors.Is(err, ErrVippsPeriodClosed), errors.Is(err, ErrPeriodClosed):
+		r.addClosedPeriodYear(year)
+	}
 }
 
 // Reasons a payment is left for a human, as reported by both rules.

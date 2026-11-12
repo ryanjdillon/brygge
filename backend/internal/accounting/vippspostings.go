@@ -202,8 +202,11 @@ func (s *Service) postVippsChargeSplit(ctx context.Context, clubID, createdBy, d
 		if err != nil {
 			return "", fmt.Errorf("resolving fiscal period: %w", err)
 		}
-		if periodStatus == "closed" {
-			return "", fmt.Errorf("fiscal period %d is closed — reopen it or pick a different period", b.date.Year())
+		// A person's booking (Lag bilag): a closed or locked period is
+		// refused here with its own reason, before the entry insert would
+		// refuse both with ErrPeriodClosed.
+		if periodStatus != "open" {
+			return "", periodNotOpenConfirmError(b.date.Year(), periodStatus)
 		}
 	} else {
 		periodID, err = existingOpenPeriodIn(ctx, s.db, clubID, b.date)
@@ -850,7 +853,8 @@ func payoutPeriods(ctx context.Context, q dbtx, clubID string, feeDate, bankDate
 				return "", fmt.Errorf("resolving %s period: %w", what, err)
 			}
 			if status != "open" {
-				return "", fmt.Errorf("%w: %d (Vipps %s)", ErrVippsPeriodClosed, date.Year(), what)
+				// A person's clearing: a locked period gets its own text.
+				return "", fmt.Errorf("clearing the Vipps %s: %w", what, periodNotOpenConfirmError(date.Year(), status))
 			}
 			return id, nil
 		}
