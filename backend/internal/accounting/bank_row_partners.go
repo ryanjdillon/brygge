@@ -525,7 +525,14 @@ const (
 // account and in the same open fiscal period; their net must not be zero
 // (that is a transfer: Synk bank or dismiss it). All rows link to the entry
 // or none do. Unassigning any of them later unbooks the whole group.
-func (s *Service) AssignBankRowsToAccountGroup(
+//
+// It books on one transaction in the booking lock order (BRY-674): the rows'
+// imports FOR SHARE as the rows are loaded (the bank account is read there,
+// so a bank-account reassign either swaps the committed entry or commits
+// first and is read here), the rows (lockBookableBankRowsTx), the period
+// (resolved, or created: a person's booking; rolled back with any refusal),
+// then the entry, the guarded link and the post. A failure keeps nothing.
+func (s *Service) AssignBankRowsToAccountGroup( //nolint:cyclop // validate, lock and post one group in a single transaction; split tracked in BRY-424
 	ctx context.Context, clubID, actorID string, rowIDs []string, accountCode, description string,
 ) (*GroupAssignResult, error) {
 	ids := uniqueStrings(rowIDs)
@@ -536,7 +543,13 @@ func (s *Service) AssignBankRowsToAccountGroup(
 		return nil, ErrGroupTargetAccount
 	}
 
-	loaded, err := s.loadGroupRows(ctx, clubID, ids)
+	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	loaded, err := loadGroupRows(ctx, tx, clubID, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -547,8 +560,14 @@ func (s *Service) AssignBankRowsToAccountGroup(
 	if accountCode == source.bankAcct {
 		return nil, ErrGroupTargetAccount
 	}
+	if err := lockBookableBankRowsTx(ctx, tx, clubID, ids, false); err != nil {
+		if errors.Is(err, errBankRowDismissed) {
+			return nil, ErrGroupRowNotBookable
+		}
+		return nil, err
+	}
 
-	periodID, periodStatus, err := s.resolvePeriod(ctx, clubID, latest, "")
+	periodID, periodStatus, err := resolvePeriodIn(ctx, tx, clubID, latest, "")
 	if err != nil {
 		return nil, fmt.Errorf("resolve period: %w", err)
 	}
@@ -556,7 +575,7 @@ func (s *Service) AssignBankRowsToAccountGroup(
 		return nil, fmt.Errorf("%w: %s", ErrGroupPeriodClosed, latest.Format("2006-01-02"))
 	}
 	for _, g := range loaded {
-		pid, _, err := s.resolvePeriod(ctx, clubID, g.date, "")
+		pid, _, err := resolvePeriodIn(ctx, tx, clubID, g.date, "")
 		if err != nil {
 			return nil, fmt.Errorf("resolve period: %w", err)
 		}
@@ -566,7 +585,7 @@ func (s *Service) AssignBankRowsToAccountGroup(
 	}
 
 	var accountExists bool
-	if err := s.db.QueryRow(ctx,
+	if err := tx.QueryRow(ctx,
 		`SELECT EXISTS(SELECT 1 FROM accounts WHERE club_id = $1 AND code = $2 AND is_active)`,
 		clubID, accountCode,
 	).Scan(&accountExists); err != nil {
@@ -592,7 +611,7 @@ func (s *Service) AssignBankRowsToAccountGroup(
 		text = source.desc
 	}
 	sourceTable := "bank_import_rows"
-	entry, err := s.CreateJournalEntry(ctx, CreateJournalEntryInput{
+	entry, err := createJournalEntryTx(ctx, tx, CreateJournalEntryInput{
 		FiscalPeriodID: periodID,
 		EntryDate:      latest.Format("2006-01-02"),
 		Description:    "Samla tildeling: " + truncate(text, 200),
@@ -606,8 +625,13 @@ func (s *Service) AssignBankRowsToAccountGroup(
 	if err != nil {
 		return nil, fmt.Errorf("create journal: %w", err)
 	}
-	if err := s.linkAndPostBankRows(ctx, clubID, actorID, entry.ID, ids, nil); err != nil {
+	// Link, post and lift the declines on this transaction: a failure rolls
+	// it all back, so there is no draft to discard.
+	if err := linkAndPostBankRowsTx(ctx, tx, clubID, actorID, entry.ID, ids, nil, false); err != nil {
 		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit group assign: %w", err)
 	}
 	return &GroupAssignResult{JournalEntryID: entry.ID, RowIDs: ids, Net: float64(net) / 100}, nil
 }
@@ -621,11 +645,12 @@ type groupRow struct {
 	booked, dismissed, prv bool
 }
 
-// loadGroupRows loads the club's rows among ids; any id that is not the
-// club's makes the whole group not found, and a provider payout deposit
+// loadGroupRows loads the club's rows among ids on tx, with their imports
+// FOR SHARE (the first lock of the booking lock order); any id that is not
+// the club's makes the whole group not found, and a provider payout deposit
 // among them refuses it (ProviderPayoutDepositError).
-func (s *Service) loadGroupRows(ctx context.Context, clubID string, ids []string) ([]groupRow, error) {
-	rows, err := s.db.Query(ctx,
+func loadGroupRows(ctx context.Context, tx pgx.Tx, clubID string, ids []string) ([]groupRow, error) {
+	rows, err := tx.Query(ctx,
 		`SELECT bir.id, bir.row_date, round(bir.amount * 100)::bigint, bir.description, COALESCE(bir.counterpart, ''),
 		        bi.bank_account_code,
 		        bir.journal_entry_id IS NOT NULL,
@@ -633,7 +658,9 @@ func (s *Service) loadGroupRows(ctx context.Context, clubID string, ids []string
 		        COALESCE((`+provisionalRowSQL("bir")+`), false)
 		   FROM bank_import_rows bir
 		   JOIN bank_imports bi ON bi.id = bir.bank_import_id
-		  WHERE bir.club_id = $1 AND bir.id = ANY($2::uuid[])`,
+		  WHERE bir.club_id = $1 AND bir.id = ANY($2::uuid[])
+		  ORDER BY bir.id
+		    FOR SHARE OF bi`,
 		clubID, ids,
 	)
 	if err != nil {
@@ -658,7 +685,7 @@ func (s *Service) loadGroupRows(ctx context.Context, clubID string, ids []string
 	for _, g := range loaded {
 		texts = append(texts, assignRowText{id: g.id, description: g.desc, counterpart: g.counterpart, cents: g.cents})
 	}
-	if err := refuseProviderPayouts(ctx, s.db, clubID, texts...); err != nil {
+	if err := refuseProviderPayouts(ctx, tx, clubID, texts...); err != nil {
 		return nil, err
 	}
 	return loaded, nil

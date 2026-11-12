@@ -192,3 +192,36 @@ func TestReassignBankImportWithTransfer(t *testing.T) {
 		t.Errorf("lines after the reassign = %v; want DR 1925 / CR 1930", got)
 	}
 }
+
+// The reassign's refusals keep their HTTP shape now that the work is
+// accounting.ReassignBankImport (BRY-674): an id that is not a UUID or not
+// the club's import is 404, an unknown target account 400, and the same
+// account 200 "unchanged" with nothing written.
+func TestReassignBankImportRefusals(t *testing.T) {
+	env, _ := newPairTransferEnv(t)
+	c := env.club
+	imp := c.NewBankImportOn(t, "1920")
+	patch := func(importID, code string) (int, map[string]any) {
+		t.Helper()
+		rec := env.serve([]string{"treasurer"}, http.MethodPatch, "/bank-import/"+importID+"/account", map[string]any{"bank_account_code": code})
+		var body map[string]any
+		_ = json.Unmarshal(rec.Body.Bytes(), &body)
+		return rec.Code, body
+	}
+	if code, body := patch("not-a-uuid", "1925"); code != http.StatusNotFound {
+		t.Errorf("malformed import id: %d %v, want 404", code, body)
+	}
+	if code, body := patch("00000000-0000-4000-8000-000000000000", "1925"); code != http.StatusNotFound {
+		t.Errorf("unknown import id: %d %v, want 404", code, body)
+	}
+	if code, body := patch(imp, "1999"); code != http.StatusBadRequest {
+		t.Errorf("unknown target account: %d %v, want 400", code, body)
+	}
+	if code, body := patch(imp, "1920"); code != http.StatusOK || body["status"] != "unchanged" {
+		t.Errorf("same account: %d %v, want 200 unchanged", code, body)
+	}
+	var got string
+	if err := c.Pool.QueryRow(context.Background(), `SELECT bank_account_code FROM bank_imports WHERE id = $1`, imp).Scan(&got); err != nil || got != "1920" {
+		t.Errorf("import account %q (err %v) after refusals, want 1920", got, err)
+	}
+}

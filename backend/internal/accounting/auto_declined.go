@@ -29,10 +29,11 @@ import (
 //
 //   - every statement that links a row to an entry sets auto_declined_at back
 //     to NULL. Automatic links can only reach unmarked rows, so in practice
-//     this is a person's booking. Paths that link, post and unwind on a
-//     failed post outside one transaction (postVippsChargeSplit,
-//     linkAndPostBankRows) lift it only after the post succeeded, so a failed
-//     booking leaves the marker as it was;
+//     this is a person's booking. A path that links, posts and unwinds on a
+//     failed post outside one transaction (postVippsChargeSplit) lifts it
+//     only after the post succeeded, so a failed booking leaves the marker as
+//     it was; the bank-row bookings lift it on their own transaction
+//     (linkAndPostBankRowsTx), which a failed post rolls back;
 //   - a person booking a charge in a Vipps settlement lifts it from that
 //     settlement's payout deposit (liftSettlementDepositDecline, ACC-11), so
 //     the sweep clears the settlement again once its charges are booked.

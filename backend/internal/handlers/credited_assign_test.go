@@ -156,7 +156,7 @@ func TestAssignVoidedFakturaIsConflict(t *testing.T) {
 	confirmRow := club.NewBankRow(t, imp, fin.BankRowOpts{Cents: 30000})
 	wantRefusalCode(t, env.serve([]string{"treasurer"}, http.MethodPost, "/bank-rows/"+confirmRow+"/reconcile-vipps/confirm",
 		map[string]any{"lines": []accounting.VippsReconcileLine{
-			{AccountCode: "1920", Debit: 300},
+			{Kind: "bank_in", AccountCode: "1920", Debit: 300},
 			{AccountCode: "1500", Credit: 300, LinkedInvoiceID: voided.ID, VippsRowID: club.NewVippsRow(t, fin.VippsRowOpts{Cents: 30000})},
 		}}), invoiceVoidedCode)
 
@@ -170,12 +170,25 @@ func TestAssignVoidedFakturaIsConflict(t *testing.T) {
 	dupRow := club.NewBankRow(t, imp, fin.BankRowOpts{Cents: 60000})
 	wantRefusalCode(t, env.serve([]string{"treasurer"}, http.MethodPost, "/bank-rows/"+dupRow+"/reconcile-vipps/confirm",
 		map[string]any{"lines": []accounting.VippsReconcileLine{
-			{AccountCode: "1920", Debit: 600},
+			{Kind: "bank_in", AccountCode: "1920", Debit: 600},
 			{AccountCode: "1500", Credit: 300, LinkedInvoiceID: open.ID, VippsRowID: charge},
 			{AccountCode: "1500", Credit: 300, LinkedInvoiceID: open.ID, VippsRowID: club.NewVippsRow(t, fin.VippsRowOpts{Cents: 30000})},
 		}}), settlementOverpaidCode)
 	if booked("bank_import_rows", dupRow) {
 		t.Errorf("a refused confirm booked the bank row")
+	}
+
+	// A bank_in line on another account than the deposit's import holds (a
+	// preview made before a reassign, or an edit) is 409 vipps_preview_stale
+	// (BRY-674).
+	staleRow := club.NewBankRow(t, imp, fin.BankRowOpts{Cents: 30000})
+	wantRefusalCode(t, env.serve([]string{"treasurer"}, http.MethodPost, "/bank-rows/"+staleRow+"/reconcile-vipps/confirm",
+		map[string]any{"lines": []accounting.VippsReconcileLine{
+			{Kind: "bank_in", AccountCode: "1925", Debit: 300},
+			{AccountCode: "3900", Credit: 300, VippsRowID: club.NewVippsRow(t, fin.VippsRowOpts{Cents: 30000})},
+		}}), vippsPreviewStaleCode)
+	if booked("bank_import_rows", staleRow) {
+		t.Errorf("a stale confirm booked the bank row")
 	}
 }
 
@@ -201,7 +214,7 @@ func TestUnassignLegacySettlementRoutes(t *testing.T) {
 	chargeB := club.NewVippsRow(t, fin.VippsRowOpts{Cents: 20000})
 	row := club.NewBankRow(t, imp, fin.BankRowOpts{Cents: 50000})
 	confirm := map[string]any{"lines": []accounting.VippsReconcileLine{
-		{AccountCode: "1920", Debit: 500},
+		{Kind: "bank_in", AccountCode: "1920", Debit: 500},
 		{AccountCode: "1500", Credit: 300, LinkedInvoiceID: invA.ID, VippsRowID: chargeA},
 		{AccountCode: "1500", Credit: 200, LinkedInvoiceID: invB.ID, VippsRowID: chargeB},
 	}}
@@ -213,7 +226,7 @@ func TestUnassignLegacySettlementRoutes(t *testing.T) {
 	row2 := club.NewBankRow(t, imp, fin.BankRowOpts{Cents: 30000})
 	wantRefusalCode(t, env.serve([]string{"treasurer"}, http.MethodPost, "/bank-rows/"+row2+"/reconcile-vipps/confirm",
 		map[string]any{"lines": []accounting.VippsReconcileLine{
-			{AccountCode: "1920", Debit: 300},
+			{Kind: "bank_in", AccountCode: "1920", Debit: 300},
 			{AccountCode: "1500", Credit: 300, VippsRowID: chargeA},
 		}}), vippsRowBookedCode)
 

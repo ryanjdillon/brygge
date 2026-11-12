@@ -456,6 +456,13 @@ func hasStrongPartner(ps []PartnerSuggestion) bool {
 
 // refreshMatchedCounts recomputes bank_imports.matched_count for the imports
 // whose rows the rule booked, so the import list counts them as matched.
+//
+// It skips an import another transaction holds (SKIP LOCKED) rather than
+// wait for it: the UPDATE takes FOR NO KEY UPDATE on every import it
+// touches, which conflicts with a booking's FOR SHARE, and holding one import
+// while waiting for another could deadlock with a booking that share-locks
+// two (a transfer pair, a group, BRY-674). The count is display metadata, so
+// a skipped import stays stale until the next refresh.
 func (s *Service) refreshMatchedCounts(ctx context.Context, clubID string, importIDs map[string]bool) {
 	if len(importIDs) == 0 {
 		return
@@ -468,7 +475,9 @@ func (s *Service) refreshMatchedCounts(ctx context.Context, clubID string, impor
 		`UPDATE bank_imports bi
 		    SET matched_count = (SELECT count(*) FROM bank_import_rows r
 		                          WHERE r.bank_import_id = bi.id AND r.journal_entry_id IS NOT NULL)
-		  WHERE bi.club_id = $1 AND bi.id = ANY($2::uuid[])`,
+		  WHERE bi.id IN (SELECT id FROM bank_imports
+		                   WHERE club_id = $1 AND id = ANY($2::uuid[])
+		                   FOR NO KEY UPDATE SKIP LOCKED)`,
 		clubID, ids,
 	); err != nil {
 		s.log.Warn().Err(err).Msg("bank auto-assign: refreshing matched counts failed")

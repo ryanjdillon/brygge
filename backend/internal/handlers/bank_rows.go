@@ -197,6 +197,13 @@ const (
 	// vippsRowBookedCode is the confirm's refusal of a settlement with a
 	// Vipps row that is already booked.
 	vippsRowBookedCode = "vipps_row_booked"
+	// vippsPreviewStaleCode refuses a legacy Vipps confirm whose preview
+	// predates a bank-account reassign of the deposit's import (BRY-674).
+	vippsPreviewStaleCode = "vipps_preview_stale"
+	// vippsConfirmBankLineCode refuses (400) a legacy Vipps confirm whose
+	// lines do not carry the deposit as exactly one bank_in debit, or post
+	// another line to a bank account (BRY-674).
+	vippsConfirmBankLineCode = "vipps_confirm_bank_line"
 )
 
 // invoiceNotAssignableConflict answers 409 invoice_credited, invoice_not_debt
@@ -215,6 +222,7 @@ func invoiceNotAssignableConflict(w http.ResponseWriter, err error) bool {
 		{accounting.ErrInvoiceVoided, invoiceVoidedCode},
 		{accounting.ErrSettlementInvoiceOverpaid, settlementOverpaidCode},
 		{accounting.ErrVippsRowAlreadyBooked, vippsRowBookedCode},
+		{accounting.ErrVippsPreviewStale, vippsPreviewStaleCode},
 	} {
 		if errors.Is(err, refusal.err) {
 			JSON(w, http.StatusConflict, map[string]string{"error": refusal.err.Error(), "code": refusal.code})

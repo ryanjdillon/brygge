@@ -807,9 +807,7 @@ func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID
 		`WITH this_import AS (
 		   SELECT bank_account_code, bank_account_number FROM bank_imports WHERE id = $1
 		 )
-		 SELECT
-		   r1.id, r1.row_date, r1.amount, ti.bank_account_code, ti.bank_account_number,
-		   r2.id, bi2.bank_account_code, bi2.bank_account_number, r1.description
+		 SELECT r1.id, r1.row_date, r1.amount, r2.id, r1.description
 		 FROM bank_import_rows r1
 		 CROSS JOIN this_import ti
 		 JOIN bank_import_rows r2 ON r2.club_id = r1.club_id
@@ -841,15 +839,17 @@ func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID
 	}
 	defer rows.Close()
 
+	// The bank accounts only select the candidates here; the booking reads
+	// them under the import lock (pairIntraBankTransfer, BRY-674).
 	type pair struct {
-		r1ID, r2ID, codeA, numA, codeB, numB, desc string
-		date                                       time.Time
-		amount                                     float64
+		r1ID, r2ID, desc string
+		date             time.Time
+		amount           float64
 	}
 	var pairs []pair
 	for rows.Next() {
 		var p pair
-		if err := rows.Scan(&p.r1ID, &p.date, &p.amount, &p.codeA, &p.numA, &p.r2ID, &p.codeB, &p.numB, &p.desc); err != nil {
+		if err := rows.Scan(&p.r1ID, &p.date, &p.amount, &p.r2ID, &p.desc); err != nil {
 			s.log.Warn().Err(err).Msg("transfer detect scan error")
 			continue
 		}
@@ -868,16 +868,14 @@ func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID
 		if ctx.Err() != nil {
 			break
 		}
-		debitCode, creditCode := p.codeB, p.codeA
-		if p.amount > 0 {
-			debitCode, creditCode = p.codeA, p.codeB
-		}
 		amount := p.amount
 		if amount < 0 {
 			amount = -amount
 		}
+		// The bank accounts read above only chose the candidates: the booking
+		// reads them again under the import lock (BRY-674).
 		err := s.pairIntraBankTransfer(ctx, clubID, createdBy, periodOverride, intraBankPair{
-			r1ID: p.r1ID, r2ID: p.r2ID, debitCode: debitCode, creditCode: creditCode,
+			r1ID: p.r1ID, r2ID: p.r2ID, r1Incoming: p.amount > 0,
 			desc: p.desc, date: p.date, amount: amount,
 		})
 		switch {
@@ -890,9 +888,10 @@ func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID
 			// the entry insert.
 			closedYearSet[p.date.Year()] = true
 			continue
-		case errors.Is(err, errTransferRowTaken):
+		case errors.Is(err, errTransferRowTaken), errors.Is(err, errTransferOneAccount):
 			// One side was booked, dismissed, refund-paired or declined
-			// concurrently: a transfer needs both rows, and nothing was kept.
+			// concurrently, or a reassign put both rows on one bank account: a
+			// transfer needs both rows on two accounts, and nothing was kept.
 			continue
 		default:
 			s.log.Warn().Err(err).Str("bank_row_id", p.r1ID).Msg("intra-bank transfer: pairing failed; rows stay unmatched")
@@ -915,10 +914,18 @@ func (s *Service) detectIntraBankTransfers(ctx context.Context, clubID, importID
 // dismissed, refund-paired or declined after the candidate query.
 var errTransferRowTaken = errors.New("transfer row was taken concurrently")
 
-// intraBankPair is one transfer the detector pairs: both rows, the GL codes
-// the draft debits and credits, and the amount (positive).
+// errTransferOneAccount means both rows of a detected pair are on one bank
+// account under the import lock: a reassign moved one import onto the
+// other's account after the candidate query.
+var errTransferOneAccount = errors.New("transfer rows are on one bank account")
+
+// intraBankPair is one transfer to book: both rows, the GL codes the entry
+// debits and credits, and the amount (positive). The detector sets
+// r1Incoming instead of the codes; pairIntraBankTransfer reads them under
+// the import lock.
 type intraBankPair struct {
 	r1ID, r2ID, debitCode, creditCode, desc string
+	r1Incoming                              bool
 	date                                    time.Time
 	amount                                  float64
 }
@@ -929,11 +936,15 @@ type intraBankPair struct {
 const transferRowEligibleSQL = `journal_entry_id IS NULL AND auto_declined_at IS NULL AND dismissed_at IS NULL AND refund_paired_with IS NULL`
 
 // pairIntraBankTransfer books one transfer pair as a draft bilag and links
-// both rows to it, in one transaction: the rows are locked in id order, the
+// both rows to it, in one transaction. The rows are locked in id order with
+// their imports FOR SHARE, and each row's bank account is read there, not
+// taken from the candidate query, so a bank-account reassign either swaps
+// the committed draft or is seen by it, never in between (BRY-674). The
 // period is read on that transaction (existing and open only, BRY-578), and
 // the draft and the guarded link of both rows commit together
 // (bookTransferPairTx, transferLinkAutomatic). A row taken meanwhile is
-// errTransferRowTaken and nothing is kept, so neither a lost race nor a
+// errTransferRowTaken, two rows a reassign put on one account
+// errTransferOneAccount, and nothing is kept, so neither a lost race nor a
 // cancelled context leaves an orphan draft behind.
 func (s *Service) pairIntraBankTransfer(ctx context.Context, clubID, createdBy, periodOverride string, p intraBankPair) error {
 	tx, err := s.db.Begin(ctx)
@@ -944,21 +955,36 @@ func (s *Service) pairIntraBankTransfer(ctx context.Context, clubID, createdBy, 
 
 	ids := []string{p.r1ID, p.r2ID}
 	sort.Strings(ids)
+	type lockedRow struct{ ID, Code string }
+	// The eligibility is transferRowEligibleSQL, qualified for the join.
 	locked, err := tx.Query(ctx,
-		`SELECT id::text FROM bank_import_rows
-		  WHERE id = ANY($1::uuid[]) AND club_id = $2 AND `+transferRowEligibleSQL+`
-		  ORDER BY id FOR UPDATE`,
+		`SELECT bir.id::text, bi.bank_account_code
+		   FROM bank_import_rows bir
+		   JOIN bank_imports bi ON bi.id = bir.bank_import_id
+		  WHERE bir.id = ANY($1::uuid[]) AND bir.club_id = $2
+		    AND bir.journal_entry_id IS NULL AND bir.auto_declined_at IS NULL
+		    AND bir.dismissed_at IS NULL AND bir.refund_paired_with IS NULL
+		  ORDER BY bir.id FOR UPDATE OF bir FOR SHARE OF bi`,
 		ids, clubID,
 	)
 	if err != nil {
 		return fmt.Errorf("locking transfer rows: %w", err)
 	}
-	eligible, err := pgx.CollectRows(locked, pgx.RowTo[string])
+	eligible, err := pgx.CollectRows(locked, pgx.RowToStructByPos[lockedRow])
 	if err != nil {
 		return fmt.Errorf("locking transfer rows: %w", err)
 	}
 	if len(eligible) != 2 {
 		return errTransferRowTaken
+	}
+	codes := map[string]string{eligible[0].ID: eligible[0].Code, eligible[1].ID: eligible[1].Code}
+	r1Code, r2Code := codes[p.r1ID], codes[p.r2ID]
+	if r1Code == r2Code {
+		return errTransferOneAccount
+	}
+	p.debitCode, p.creditCode = r2Code, r1Code
+	if p.r1Incoming {
+		p.debitCode, p.creditCode = r1Code, r2Code
 	}
 
 	periodID, err := openPeriodIn(ctx, tx, clubID, p.date, periodOverride)

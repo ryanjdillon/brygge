@@ -820,6 +820,9 @@ func (s *Service) syncVippsReconciliations(ctx context.Context, clubID, createdB
 		case errors.Is(cerr, ErrVippsPeriodClosed):
 			// Closed or locked after the preview.
 			closedYears[c.date.Year()] = true
+		case errors.Is(cerr, ErrVippsPreviewStale):
+			// The import was reassigned to another bank account after the
+			// preview (BRY-674): the next sync previews and books it again.
 		default:
 			s.log.Warn().Err(cerr).Str("bank_row_id", c.id).Msg("legacy Vipps reconcile failed; deposit stays unmatched")
 			res.unbalanced++

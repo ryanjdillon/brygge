@@ -2,6 +2,7 @@ package accounting
 
 import (
 	"context"
+	"errors"
 	"fmt"
 )
 
@@ -149,6 +150,16 @@ func (s *Service) ResyncVippsBilags(ctx context.Context, clubID, createdBy strin
 		// Supervised: it rebooks drafts it detached itself, never a row a
 		// person declined (a declined row is unbooked, so it is no candidate).
 		if _, err := s.reconcileVippsConfirm(ctx, clubID, c.bankRowID, "", createdBy, preview.Lines, false, personBooking); err != nil {
+			if errors.Is(err, ErrVippsPreviewStale) {
+				// The deposit's import was reassigned to another bank
+				// account between the preview above and the confirm
+				// (BRY-674). Its old draft is already deleted, so the row is
+				// left unbooked like any unmatched deposit: bank sync's
+				// legacy Vipps pass previews and books it on its next run
+				// (posted, not a draft), or a person confirms it.
+				res.Skipped++
+				continue
+			}
 			res.Failed = append(res.Failed, c.bankRowID)
 			continue
 		}

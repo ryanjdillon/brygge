@@ -53,9 +53,6 @@ func notReferenceEntrySQL(je string) string {
 	        AND NOT ` + referenceDateSQL(je+".club_id", je+".entry_date") + `)`
 }
 
-// ReferenceDateSQL is referenceDateSQL for the handlers' own queries.
-func ReferenceDateSQL(clubExpr, dateExpr string) string { return referenceDateSQL(clubExpr, dateExpr) }
-
 // NotReferenceEntrySQL is notReferenceEntrySQL for the handlers' own queries.
 func NotReferenceEntrySQL(je string) string { return notReferenceEntrySQL(je) }
 

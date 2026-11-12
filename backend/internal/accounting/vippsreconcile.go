@@ -361,6 +361,46 @@ var ErrSettlementInvoiceOverpaid = errors.New( //nolint:staticcheck // ST1005: a
 var ErrVippsRowAlreadyBooked = errors.New( //nolint:staticcheck // ST1005: a user-facing sentence, see above
 	"En Vipps-rad i oppgjøret er allerede bokført, så oppgjøret kan ikke bokføres. Last oppgjøret på nytt.")
 
+// ErrVippsPreviewStale means the import's bank account changed (a reassign)
+// after the preview the confirm carries: its bank_in line names another
+// account than the one read under the import lock. Nothing is booked; the
+// handlers answer 409 vipps_preview_stale, and bank sync leaves the deposit
+// for its next run. Shown as is, so a full Norwegian sentence.
+var ErrVippsPreviewStale = errors.New( //nolint:staticcheck // ST1005: a user-facing sentence, see above
+	"Bankkontoen til importen er endret etter forhåndsvisningen. Last forhåndsvisningen på nytt og prøv igjen.")
+
+// ErrVippsConfirmBankLine means a confirm's lines do not carry the deposit as
+// exactly one bank_in debit, or post another line to a bank account. Nothing
+// is booked; the handler answers 400 vipps_confirm_bank_line. Shown as is, so
+// a full Norwegian sentence.
+var ErrVippsConfirmBankLine = errors.New( //nolint:staticcheck // ST1005: a user-facing sentence, see above
+	"Oppgjøret må ha nøyaktig én banklinje (debet), og ingen andre linjer kan føres på en bankkonto. Last forhåndsvisningen på nytt.")
+
+// checkVippsConfirmBankLine refuses lines that do not book the deposit as
+// exactly one bank_in debit, or that post any other line to a bank account
+// (isBank), and returns the bank_in line's account.
+func checkVippsConfirmBankLine(lines []VippsReconcileLine, isBank func(code string) bool) (string, error) {
+	var code string
+	n := 0
+	for _, l := range lines {
+		if l.Kind == "bank_in" {
+			n++
+			code = l.AccountCode
+			if l.Debit <= 0 || l.Credit != 0 {
+				return "", ErrVippsConfirmBankLine
+			}
+			continue
+		}
+		if isBank(l.AccountCode) {
+			return "", ErrVippsConfirmBankLine
+		}
+	}
+	if n != 1 {
+		return "", ErrVippsConfirmBankLine
+	}
+	return code, nil
+}
+
 // ReconcileVippsConfirm books a (possibly edited) preview as a posted journal
 // entry (BRY-339). The caller is responsible for passing the final line set.
 // If periodOverride is empty, the period is auto-resolved from the bank row's
@@ -435,6 +475,17 @@ func (s *Service) reconcileVippsConfirm(ctx context.Context, clubID, bankRowID, 
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// A bank account is the cash range or any account the club books bank
+	// movements to (its imports' and configured bank accounts), read on tx.
+	banks, err := bankAccountCodesIn(ctx, tx, clubID)
+	if err != nil {
+		return "", err
+	}
+	previewBank, err := checkVippsConfirmBankLine(lines, func(code string) bool { return inCashRange(code) || banks[code] })
+	if err != nil {
+		return "", err
+	}
+
 	var (
 		bankDate    time.Time
 		description string
@@ -488,14 +539,30 @@ func (s *Service) reconcileVippsConfirm(ctx context.Context, clubID, bankRowID, 
 		}
 	}
 	// Then the bank row, before the period and the bilag number (the booking
-	// lock order), re-checked under the lock.
-	var lockedBooked, lockedDeclined bool
+	// lock order), re-checked under the lock, with its import FOR SHARE: the
+	// bank_in line must name the account read there, so a bank-account
+	// reassign (which locks the import FOR NO KEY UPDATE) either swaps this committed
+	// entry or commits first and refuses a preview made before it
+	// (ErrVippsPreviewStale, BRY-674).
+	var (
+		lockedBooked, lockedDeclined bool
+		lockedCode                   string
+	)
 	if err := tx.QueryRow(ctx,
-		`SELECT journal_entry_id IS NOT NULL, auto_declined_at IS NOT NULL
-		   FROM bank_import_rows WHERE id = $1 AND club_id = $2 FOR UPDATE`,
+		`SELECT bir.journal_entry_id IS NOT NULL, bir.auto_declined_at IS NOT NULL, bi.bank_account_code
+		   FROM bank_import_rows bir
+		   JOIN bank_imports bi ON bi.id = bir.bank_import_id
+		  WHERE bir.id = $1 AND bir.club_id = $2
+		    FOR UPDATE OF bir FOR SHARE OF bi`,
 		bankRowID, clubID,
-	).Scan(&lockedBooked, &lockedDeclined); err != nil {
+	).Scan(&lockedBooked, &lockedDeclined, &lockedCode); err != nil {
 		return "", fmt.Errorf("locking bank row: %w", err)
+	}
+	if lockedCode == "" {
+		lockedCode = bankAccountCode
+	}
+	if previewBank != lockedCode {
+		return "", ErrVippsPreviewStale
 	}
 	if lockedBooked {
 		return "", fmt.Errorf("bank row already linked to journal entry")

@@ -114,7 +114,9 @@ func (s *Service) findCascadeInvoiceErr(ctx context.Context, clubID string, row 
 // kidCascadeMatch is one bank row the cascade matched to a faktura.
 type kidCascadeMatch struct {
 	rowID, invoiceID string
-	// actorID posts the entry; bankAccount is the GL code debited.
+	// actorID posts the entry. bankAccount is the GL code the candidate was
+	// read with; the booking debits the code it reads under the import lock
+	// (BRY-674), and bankAccount is only the fallback for an empty one.
 	actorID, bankAccount string
 	// kid and desc make the entry's description (kidMatchDescription).
 	kid, desc      string
@@ -175,12 +177,20 @@ func (s *Service) bookKIDCascadeMatch(ctx context.Context, clubID string, m kidC
 	// lock, so it sees what the lock holder committed. The row is locked
 	// here, before the entry is created: a booking that locks the row first
 	// and then numbers its entry (transfer pairing, Par som overføring)
-	// would otherwise deadlock with this one on the bilag number.
-	var eligible bool
+	// would otherwise deadlock with this one on the bilag number. The
+	// import is share-locked with it and the bank account debited is read
+	// there, not taken from the candidate: a bank-account reassign (which
+	// locks the import FOR NO KEY UPDATE) then either swaps this committed entry or
+	// commits first and is read here (BRY-674).
+	var bankAccount string
 	err = tx.QueryRow(ctx,
-		`SELECT true FROM bank_import_rows WHERE id = $1 AND club_id = $2 AND `+kidCascadeEligibleSQL("")+` FOR UPDATE`,
+		`SELECT bi.bank_account_code
+		   FROM bank_import_rows bir
+		   JOIN bank_imports bi ON bi.id = bir.bank_import_id
+		  WHERE bir.id = $1 AND bir.club_id = $2 AND `+kidCascadeEligibleSQL("bir")+`
+		    FOR UPDATE OF bir FOR SHARE OF bi`,
 		m.rowID, clubID,
-	).Scan(&eligible)
+	).Scan(&bankAccount)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return errKIDRowTaken
 	}
@@ -189,6 +199,9 @@ func (s *Service) bookKIDCascadeMatch(ctx context.Context, clubID string, m kidC
 	}
 	if lockErr != nil {
 		return lockErr
+	}
+	if bankAccount == "" {
+		bankAccount = m.bankAccount
 	}
 
 	// The cascade is automatic whoever started the import or sync, so it
@@ -216,7 +229,7 @@ func (s *Service) bookKIDCascadeMatch(ctx context.Context, clubID string, m kidC
 		CreatedBy:      m.actorID,
 		ClubID:         clubID,
 		Lines: []CreateJournalLineInput{
-			{AccountCode: m.bankAccount, Debit: m.amount, Credit: 0},
+			{AccountCode: bankAccount, Debit: m.amount, Credit: 0},
 			{AccountCode: receivablesAccountCode, Debit: 0, Credit: m.amount},
 		},
 	})

@@ -1443,14 +1443,30 @@ func (h *AccountingHandler) importBankStatement(w http.ResponseWriter, r *http.R
 func (h *AccountingHandler) recountBankImport(ctx context.Context, clubID, bankAccountCode, importID string, imported int, overwrite bool) {
 	if overwrite {
 		// The delete also cleared ghost rows from the account's older imports,
-		// so recompute the whole account, not just this import.
+		// so recompute the whole account, not just this import. An import a
+		// booking holds (FOR SHARE) is skipped, not waited for: holding the
+		// others meanwhile could deadlock with a booking that share-locks two
+		// imports (BRY-674). The counts are display metadata; a skipped one
+		// is refreshed by the next recount.
 		if _, err := h.svc.DB().Exec(ctx,
 			`UPDATE bank_imports SET
 			    row_count = (SELECT count(*) FROM bank_import_rows WHERE bank_import_id = bank_imports.id),
 			    matched_count = (SELECT count(*) FROM bank_import_rows WHERE bank_import_id = bank_imports.id AND journal_entry_id IS NOT NULL)
-			  WHERE club_id = $1 AND bank_account_code = $2`,
+			  WHERE id IN (SELECT id FROM bank_imports
+			                WHERE club_id = $1 AND bank_account_code = $2
+			                FOR NO KEY UPDATE SKIP LOCKED)`,
 			clubID, bankAccountCode); err != nil {
 			h.log.Error().Err(err).Str("bank_account_code", bankAccountCode).Msg("failed to recount bank imports after re-import")
+		}
+		// This import's own counts are always written: one row, so waiting
+		// for a booking that holds it holds nothing else.
+		if _, err := h.svc.DB().Exec(ctx,
+			`UPDATE bank_imports SET
+			    row_count = (SELECT count(*) FROM bank_import_rows WHERE bank_import_id = $1),
+			    matched_count = (SELECT count(*) FROM bank_import_rows WHERE bank_import_id = $1 AND journal_entry_id IS NOT NULL)
+			  WHERE id = $1`,
+			importID); err != nil {
+			h.log.Error().Err(err).Str("import_id", importID).Msg("failed to recount bank import after re-import")
 		}
 		return
 	}
@@ -1886,8 +1902,9 @@ const reassignCollidesTransferCode = "reassign_collides_transfer"
 // Refuses only when the cascade would touch a journal entry whose
 // fiscal period is closed or locked, or that has been voided — those
 // are immutable accounting state — or one in (or dated in) a reference
-// year, whose bookings only the central guard may add (BRY-418). See
-// DIL-343.
+// year, whose bookings only the central guard may add (BRY-418), or when
+// a linked transfer already uses the target (BRY-672). See DIL-343. The
+// work is accounting.ReassignBankImport; this maps its errors.
 func (h *AccountingHandler) HandleReassignBankImport(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -1906,147 +1923,36 @@ func (h *AccountingHandler) HandleReassignBankImport(w http.ResponseWriter, r *h
 		return
 	}
 
-	tx, err := h.svc.DB().BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		h.log.Error().Err(err).Msg("begin tx")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-	defer tx.Rollback(ctx)
-
-	// The import is locked first and every check and the swap run on this
-	// transaction. A booking that links one of the import's rows reads the
-	// import FOR SHARE, so it books either before the swap (and is swapped
-	// with the rest) or after it, on the new account, never in between.
-	var oldCode string
-	if err := tx.QueryRow(ctx,
-		`SELECT bank_account_code FROM bank_imports WHERE id = $1 AND club_id = $2 FOR UPDATE`,
-		importID, claims.ClubID,
-	).Scan(&oldCode); err != nil {
+	// The lock, the checks and the swap are one transaction in the service
+	// (BRY-674), the same one the booking race tests drive.
+	res, err := h.svc.ReassignBankImport(ctx, claims.ClubID, importID, req.BankAccountCode)
+	switch {
+	case errors.Is(err, accounting.ErrBankImportNotFound):
 		Error(w, http.StatusNotFound, "bank import not found")
 		return
-	}
-	if oldCode == req.BankAccountCode {
-		JSON(w, http.StatusOK, map[string]any{"status": "unchanged"})
+	case errors.Is(err, accounting.ErrReassignOldAccountMissing):
+		Error(w, http.StatusInternalServerError, err.Error())
 		return
-	}
-
-	// Resolve both account ids (old + new) for this club.
-	var oldAccountID, newAccountID string
-	if err := tx.QueryRow(ctx,
-		`SELECT id FROM accounts WHERE club_id = $1 AND code = $2`,
-		claims.ClubID, oldCode,
-	).Scan(&oldAccountID); err != nil {
-		Error(w, http.StatusInternalServerError, "old account not found in chart of accounts")
+	case errors.Is(err, accounting.ErrReassignTargetAccountMissing):
+		Error(w, http.StatusBadRequest, err.Error())
 		return
-	}
-	if err := tx.QueryRow(ctx,
-		`SELECT id FROM accounts WHERE club_id = $1 AND code = $2`,
-		claims.ClubID, req.BankAccountCode,
-	).Scan(&newAccountID); err != nil {
-		Error(w, http.StatusBadRequest, "target account not found in chart of accounts")
+	case errors.Is(err, accounting.ErrReassignBlocked):
+		Error(w, http.StatusConflict, err.Error())
 		return
-	}
-
-	// Refuse if any affected journal entry is in a closed/locked period,
-	// is in or dated in a reference year, or has been voided — those are
-	// accounting facts we can't rewrite. The cascade updates posted lines
-	// directly, so it never reaches the journal guard.
-	var blockedPeriods []string
-	rows, err := tx.Query(ctx,
-		`SELECT DISTINCT fp.year::text
-		   FROM bank_import_rows bir
-		   JOIN journal_entries je ON je.id = bir.journal_entry_id
-		   JOIN fiscal_periods fp ON fp.id = je.fiscal_period_id
-		  WHERE bir.bank_import_id = $1
-		    AND (fp.status IN ('closed','locked') OR fp.reference_only
-		         OR je.status = 'voided' OR `+accounting.ReferenceDateSQL("je.club_id", "je.entry_date")+`)`,
-		importID,
-	)
-	if err != nil {
-		h.log.Error().Err(err).Msg("scan closed periods")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-	for rows.Next() {
-		var label string
-		if err := rows.Scan(&label); err == nil {
-			blockedPeriods = append(blockedPeriods, label)
-		}
-	}
-	rows.Close()
-	if len(blockedPeriods) > 0 {
-		Error(w, http.StatusConflict,
-			"cannot reassign: some matched rows live in closed/locked, reference-year or voided journals ("+strings.Join(blockedPeriods, ", ")+") — reopen them first or void the entries manually")
-		return
-	}
-
-	// Refuse when an affected entry already has a line on the target
-	// account as well as the old one: a transfer between the club's own
-	// accounts (paired automatically or by Par som overføring, BRY-672)
-	// from this import's account to the target would become DR target /
-	// CR target, which books nothing.
-	var collides bool
-	if err := tx.QueryRow(ctx,
-		`SELECT EXISTS (
-		   SELECT 1 FROM journal_lines jl_new
-		     JOIN journal_lines jl_old ON jl_old.journal_entry_id = jl_new.journal_entry_id AND jl_old.account_id = $2
-		    WHERE jl_new.account_id = $1
-		      AND jl_new.journal_entry_id IN (
-		        SELECT bir.journal_entry_id FROM bank_import_rows bir
-		         WHERE bir.bank_import_id = $3 AND bir.journal_entry_id IS NOT NULL))`,
-		newAccountID, oldAccountID, importID,
-	).Scan(&collides); err != nil {
-		h.log.Error().Err(err).Msg("scan reassign collisions")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-	if collides {
+	case errors.Is(err, accounting.ErrReassignCollidesTransfer):
 		JSON(w, http.StatusConflict, map[string]string{
 			"error": "cannot reassign: a linked bilag already has a line on the target account " + req.BankAccountCode +
 				"; undo that bilag in Tildel first",
 			"code": reassignCollidesTransferCode,
 		})
 		return
-	}
-
-	// Cascade: rewrite the bank-side line of every affected journal
-	// entry from the old account to the new account. A single-row booking
-	// has one such line; a transfer's entry has one line per bank account,
-	// and only this import's is swapped (the collision check above keeps
-	// the two apart), so this is a straight account_id swap, not a
-	// re-balance.
-	cascadeTag, err := tx.Exec(ctx,
-		`UPDATE journal_lines
-		    SET account_id = $1
-		  WHERE account_id = $2
-		    AND journal_entry_id IN (
-		      SELECT bir.journal_entry_id
-		        FROM bank_import_rows bir
-		       WHERE bir.bank_import_id = $3
-		         AND bir.journal_entry_id IS NOT NULL
-		    )`,
-		newAccountID, oldAccountID, importID,
-	)
-	if err != nil {
-		h.log.Error().Err(err).Msg("cascade journal lines")
+	case err != nil:
+		h.log.Error().Err(err).Str("import_id", importID).Msg("reassign bank import")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	cascaded := cascadeTag.RowsAffected()
-
-	if _, err := tx.Exec(ctx,
-		`UPDATE bank_imports SET bank_account_code = $1 WHERE id = $2 AND club_id = $3`,
-		req.BankAccountCode, importID, claims.ClubID,
-	); err != nil {
-		h.log.Error().Err(err).Msg("reassign bank import")
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		h.log.Error().Err(err).Msg("commit reassign")
-		Error(w, http.StatusInternalServerError, "internal error")
+	if res.Unchanged {
+		JSON(w, http.StatusOK, map[string]any{"status": "unchanged"})
 		return
 	}
 
@@ -2054,16 +1960,16 @@ func (h *AccountingHandler) HandleReassignBankImport(w http.ResponseWriter, r *h
 		h.audit.LogAction(ctx, claims.ClubID, claims.UserID, r.RemoteAddr,
 			"accounting.bank_import_reassigned", "bank_import", importID,
 			map[string]any{
-				"from":              oldCode,
-				"to":                req.BankAccountCode,
-				"cascaded_journals": cascaded,
+				"from":              res.From,
+				"to":                res.To,
+				"cascaded_journals": res.CascadedJournals,
 			})
 	}
 	JSON(w, http.StatusOK, map[string]any{
 		"status":            "reassigned",
-		"from":              oldCode,
-		"to":                req.BankAccountCode,
-		"cascaded_journals": cascaded,
+		"from":              res.From,
+		"to":                res.To,
+		"cascaded_journals": res.CascadedJournals,
 	})
 }
 
@@ -2856,6 +2762,10 @@ func (h *AccountingHandler) HandleVippsReconcileConfirm(w http.ResponseWriter, r
 	}
 	if errors.Is(err, accounting.ErrImportedNoOpeningBalance) {
 		importedNoOpeningBalanceConflict(w)
+		return
+	}
+	if errors.Is(err, accounting.ErrVippsConfirmBankLine) {
+		JSON(w, http.StatusBadRequest, map[string]string{"error": err.Error(), "code": vippsConfirmBankLineCode})
 		return
 	}
 	if err != nil {

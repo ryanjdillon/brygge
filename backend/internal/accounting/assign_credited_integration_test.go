@@ -330,7 +330,7 @@ func TestReconcileVippsConfirmRefusesCreditedFaktura(t *testing.T) {
 
 	charge := c.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000, CustomerName: "Synthetic Payer"})
 	lines := []VippsReconcileLine{
-		{AccountCode: "1920", Debit: 450},
+		{Kind: "bank_in", AccountCode: "1920", Debit: 450},
 		{AccountCode: receivablesAccountCode, Credit: 450, LinkedInvoiceID: f.linked.ID, VippsRowID: charge},
 	}
 	if _, err := f.svc.ReconcileVippsConfirm(ctx, c.ID, row, "", c.Treasurer.ID, lines); !errors.Is(err, ErrInvoiceCredited) {

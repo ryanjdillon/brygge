@@ -432,7 +432,7 @@ func TestUnassignLegacySettlementLeavesSameDayBookingAlone(t *testing.T) {
 	charge := c.NewVippsRow(t, fin.VippsRowOpts{Cents: 45000, CustomerName: "Synthetic Payer"})
 	settlementRow := c.NewBankRow(t, imp, fin.BankRowOpts{Cents: 45000, Date: day})
 	if _, err := f.svc.ReconcileVippsConfirm(ctx, c.ID, settlementRow, "", c.Treasurer.ID, []VippsReconcileLine{
-		{AccountCode: "1920", Debit: 450},
+		{Kind: "bank_in", AccountCode: "1920", Debit: 450},
 		{AccountCode: receivablesAccountCode, Credit: 450, VippsRowID: charge},
 	}); err != nil {
 		t.Fatalf("confirm: %v", err)
@@ -472,7 +472,7 @@ func TestReconcileVippsConfirmRefusesRowAlreadyBooked(t *testing.T) {
 
 	bankRow := c.NewBankRow(t, imp, fin.BankRowOpts{Cents: 45000})
 	_, err := f.svc.ReconcileVippsConfirm(ctx, c.ID, bankRow, "", c.Treasurer.ID, []VippsReconcileLine{
-		{AccountCode: "1920", Debit: 450},
+		{Kind: "bank_in", AccountCode: "1920", Debit: 450},
 		{AccountCode: receivablesAccountCode, Credit: 450, VippsRowID: charge},
 	})
 	if !errors.Is(err, ErrVippsRowAlreadyBooked) {
@@ -522,16 +522,16 @@ func TestReconcileVippsConfirmRefusesOverpaidFaktura(t *testing.T) {
 		want  error
 	}{
 		{"one faktura on two lines", []VippsReconcileLine{
-			{AccountCode: "1920", Debit: 900},
+			{Kind: "bank_in", AccountCode: "1920", Debit: 900},
 			{AccountCode: receivablesAccountCode, Credit: 450, LinkedInvoiceID: inv.ID, VippsRowID: chargeOne},
 			{AccountCode: receivablesAccountCode, Credit: 450, LinkedInvoiceID: inv.ID, VippsRowID: chargeTwo},
 		}, ErrSettlementInvoiceOverpaid},
 		{"credit above the total", []VippsReconcileLine{
-			{AccountCode: "1920", Debit: 452},
+			{Kind: "bank_in", AccountCode: "1920", Debit: 452},
 			{AccountCode: receivablesAccountCode, Credit: 452, LinkedInvoiceID: inv.ID, VippsRowID: chargeOne},
 		}, ErrSettlementInvoiceOverpaid},
 		{"link without a charge", []VippsReconcileLine{
-			{AccountCode: "1920", Debit: 450},
+			{Kind: "bank_in", AccountCode: "1920", Debit: 450},
 			{AccountCode: receivablesAccountCode, Credit: 450, LinkedInvoiceID: inv.ID},
 		}, nil},
 	}
@@ -552,7 +552,7 @@ func TestReconcileVippsConfirmRefusesOverpaidFaktura(t *testing.T) {
 	// Within the tolerance a charge a krone over still books.
 	row := c.NewBankRow(t, imp, fin.BankRowOpts{Cents: 45050})
 	if _, err := f.svc.ReconcileVippsConfirm(ctx, c.ID, row, "", c.Treasurer.ID, []VippsReconcileLine{
-		{AccountCode: "1920", Debit: 450.5},
+		{Kind: "bank_in", AccountCode: "1920", Debit: 450.5},
 		{AccountCode: receivablesAccountCode, Credit: 450.5, LinkedInvoiceID: inv.ID, VippsRowID: chargeOne},
 	}); err != nil {
 		t.Errorf("charge within the tolerance: %v", err)

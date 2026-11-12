@@ -724,45 +724,14 @@ func canonicalBankRowIDs(rowIDs []string, minRows int) ([]string, error) {
 	return out, nil
 }
 
-// linkAndPostBankRows links a manual booking's draft to its bank rows and
-// then posts it (the group booking). The link is guarded on each row still
-// being unbooked and not dismissed, so of two concurrent bookings exactly one
-// links; the loser's draft is discarded. Posting comes after the link so a
-// posted entry never exists without its rows; a failed post unlinks them and
-// deletes the draft. A person's decline is lifted only after the post
-// succeeded. All rows link or none do.
-func (s *Service) linkAndPostBankRows(ctx context.Context, clubID, actorID, entryID string, bankRowIDs []string, invoiceID *string) error {
-	// A person's booking (account assigns, group booking): no decline guard.
-	if err := s.linkBankRows(ctx, clubID, entryID, bankRowIDs, invoiceID, false); err != nil {
-		s.discardDraft(ctx, clubID, entryID)
-		return err
-	}
-	if err := s.PostJournalEntry(ctx, clubID, entryID, actorID); err != nil {
-		if _, uerr := s.db.Exec(ctx,
-			`UPDATE bank_import_rows
-			    SET journal_entry_id = NULL, auto_matched = false,
-			        invoice_id = CASE WHEN $3::uuid IS NULL THEN invoice_id ELSE NULL END
-			  WHERE club_id = $1 AND journal_entry_id = $2`,
-			clubID, entryID, invoiceID,
-		); uerr != nil {
-			s.log.Error().Err(uerr).Str("entry_id", entryID).Msg("unlinking bank row after a failed post failed")
-		}
-		s.discardDraft(ctx, clubID, entryID)
-		return fmt.Errorf("post journal: %w", err)
-	}
-	// Booked and posted: lift the decline. Logged on failure; the booking
-	// stands and no automatic pass reaches a booked row.
-	if err := liftBankRowsDeclineIn(ctx, s.db, clubID, entryID); err != nil {
-		s.log.Warn().Err(err).Str("entry_id", entryID).Msg("bank rows booked; lifting their decline failed")
-	}
-	return nil
-}
-
-// linkAndPostBankRowsTx is linkAndPostBankRows inside the caller's
-// transaction, for a booking that holds the faktura lock: a failed link or
-// post rolls back with the entry, so there is nothing to unlink or discard.
-// auto (bank auto-assign) refuses a row a person declined (errAutoDeclined);
-// otherwise the decline is lifted once the entry is posted.
+// linkAndPostBankRowsTx links a booking's entry to its bank rows and posts
+// it, inside the caller's transaction (which holds the rows' locks): a
+// failed link or post rolls back with the entry, so there is nothing to
+// unlink or discard. The link is guarded on each row still being unbooked
+// and not dismissed, so of two concurrent bookings exactly one links, and
+// all rows link or none do. auto (bank auto-assign) refuses a row a person
+// declined (errAutoDeclined); otherwise the decline is lifted once the entry
+// is posted.
 func linkAndPostBankRowsTx(ctx context.Context, tx pgx.Tx, clubID, actorID, entryID string, bankRowIDs []string, invoiceID *string, auto bool) error {
 	if err := linkBankRowsTx(ctx, tx, clubID, entryID, bankRowIDs, invoiceID, auto); err != nil {
 		return err
@@ -780,8 +749,12 @@ func linkAndPostBankRowsTx(ctx context.Context, tx pgx.Tx, clubID, actorID, entr
 // declined one).
 //
 // Every booking that links bank rows takes its locks in one order: the
-// faktura (lockInvoiceForAssign) if it settles one, then the bank rows, then
-// the period (resolve or create) and the bilag number (createJournalEntryTx).
+// import FOR SHARE (where the bank account it posts on is read, BRY-674),
+// the faktura (lockInvoiceForAssign) if it settles one, then the bank rows,
+// then the period (resolve or create) and the bilag number
+// (createJournalEntryTx). Paths that lock a row and its import in one
+// statement take the share lock with the row; see invariants.md "Bookings
+// that link bank rows lock in one order" for why that cannot deadlock.
 // The bilag number is held by its unique index until the transaction ends,
 // so a booking that numbered its entry before it locked its rows deadlocks
 // with one that locked the rows first and then waits for a number (BRY-672).
@@ -844,30 +817,19 @@ func lockInvoiceThenRowsTx(
 	return cents, nil
 }
 
-// linkBankRows points every row at the entry in one transaction, guarded on
-// each row still being unbooked and not dismissed.
-func (s *Service) linkBankRows(ctx context.Context, clubID, entryID string, bankRowIDs []string, invoiceID *string, auto bool) error {
-	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return fmt.Errorf("begin tx: %w", err)
-	}
-	defer tx.Rollback(ctx)
-	if err := linkBankRowsTx(ctx, tx, clubID, entryID, bankRowIDs, invoiceID, auto); err != nil {
-		return err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit row link: %w", err)
-	}
-	return nil
-}
-
-// linkBankRowsTx is linkBankRows inside the caller's transaction, which then
-// holds the rows until it ends. auto adds the decline guard: a row a person
-// declined is not linked, and the loss is errAutoDeclined. The link never
-// touches auto_declined_at; the caller lifts it after a successful post.
+// linkBankRowsTx points every row at the entry inside the caller's
+// transaction, which then holds the rows until it ends, guarded on each row
+// still being unbooked and not dismissed. auto adds the decline guard: a row
+// a person declined is not linked, and the loss is errAutoDeclined. The link
+// never touches auto_declined_at; the caller lifts it after a successful
+// post.
 func linkBankRowsTx(ctx context.Context, tx pgx.Tx, clubID, entryID string, bankRowIDs []string, invoiceID *string, auto bool) error {
-	// Lock in id order first, so two overlapping group bookings queue
-	// instead of deadlocking on each other's rows.
+	// Lock in id order first, so two overlapping bookings queue instead of
+	// deadlocking on each other's rows. Every current caller has already
+	// locked the rows (lockBookableBankRowsTx, lockTransferRowsTx), so this
+	// re-takes locks it holds and costs nothing; it stays as the guard for a
+	// caller that does not, since the guarded UPDATE alone would lock in
+	// arbitrary order.
 	if _, err := tx.Exec(ctx,
 		`SELECT id FROM bank_import_rows WHERE id = ANY($1::uuid[]) AND club_id = $2 ORDER BY id FOR UPDATE`,
 		bankRowIDs, clubID,

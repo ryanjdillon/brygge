@@ -597,13 +597,27 @@ func (s *Service) clearVippsPayout(ctx context.Context, clubID, bankRowID, creat
 	}
 	// A clear that held the lock first may have booked the deposit and the
 	// payout row since they were read above. The deposit is locked here,
-	// before the period and the bilag number (the booking lock order).
-	var winner *string
+	// before the period and the bilag number (the booking lock order), with
+	// its import FOR SHARE, and the bank account debited is read again
+	// there: a bank-account reassign (which locks the import FOR NO KEY UPDATE)
+	// either swaps this committed entry or commits first and is read here,
+	// never in between (BRY-674).
+	var (
+		winner     *string
+		lockedCode string
+	)
 	if err := tx.QueryRow(ctx,
-		`SELECT journal_entry_id::text FROM bank_import_rows WHERE id = $1 AND club_id = $2 FOR UPDATE`,
+		`SELECT bir.journal_entry_id::text, bi.bank_account_code
+		   FROM bank_import_rows bir
+		   JOIN bank_imports bi ON bi.id = bir.bank_import_id
+		  WHERE bir.id = $1 AND bir.club_id = $2
+		    FOR UPDATE OF bir FOR SHARE OF bi`,
 		bankRowID, clubID,
-	).Scan(&winner); err != nil {
+	).Scan(&winner, &lockedCode); err != nil {
 		return nil, fmt.Errorf("re-reading bank row: %w", err)
+	}
+	if lockedCode != "" {
+		bankAccount = lockedCode
 	}
 	if winner != nil {
 		_ = tx.Rollback(ctx)
