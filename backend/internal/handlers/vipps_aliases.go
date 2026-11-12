@@ -107,6 +107,16 @@ func (h *AccountingHandler) HandleDeleteCustomerAlias(w http.ResponseWriter, r *
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// MountMessageRuleRoutes mounts the Vipps queue's message rules. The writes
+// take writeGate (treasurer/admin role and a fresh TOTP in production): a
+// rule picks the revenue account the Vipps payout confirm books a charge
+// to, so it moves money like the aliases and the assigns (BRY-676).
+func (h *AccountingHandler) MountMessageRuleRoutes(r chi.Router, writeGate ...func(http.Handler) http.Handler) {
+	r.Get("/", h.HandleListMessageRules)
+	r.With(writeGate...).Post("/", h.HandleUpsertMessageRule)
+	r.With(writeGate...).Delete("/{ruleID}", h.HandleDeleteMessageRule)
+}
+
 // HandleListMessageRules GET /admin/vipps/message-rules
 func (h *AccountingHandler) HandleListMessageRules(w http.ResponseWriter, r *http.Request) {
 	claims := middleware.GetClaims(r.Context())
@@ -143,10 +153,30 @@ func (h *AccountingHandler) HandleUpsertMessageRule(w http.ResponseWriter, r *ht
 		return
 	}
 	rule, err := h.svc.UpsertMessageRule(r.Context(), claims.ClubID, req.Pattern, req.AccountCode, req.Priority)
+	// The Vipps queue shows these messages in its rule form, in Norwegian
+	// like the rest of the view.
+	if errors.Is(err, accounting.ErrMessageRulePattern) {
+		Error(w, http.StatusBadRequest, "Mønsteret må ha minst 3 teikn og kan ikkje innehalde %, _ eller \\.")
+		return
+	}
+	if errors.Is(err, accounting.ErrMessageRuleAccount) {
+		Error(w, http.StatusBadRequest, "Kontokoden er ikkje ein aktiv konto i klubben.")
+		return
+	}
 	if err != nil {
 		h.log.Error().Err(err).Msg("upsert message rule")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
+	}
+	// The pattern is staff-typed message text that may hold a name, so the
+	// audit row carries the account and priority only.
+	if h.audit != nil {
+		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
+			audit.ActionVippsMessageRuleSaved, "vipps_message_rule", rule.ID,
+			map[string]any{
+				"account_code": rule.AccountCode,
+				"priority":     rule.Priority,
+			})
 	}
 	JSON(w, http.StatusOK, rule)
 }
@@ -159,10 +189,19 @@ func (h *AccountingHandler) HandleDeleteMessageRule(w http.ResponseWriter, r *ht
 		return
 	}
 	id := chi.URLParam(r, "ruleID")
-	if err := h.svc.DeleteMessageRule(r.Context(), claims.ClubID, id); err != nil {
+	removed, err := h.svc.DeleteMessageRule(r.Context(), claims.ClubID, id)
+	if err != nil {
 		h.log.Error().Err(err).Msg("delete message rule")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
+	}
+	if removed != nil && h.audit != nil {
+		h.audit.LogAction(r.Context(), claims.ClubID, claims.UserID, r.RemoteAddr,
+			audit.ActionVippsMessageRuleRemoved, "vipps_message_rule", id,
+			map[string]any{
+				"account_code": removed.AccountCode,
+				"priority":     removed.Priority,
+			})
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

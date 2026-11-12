@@ -158,6 +158,11 @@ const (
 	ActionPayerAliasTaught  = "payer_alias.taught"
 	ActionPayerAliasRemoved = "payer_alias.removed"
 
+	// Vipps-queue message rules: a rule picks the revenue account the
+	// Vipps payout confirm books a charge to (BRY-676)
+	ActionVippsMessageRuleSaved   = "vipps_message_rule.saved"
+	ActionVippsMessageRuleRemoved = "vipps_message_rule.removed"
+
 	// Developer / DB inspection (DIL-365, BRY-115)
 	ActionDeveloperQuery        = "developer.db_query"
 	ActionDeveloperTokenCreated = "developer.token_created"

@@ -25,9 +25,9 @@ export function canViewAdmin(roles: readonly string[]): boolean {
  * cmd/api/routes.go; keep the two in step.
  */
 export const WRITE_ROLES = {
-  /** Faktura, Tildel, imports, syncs, pricing, economy and bank settings, Vipps aliases. */
+  /** Faktura, Tildel, imports, syncs, pricing, economy and bank settings, Vipps aliases and message rules. */
   money: ['treasurer', 'admin'],
-  /** Accounting group writes outside moneyGate: accounts, periods, Vipps message rules. */
+  /** Accounting group writes outside moneyGate: accounts, periods. */
   ledger: ['treasurer', 'board', 'admin'],
   /** Member records under /admin/users. */
   members: ['board', 'admin'],

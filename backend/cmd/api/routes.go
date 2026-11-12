@@ -1222,10 +1222,11 @@ func newRouter(d routeDeps) *chi.Mux {
 								middleware.RequireRole("treasurer", "admin"),
 								middleware.RequireFreshTOTPDefault())
 						})
+						// BRY-676: a message rule picks the revenue account
+						// the payout confirm books a charge to, so writing or
+						// removing one takes the money gate too.
 						r.Route("/vipps/message-rules", func(r chi.Router) {
-							r.Get("/", accountingHandler.HandleListMessageRules)
-							r.Post("/", accountingHandler.HandleUpsertMessageRule)
-							r.Delete("/{ruleID}", accountingHandler.HandleDeleteMessageRule)
+							accountingHandler.MountMessageRuleRoutes(r, moneyGate...)
 						})
 
 						// DIL-392 Tildel tab — per-row manual

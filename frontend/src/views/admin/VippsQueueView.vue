@@ -3,19 +3,21 @@ import { ref, computed, onMounted } from 'vue'
 import { useApi } from '@/composables/useApi'
 import { useCan } from '@/composables/useCan'
 import { useFreshTotp } from '@/composables/useFreshTotp'
+import { useConfirm } from '@/stores/confirm'
 import { formatNOK as nok } from '@/lib/format'
 import { UserPlus, Tag, Trash2, RefreshCw, Inbox } from 'lucide-vue-next'
 
 const { fetchApi } = useApi()
 // Viewers without the role read aliases and rules only (BRY-372). An alias
-// decides whose faktura a payer's money settles, so it takes the money role
-// like Tildel (BRY-383); message rules stay ledger settings.
+// decides whose faktura a payer's money settles (BRY-383) and a message rule
+// picks the revenue account the payout confirm books a charge to (BRY-676),
+// so both take the money role like Tildel.
 const { can } = useCan()
-const canEditRules = can('ledger')
-const canEditAliases = can('money')
-// Teaching or removing an alias needs a fresh step-up, prompted before the
-// form opens.
+const canEdit = can('money')
+// Every alias or rule write needs a fresh step-up, prompted on the click
+// before the form opens or the delete is confirmed.
 const { ensureFreshTotp } = useFreshTotp()
+const askConfirm = useConfirm()
 
 interface QueueRow {
   id: string
@@ -66,6 +68,8 @@ const rulePattern = ref('')
 const ruleAccountCode = ref('')
 const rulePriority = ref(0)
 const saving = ref(false)
+// A refused save is shown inside its form, not behind the modal.
+const modalError = ref<string | null>(null)
 
 // ── Load ────────────────────────────────────────────────────────────────────
 
@@ -98,6 +102,7 @@ async function openAliasModal(row: QueueRow) {
   if (!(await ensureFreshTotp())) return
   aliasModal.value = { row }
   aliasUserID.value = ''
+  modalError.value = null
 }
 
 async function saveAlias() {
@@ -114,14 +119,24 @@ async function saveAlias() {
     aliasModal.value = null
     await load()
   } catch (e) {
-    error.value = (e as Error).message
+    modalError.value = (e as Error).message
   } finally {
     saving.value = false
   }
 }
 
-async function deleteAlias(id: string) {
+// Step-up first, then the confirm, then the delete.
+async function deleteAlias(alias: CustomerAlias) {
   if (!(await ensureFreshTotp())) return
+  const ok = await askConfirm({
+    title: 'Slett alias?',
+    body: `Betalingar frå «${alias.customer_name}» blir ikkje lenger knytte til medlemmen automatisk.`,
+    confirmLabel: 'Slett',
+    cancelLabel: 'Avbryt',
+    tone: 'danger',
+  })
+  if (!ok) return
+  const id = alias.id
   try {
     await fetchApi(`/api/v1/admin/accounting/vipps/customer-aliases/${id}`, { method: 'DELETE' })
     await load()
@@ -132,11 +147,13 @@ async function deleteAlias(id: string) {
 
 // ── Rule modal ───────────────────────────────────────────────────────────────
 
-function openRuleModal(row: QueueRow) {
+async function openRuleModal(row: QueueRow) {
+  if (!(await ensureFreshTotp())) return
   ruleModal.value = { row }
   rulePattern.value = row.message
   ruleAccountCode.value = '3900'
   rulePriority.value = 0
+  modalError.value = null
 }
 
 async function saveRule() {
@@ -154,15 +171,30 @@ async function saveRule() {
     ruleModal.value = null
     await load()
   } catch (e) {
-    error.value = (e as Error).message
+    modalError.value = (e as Error).message
   } finally {
     saving.value = false
   }
 }
 
-async function deleteRule(id: string) {
-  await fetchApi(`/api/v1/admin/accounting/vipps/message-rules/${id}`, { method: 'DELETE' })
-  await load()
+// Step-up first, then the confirm, then the delete.
+async function deleteRule(rule: MessageRule) {
+  if (!(await ensureFreshTotp())) return
+  const ok = await askConfirm({
+    title: 'Slett meldingsregel?',
+    body: `Vipps-innbetalingar med «${rule.pattern}» i meldinga blir ikkje lenger foreslått førte på konto ${rule.account_code}.`,
+    confirmLabel: 'Slett',
+    cancelLabel: 'Avbryt',
+    tone: 'danger',
+  })
+  if (!ok) return
+  const id = rule.id
+  try {
+    await fetchApi(`/api/v1/admin/accounting/vipps/message-rules/${id}`, { method: 'DELETE' })
+    await load()
+  } catch (e) {
+    error.value = (e as Error).message
+  }
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -242,10 +274,9 @@ function dateLabel(row: QueueRow): string {
                 <span class="inline-flex rounded bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Uklassifisert</span>
               </td>
               <td class="whitespace-nowrap px-3 py-2">
-                <div v-if="canEditAliases || canEditRules" class="flex gap-1">
+                <div v-if="canEdit" class="flex gap-1">
                   <button
-                    v-if="canEditAliases"
-                    class="inline-flex items-center gap-1 rounded border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-100"
+                    class="inline-flex min-h-11 items-center gap-1 rounded border border-gray-200 px-3 py-1 text-xs text-gray-600 hover:bg-gray-100"
                     title="Knytt betalar til medlem"
                     @click="openAliasModal(row)"
                   >
@@ -253,8 +284,8 @@ function dateLabel(row: QueueRow): string {
                     Alias
                   </button>
                   <button
-                    v-if="canEditRules && row.message"
-                    class="inline-flex items-center gap-1 rounded border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-100"
+                    v-if="row.message"
+                    class="inline-flex min-h-11 items-center gap-1 rounded border border-gray-200 px-3 py-1 text-xs text-gray-600 hover:bg-gray-100"
                     title="Lag meldingsregel"
                     @click="openRuleModal(row)"
                   >
@@ -291,7 +322,12 @@ function dateLabel(row: QueueRow): string {
               <td class="px-3 py-2 font-mono text-xs text-gray-500">{{ a.user_id }}</td>
               <td class="whitespace-nowrap px-3 py-2 text-gray-500">{{ a.created_at.slice(0, 10) }}</td>
               <td class="px-3 py-2">
-                <button v-if="canEditAliases" class="text-red-500 hover:text-red-700" @click="deleteAlias(a.id)">
+                <button
+                  v-if="canEdit"
+                  class="inline-flex h-11 w-11 items-center justify-center text-red-500 hover:text-red-700"
+                  :aria-label="`Slett alias ${a.customer_name}`"
+                  @click="deleteAlias(a)"
+                >
                   <Trash2 class="h-4 w-4" />
                 </button>
               </td>
@@ -323,7 +359,12 @@ function dateLabel(row: QueueRow): string {
               <td class="px-3 py-2 tabular-nums">{{ r.account_code }}</td>
               <td class="px-3 py-2 tabular-nums text-gray-500">{{ r.priority }}</td>
               <td class="px-3 py-2">
-                <button v-if="canEditRules" class="text-red-500 hover:text-red-700" @click="deleteRule(r.id)">
+                <button
+                  v-if="canEdit"
+                  class="inline-flex h-11 w-11 items-center justify-center text-red-500 hover:text-red-700"
+                  :aria-label="`Slett meldingsregel ${r.pattern}`"
+                  @click="deleteRule(r)"
+                >
                   <Trash2 class="h-4 w-4" />
                 </button>
               </td>
@@ -337,7 +378,7 @@ function dateLabel(row: QueueRow): string {
     <Teleport to="body">
       <div
         v-if="aliasModal"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
         @click.self="aliasModal = null"
       >
         <div class="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
@@ -353,6 +394,9 @@ function dateLabel(row: QueueRow): string {
             <option value="">— vel —</option>
             <option v-for="m in memberOptions" :key="m.value" :value="m.value">{{ m.label }}</option>
           </select>
+          <p v-if="modalError" role="alert" class="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {{ modalError }}
+          </p>
           <div class="mt-4 flex justify-end gap-2">
             <button
               class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
@@ -372,7 +416,7 @@ function dateLabel(row: QueueRow): string {
     <Teleport to="body">
       <div
         v-if="ruleModal"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
         @click.self="ruleModal = null"
       >
         <div class="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
@@ -407,6 +451,9 @@ function dateLabel(row: QueueRow): string {
               />
             </div>
           </div>
+          <p v-if="modalError" role="alert" class="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {{ modalError }}
+          </p>
           <div class="mt-4 flex justify-end gap-2">
             <button
               class="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"

@@ -4,8 +4,9 @@ import { mountWithPlugins } from '@/test/test-utils'
 import VippsQueueView from '@/views/admin/VippsQueueView.vue'
 
 // A synthetic unclassified charge and one learned alias.
-const { ensureFreshTotp, fetchApi, icon, areas } = vi.hoisted(() => ({
+const { ensureFreshTotp, askConfirm, fetchApi, icon, areas } = vi.hoisted(() => ({
   ensureFreshTotp: vi.fn(),
+  askConfirm: vi.fn(),
   fetchApi: vi.fn(),
   icon: { template: '<span />' },
   areas: { writable: ['money', 'ledger'] as string[] },
@@ -14,6 +15,7 @@ const { ensureFreshTotp, fetchApi, icon, areas } = vi.hoisted(() => ({
 vi.mock('lucide-vue-next', () => ({ UserPlus: icon, Tag: icon, Trash2: icon, RefreshCw: icon, Inbox: icon }))
 vi.mock('@/composables/useFreshTotp', () => ({ useFreshTotp: () => ({ ensureFreshTotp }) }))
 vi.mock('@/composables/useCan', () => ({ useCan: () => ({ can: (area: string) => areas.writable.includes(area) }) }))
+vi.mock('@/stores/confirm', () => ({ useConfirm: () => askConfirm }))
 vi.mock('@/composables/useApi', () => ({ useApi: () => ({ fetchApi }) }))
 
 const ALIAS_ID = '00000000-0000-0000-0000-0000000000a1'
@@ -37,6 +39,7 @@ const writes = () => fetchApi.mock.calls.filter(([, init]) => init?.method)
 describe('VippsQueueView alias step-up', () => {
   beforeEach(() => {
     ensureFreshTotp.mockReset()
+    askConfirm.mockReset()
     fetchApi.mockReset()
     fetchApi.mockImplementation(respond)
     areas.writable = ['money', 'ledger']
@@ -72,18 +75,27 @@ describe('VippsQueueView alias step-up', () => {
     ])
   })
 
-  it('asks for a fresh TOTP before deleting an alias, and deletes nothing without it', async () => {
+  it('asks for a fresh TOTP, then a confirm, before deleting an alias', async () => {
     ensureFreshTotp.mockResolvedValue(false)
     const wrapper = mountWithPlugins(VippsQueueView)
     await flushPromises()
     const del = wrapper.findAll('button').find((b) => b.classes().includes('text-red-500'))!
+    expect(del.attributes('aria-label')).toBe('Slett alias SYN OTHER')
 
     await del.trigger('click')
     await flushPromises()
     expect(ensureFreshTotp).toHaveBeenCalledOnce()
+    expect(askConfirm).not.toHaveBeenCalled()
     expect(writes()).toEqual([])
 
     ensureFreshTotp.mockResolvedValue(true)
+    askConfirm.mockResolvedValue(false)
+    await del.trigger('click')
+    await flushPromises()
+    expect(askConfirm).toHaveBeenCalledOnce()
+    expect(writes()).toEqual([])
+
+    askConfirm.mockResolvedValue(true)
     await del.trigger('click')
     await flushPromises()
     expect(writes()).toEqual([

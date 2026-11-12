@@ -208,6 +208,9 @@ reads admit any admin viewer (see *Board read access* above).
 | `POST /vipps-imports` | ✅ (treasurer, admin; BRY-370) | posts order-linked and auto-assigned charges |
 | `POST /bank-rows/{id}/reconcile-vipps/confirm` | ✅ (treasurer, admin; BRY-370) | posts the payout reconciliation |
 | `/vipps-imports` list | — | |
+| `POST /vipps/customer-aliases`, `DELETE /vipps/customer-aliases/{id}` | ✅ (treasurer, admin; BRY-383) | an alias decides which member's faktura a payer's money settles |
+| `POST /vipps/message-rules`, `DELETE /vipps/message-rules/{id}` | ✅ (treasurer, admin; BRY-676) | a rule picks the revenue account the Vipps payout confirm books a charge to; `moneyGate`. `TestVippsQueueSettingWritesNeedMoneyRoleAndFreshTOTP` walks every non-GET route under both prefixes as a board session and a stale treasurer |
+| `/vipps/queue`, `/vipps/customer-aliases` and `/vipps/message-rules` lists | — | reads |
 | `bank-rows/{id}` suggestions/potential-invoices/partners, `vipps-charges/{id}` suggestions/potential-invoices | — | reads |
 | `assign-invoice[-multi]`, assign-account, assign-account-group, `pair-transfer`, dismiss, unassign | ✅ (treasurer, admin) | manual reconcile (Tildel); `pair-transfer` (BRY-672) posts a transfer between the club's own bank accounts and uses `moneyGate`. `TestBankRowWritesNeedMoneyRoleAndFreshTOTP` walks every non-GET `/accounting/bank-rows/*` route as a board session |
 | `POST /bank-rows/{rowID}/undismiss` | ✅ (treasurer, admin; BRY-418) | returns a dismissed reference-year row to the Referanseår list |
