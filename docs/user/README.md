@@ -14,4 +14,5 @@ Cross-audience navigation: see [`../index.md`](../index.md).
 | [payments-overview.md](payments-overview.md) | The Payments page: reading it, and setting up its filter groups (names, icons, order, prices) |
 | [harbor-share-import.md](harbor-share-import.md) | Site admin's guide to importing harbor share (moloandel) owners from the member sheet: the CSV UTF-8 file format and the preview |
 | [harbor-qr.md](harbor-qr.md) | Harbor master's guide to QR payment targets: full-page posters and 2/4/6-up card sheets |
+| [iphone-notifications.md](iphone-notifications.md) | **Brygge på iPhone**: adding Brygge to the Home Screen so push notifications work on iPhone and iPad, **Send testvarsel**, and what its result means |
 | [setting-up-email.md](setting-up-email.md) | Member + board guide to reading and sending club mail in Apple Mail, Outlook, Gmail, Thunderbird, etc. |

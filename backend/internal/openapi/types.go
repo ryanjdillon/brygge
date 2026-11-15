@@ -54,6 +54,14 @@ type NotificationConfigResponse struct {
 	Categories []NotificationConfig `json:"categories" doc:"Notification config categories"`
 }
 
+// TestPushResult mirrors handlers.testPushResult.
+type TestPushResult struct {
+	Sent    int `json:"sent" doc:"Subscriptions the push service accepted the test for"`
+	Removed int `json:"removed" doc:"Expired subscriptions (404/410) that were deleted"`
+	Failed  int `json:"failed" doc:"Subscriptions the push could not be delivered to"`
+	Total   int `json:"total" doc:"The caller's subscriptions tried"`
+}
+
 // --- Health ---
 
 type HealthServiceStatus struct {

@@ -531,6 +531,15 @@ func newRouter(d routeDeps) *chi.Mux {
 			r.Delete("/subscribe", notificationsHandler.HandleUnsubscribe)
 		})
 
+		// "Send testvarsel" (BRY-682): pushes to the caller's own
+		// subscriptions only. Each click reaches an outside push service, so
+		// it has its own small per-user budget.
+		pushTestRL := middleware.NewRateLimiter(rdb, log, handlers.PushTestRateLimit, time.Minute, handlers.PushTestRateKey)
+		r.Route("/notifications", func(r chi.Router) {
+			r.Use(middleware.AuthenticateSession(sessionService))
+			r.With(pushTestRL.Handler).Post("/test", notificationsHandler.HandleTestPush)
+		})
+
 		r.Route("/members/me/notifications", func(r chi.Router) {
 			r.Use(middleware.AuthenticateSession(sessionService))
 			r.Get("/", notificationsHandler.HandleGetPreferences)
@@ -1130,7 +1139,6 @@ func newRouter(d routeDeps) *chi.Mux {
 					r.Use(middleware.RequireRole("board", "admin"))
 					r.Get("/config", notificationsHandler.HandleGetConfig)
 					r.Put("/config", notificationsHandler.HandleUpdateConfig)
-					r.Post("/test", notificationsHandler.HandleTestPush)
 				})
 
 				// GDPR is one function, held by the site admin by default

@@ -2564,5 +2564,30 @@
     "complete": {
       "navLabel": "Lidmaatschap afronden"
     }
+  },
+  "notifications": {
+    "iosTitle": "Meldingen op iPhone en iPad",
+    "iosIntro": "Op iPhone en iPad komen meldingen alleen aan als Brygge op het beginscherm staat en daarvandaan wordt geopend.",
+    "iosStep1": "Open deze pagina in Safari en tik op de deelknop (het vierkant met de pijl omhoog).",
+    "iosStep2": "Kies ‘Zet op beginscherm’ en tik op Voeg toe.",
+    "iosStep3": "Open Brygge via het nieuwe pictogram op het beginscherm en log in met een toegangssleutel (maak er eerst een aan in Safari onder Security als je er geen hebt).",
+    "iosStep4": "Zet pushmeldingen aan op de pagina Meldingen en sta meldingen toe als de telefoon erom vraagt.",
+    "iosLoginNote": "De inloglink in je e-mail opent Safari, niet de app op het beginscherm.",
+    "iosVersion": "Vereist iOS 16.4 of nieuwer.",
+    "iosNeedsHomeScreen": "Zet Brygge eerst op het beginscherm",
+    "pushDenied": "Meldingen voor Brygge zijn geblokkeerd. Sta ze toe in de instellingen van het apparaat (iPhone: Instellingen → Berichtgeving → Brygge) en probeer het opnieuw.",
+    "pushSubscribeFailed": "Meldingen konden op dit apparaat niet worden aangezet. Probeer het opnieuw.",
+    "pushUnsubscribeFailed": "Meldingen konden niet worden uitgezet. Probeer het opnieuw.",
+    "test": {
+      "button": "Testmelding versturen",
+      "sent": "Testmelding verstuurd naar {sent} van {total} apparaat. | Testmelding verstuurd naar {sent} van {total} apparaten.",
+      "removed": "Verlopen apparaten verwijderd: {count}. Zet meldingen uit en weer aan op het ontbrekende apparaat.",
+      "failed": "Onbereikbare apparaten: {count}.",
+      "hint": "Komt er binnen een minuut niets binnen, controleer dan of meldingen voor Brygge zijn toegestaan in de instellingen van het apparaat.",
+      "noSubscription": "Er is geen apparaat geregistreerd voor meldingen. Zet meldingen uit en weer aan.",
+      "notConfigured": "Pushmeldingen zijn niet ingesteld op deze server. Neem contact op met het bestuur.",
+      "rateLimited": "Te veel testmeldingen. Wacht een minuut en probeer het opnieuw.",
+      "error": "De testmelding kon niet worden verstuurd. Probeer het later opnieuw."
+    }
   }
 }

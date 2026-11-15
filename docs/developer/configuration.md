@@ -194,6 +194,8 @@ condition, and points at test mode (`/test`) for a test key.
 npx web-push generate-vapid-keys
 ```
 
+Without both keys, `POST /api/v1/notifications/test` answers 503 `push_not_configured`. The VAPID contact (`sub`) is `FRONTEND_URL` when it is https (else `admin@<DOMAIN>`); there is no separate variable. Members check delivery with **Send testvarsel**; iPhones need the Home Screen install in [../user/iphone-notifications.md](../user/iphone-notifications.md).
+
 ## Database Pool
 
 | Variable                | Default | Description                       |

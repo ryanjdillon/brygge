@@ -3169,8 +3169,29 @@
     "disable": "Disable",
     "notSupported": "Not supported in this browser",
     "required": "required",
-    "iosTitle": "Enable notifications on iOS",
-    "iosInstructions": "To receive push notifications on iOS, add this app to your home screen: tap the Share button, then 'Add to Home Screen'.",
+    "iosTitle": "Notifications on iPhone and iPad",
+    "iosIntro": "On iPhone and iPad, notifications only arrive when Brygge is added to the Home Screen and opened from there.",
+    "iosStep1": "Open this page in Safari and tap the Share button (the square with an arrow pointing up).",
+    "iosStep2": "Choose “Add to Home Screen” and tap Add.",
+    "iosStep3": "Open Brygge from the new icon on the Home Screen and sign in with a passkey (create one in Safari under Security first if you don't have one).",
+    "iosStep4": "Turn on push notifications on the Notifications page and allow them when the phone asks.",
+    "iosLoginNote": "The sign-in link in your email opens Safari, not the Home Screen app.",
+    "iosVersion": "Requires iOS 16.4 or later.",
+    "iosNeedsHomeScreen": "Add Brygge to the Home Screen first",
+    "pushDenied": "Notifications are blocked for Brygge. Allow them in the device settings (on iPhone: Settings → Notifications → Brygge) and try again.",
+    "pushSubscribeFailed": "Could not turn on notifications on this device. Try again.",
+    "pushUnsubscribeFailed": "Could not turn off notifications. Try again.",
+    "test": {
+      "button": "Send test notification",
+      "sent": "Test notification sent to {sent} of {total} device. | Test notification sent to {sent} of {total} devices.",
+      "removed": "Expired devices removed: {count}. Turn notifications off and on again on the device that is missing.",
+      "failed": "Devices that could not be reached: {count}.",
+      "hint": "If nothing arrives within a minute, check that notifications are allowed for Brygge in the device settings.",
+      "noSubscription": "No device is registered for notifications. Turn notifications off and on again.",
+      "notConfigured": "Push notifications are not set up on this server. Contact the board.",
+      "rateLimited": "Too many test notifications. Wait a minute and try again.",
+      "error": "Could not send the test notification. Try again later."
+    },
     "cat": {
       "payment_reminder": "Payment reminders",
       "slip_offer": "Slip offers",
@@ -3186,9 +3207,7 @@
       "subtitle": "Configure notification requirements for all members",
       "requiredToggle": "Required",
       "leadDays": "Reminder days before",
-      "testPush": "Send test notification",
-      "testSent": "Test notification sent",
-      "testFailed": "Failed to send test notification"
+      "testPush": "Send test notification"
     }
   },
   "gdpr": {

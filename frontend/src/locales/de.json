@@ -2564,5 +2564,30 @@
     "complete": {
       "navLabel": "Mitgliedschaft abschließen"
     }
+  },
+  "notifications": {
+    "iosTitle": "Benachrichtigungen auf iPhone und iPad",
+    "iosIntro": "Auf iPhone und iPad kommen Benachrichtigungen nur an, wenn Brygge zum Home-Bildschirm hinzugefügt und von dort geöffnet wird.",
+    "iosStep1": "Öffne diese Seite in Safari und tippe auf die Teilen-Taste (das Quadrat mit dem Pfeil nach oben).",
+    "iosStep2": "Wähle „Zum Home-Bildschirm“ und tippe auf Hinzufügen.",
+    "iosStep3": "Öffne Brygge über das neue Symbol auf dem Home-Bildschirm und melde dich mit einem Passkey an (lege vorher in Safari unter Security einen an, falls du keinen hast).",
+    "iosStep4": "Schalte auf der Seite Benachrichtigungen die Push-Benachrichtigungen ein und erlaube sie, wenn das Telefon fragt.",
+    "iosLoginNote": "Der Anmeldelink in der E-Mail öffnet Safari, nicht die App auf dem Home-Bildschirm.",
+    "iosVersion": "Erfordert iOS 16.4 oder neuer.",
+    "iosNeedsHomeScreen": "Füge Brygge zuerst zum Home-Bildschirm hinzu",
+    "pushDenied": "Benachrichtigungen für Brygge sind blockiert. Erlaube sie in den Geräteeinstellungen (iPhone: Einstellungen → Mitteilungen → Brygge) und versuche es erneut.",
+    "pushSubscribeFailed": "Benachrichtigungen konnten auf diesem Gerät nicht eingeschaltet werden. Versuche es erneut.",
+    "pushUnsubscribeFailed": "Benachrichtigungen konnten nicht ausgeschaltet werden. Versuche es erneut.",
+    "test": {
+      "button": "Testbenachrichtigung senden",
+      "sent": "Testbenachrichtigung an {sent} von {total} Gerät gesendet. | Testbenachrichtigung an {sent} von {total} Geräten gesendet.",
+      "removed": "Abgelaufene Geräte entfernt: {count}. Schalte Benachrichtigungen auf dem fehlenden Gerät aus und wieder ein.",
+      "failed": "Nicht erreichbare Geräte: {count}.",
+      "hint": "Wenn innerhalb einer Minute nichts ankommt, prüfe, ob Benachrichtigungen für Brygge in den Geräteeinstellungen erlaubt sind.",
+      "noSubscription": "Kein Gerät ist für Benachrichtigungen registriert. Schalte Benachrichtigungen aus und wieder ein.",
+      "notConfigured": "Push-Benachrichtigungen sind auf diesem Server nicht eingerichtet. Wende dich an den Vorstand.",
+      "rateLimited": "Zu viele Testbenachrichtigungen. Warte eine Minute und versuche es erneut.",
+      "error": "Die Testbenachrichtigung konnte nicht gesendet werden. Versuche es später erneut."
+    }
   }
 }

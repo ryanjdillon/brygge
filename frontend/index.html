@@ -7,6 +7,13 @@
     <meta name="theme-color" content="#2563eb" />
     <link rel="icon" type="image/svg+xml" href="/src/assets/logo.svg" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
+    <!-- iOS Home Screen web app (BRY-682): web push needs it installed.
+         index.html is served as built (not templated per club), so the
+         icon label is "Brygge"; the member can rename it when adding it. -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Brygge" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>Brygge</title>
   </head>
   <body>

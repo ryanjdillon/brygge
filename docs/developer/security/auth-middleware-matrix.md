@@ -102,6 +102,7 @@ keep `moneyGate` (treasurer/admin + fresh step-up).
 
 `/auth/me`, `/auth/session/*`, `/members/me/*`, `/portal/slip-shares/*`,
 `/waiting-list/*` (member actions), `/bookings/me*`, `/push/*`,
+`POST /notifications/test` (own subscriptions only, 5/min per user, BRY-682),
 `/forum/*`, `/projects` + `/tasks` (read + self-join),
 `/feature-requests` (read + vote), `/documents` (read + comment),
 `/shopping-lists/*`. These are correctly member-scoped; ownership checks
@@ -181,7 +182,7 @@ reads admit any admin viewer (see *Board read access* above).
 | `/admin/content-documents` † | board | — |
 | `/admin/bookings` † | board, harbor_master | — |
 | `/admin/documents` (upload/delete/AI) | board | — |
-| `/admin/notifications/config` | board, admin | — |
+| `/admin/notifications/config` | board, admin | — (the test push moved to the member route `POST /notifications/test`) |
 | `/admin/gdpr/*` (deletion requests, legal documents; BRY-481) | admin | — for reads and the legal editor |
 | `POST /admin/gdpr/deletion-requests/{id}/process` (erases or anonymises the member) | admin | ✅ (BRY-509) |
 

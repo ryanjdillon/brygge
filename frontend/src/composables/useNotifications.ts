@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useApiClient, unwrap } from '@/lib/apiClient'
+import type { components } from '@/types/api'
 
 export interface NotificationPreference {
   category: string
@@ -65,23 +66,60 @@ export function useUpdateNotificationConfig() {
   })
 }
 
+export type TestPushResult = components['schemas']['TestPushResult']
+
+/**
+ * Sends a test push to the signed-in user's own devices (BRY-682). Errors
+ * carry `code` `no_push_subscription` (409) or `push_not_configured` (503).
+ */
 export function useTestPush() {
   const client = useApiClient()
 
   return useMutation({
-    mutationFn: async () =>
-      unwrap(await client.POST('/api/v1/admin/notifications/test')),
+    mutationFn: async (): Promise<TestPushResult> =>
+      unwrap(await client.POST('/api/v1/notifications/test')),
   })
+}
+
+/** Thrown by subscribe() when the browser or the user refuses notifications. */
+export class PushPermissionError extends Error {
+  constructor(public permission: NotificationPermission) {
+    super(`notification permission ${permission}`)
+    this.name = 'PushPermissionError'
+  }
+}
+
+/** Thrown by subscribe() when the server has no VAPID key. */
+export class PushNotConfiguredError extends Error {
+  constructor() {
+    super('VAPID key not configured')
+    this.name = 'PushNotConfiguredError'
+  }
 }
 
 export function usePushSubscription() {
   const client = useApiClient()
-  const isSupported = ref('serviceWorker' in navigator && 'PushManager' in window)
+  const isSupported = ref('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window)
   const isSubscribed = ref(false)
   const isLoading = ref(false)
+  // Fetched ahead (checkSubscription, on mount) so the click handler does
+  // not have to await the network before asking for permission.
+  let vapidKey: string | null = null
+
+  async function loadVapidKey(): Promise<string | null> {
+    if (vapidKey) return vapidKey
+    try {
+      const { vapid_key } = unwrap(await client.GET('/api/v1/push/vapid-key'))
+      vapidKey = vapid_key || null
+    } catch {
+      vapidKey = null
+    }
+    return vapidKey
+  }
 
   async function checkSubscription() {
     if (!isSupported.value) return
+    void loadVapidKey()
     try {
       const reg = await navigator.serviceWorker.ready
       const sub = await reg.pushManager.getSubscription()
@@ -91,17 +129,26 @@ export function usePushSubscription() {
     }
   }
 
+  /**
+   * Must be called straight from the click handler. iOS only shows the
+   * permission prompt inside the user gesture, so Notification.requestPermission()
+   * is the first call, with no await before it; the subscription follows.
+   */
   async function subscribe() {
     if (!isSupported.value) return
+    const permission = Notification.requestPermission()
     isLoading.value = true
     try {
-      const { vapid_key } = unwrap(await client.GET('/api/v1/push/vapid-key'))
-      if (!vapid_key) throw new Error('VAPID key not configured')
+      const granted = await permission
+      if (granted !== 'granted') throw new PushPermissionError(granted)
+
+      const key = vapidKey ?? (await loadVapidKey())
+      if (!key) throw new PushNotConfiguredError()
 
       const reg = await navigator.serviceWorker.ready
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapid_key) as BufferSource,
+        applicationServerKey: urlBase64ToUint8Array(key) as BufferSource,
       })
 
       const json = sub.toJSON()

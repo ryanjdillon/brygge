@@ -40,8 +40,8 @@ func TestHandleGetVAPIDKey(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if resp["public_key"] != "test-vapid-public-key" {
-		t.Errorf("expected public_key 'test-vapid-public-key', got %q", resp["public_key"])
+	if resp["vapid_key"] != "test-vapid-public-key" {
+		t.Errorf("expected vapid_key 'test-vapid-public-key', got %q", resp["vapid_key"])
 	}
 }
 
@@ -63,8 +63,8 @@ func TestHandleGetVAPIDKeyEmpty(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if resp["public_key"] != "" {
-		t.Errorf("expected empty public_key, got %q", resp["public_key"])
+	if resp["vapid_key"] != "" {
+		t.Errorf("expected empty vapid_key, got %q", resp["vapid_key"])
 	}
 }
 
@@ -310,11 +310,11 @@ func TestHandleTestPushNoVAPIDKeys(t *testing.T) {
 	log := zerolog.Nop()
 	h := NewNotificationsHandler(nil, cfg, log)
 
-	r := setupRoleProtectedRouter(http.MethodPost, "/admin/notifications/test", h.HandleTestPush, "board", "admin")
+	r := setupAuthenticatedRouter(http.MethodPost, "/notifications/test", h.HandleTestPush)
 
-	token := generateTestToken("user-123", "club-456", []string{"board"})
+	token := generateTestToken("user-123", "club-456", []string{"member"})
 
-	req := httptest.NewRequest(http.MethodPost, "/admin/notifications/test", nil)
+	req := httptest.NewRequest(http.MethodPost, "/notifications/test", nil)
 	req.Header.Set("Authorization", authHeader(token))
 	rec := httptest.NewRecorder()
 
@@ -324,12 +324,26 @@ func TestHandleTestPushNoVAPIDKeys(t *testing.T) {
 		t.Fatalf("expected status %d, got %d; body: %s", http.StatusServiceUnavailable, rec.Code, rec.Body.String())
 	}
 
-	var resp errorResponse
+	var resp map[string]string
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if resp.Error != "VAPID keys not configured" {
-		t.Errorf("expected error 'VAPID keys not configured', got %q", resp.Error)
+	if resp["code"] != codePushNotConfigured {
+		t.Errorf("expected code %q, got %q", codePushNotConfigured, resp["code"])
+	}
+}
+
+func TestVAPIDSubscriberIsNotDoubleMailto(t *testing.T) {
+	cfg := testConfig()
+	cfg.FrontendURL = "https://club.example.invalid"
+	if got := vapidSubscriber(cfg); got != "https://club.example.invalid" {
+		t.Errorf("https site: got %q", got)
+	}
+	cfg.FrontendURL = "http://localhost:5173"
+	cfg.Domain = "localhost"
+	got := vapidSubscriber(cfg)
+	if strings.HasPrefix(got, "mailto:") {
+		t.Errorf("subscriber %q must not carry mailto: (webpush-go adds it)", got)
 	}
 }
 

@@ -1,10 +1,17 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"net/url"
+	"strings"
+	"time"
 
 	webpush "github.com/SherClockHolmes/webpush-go"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 
@@ -16,6 +23,7 @@ type NotificationsHandler struct {
 	db     *pgxpool.Pool
 	config *config.Config
 	log    zerolog.Logger
+	push   pushSender
 }
 
 func NewNotificationsHandler(db *pgxpool.Pool, cfg *config.Config, log zerolog.Logger) *NotificationsHandler {
@@ -23,6 +31,7 @@ func NewNotificationsHandler(db *pgxpool.Pool, cfg *config.Config, log zerolog.L
 		db:     db,
 		config: cfg,
 		log:    log.With().Str("handler", "notifications").Logger(),
+		push:   webpushSender{config: cfg},
 	}
 }
 
@@ -81,7 +90,8 @@ type pushSubscriptionRow struct {
 }
 
 func (h *NotificationsHandler) HandleGetVAPIDKey(w http.ResponseWriter, r *http.Request) {
-	JSON(w, http.StatusOK, map[string]string{"public_key": h.config.VAPIDPublicKey})
+	// The SPA (useNotifications.ts) and the OpenAPI spec read "vapid_key".
+	JSON(w, http.StatusOK, map[string]string{"vapid_key": h.config.VAPIDPublicKey})
 }
 
 func (h *NotificationsHandler) HandleSubscribe(w http.ResponseWriter, r *http.Request) {
@@ -403,6 +413,74 @@ func (h *NotificationsHandler) HandleUpdateConfig(w http.ResponseWriter, r *http
 	})
 }
 
+// Error codes the test-push route answers with, so the SPA can say what to
+// do instead of showing a raw message.
+const (
+	codePushNotConfigured  = "push_not_configured"
+	codeNoPushSubscription = "no_push_subscription"
+)
+
+// PushTestRateLimit is how many test pushes a member may send per minute;
+// each one reaches an outside push service. routes.go mounts it with
+// PushTestRateKey.
+const PushTestRateLimit = 5
+
+// PushTestRateKey buckets the test-push limiter per user (IP bucket before
+// login), apart from every other limiter's budget.
+func PushTestRateKey(r *http.Request) string {
+	return "push-test:" + middleware.UserOrIPKey(r)
+}
+
+// pushSendTimeout bounds one delivery to a push service, so a slow service
+// cannot hold the request (and the member's button) open.
+const pushSendTimeout = 10 * time.Second
+
+// testPushCopy is the test notification's title (with the club name) and
+// body, per UI language (the clubs/users language CHECK list).
+var testPushCopy = map[string]struct{ Title, Body string }{
+	"nb": {"Testvarsel fra %s", "Varsler fungerer på denne enheten."},
+	"nn": {"Testvarsel frå %s", "Varslar fungerer på denne eininga."},
+	"en": {"Test notification from %s", "Notifications work on this device."},
+	"de": {"Testbenachrichtigung von %s", "Benachrichtigungen funktionieren auf diesem Gerät."},
+	"fr": {"Notification de test de %s", "Les notifications fonctionnent sur cet appareil."},
+	"it": {"Notifica di prova da %s", "Le notifiche funzionano su questo dispositivo."},
+	"nl": {"Testmelding van %s", "Meldingen werken op dit apparaat."},
+	"pl": {"Powiadomienie testowe od %s", "Powiadomienia działają na tym urządzeniu."},
+}
+
+// testPushPayload is what the service worker (frontend/public/sw.js) shows:
+// the title names the club, the text is in the member's language (their own
+// choice, else the club's default, else Bokmål). Tapping it opens the
+// member's notifications page.
+func testPushPayload(locale, clubName string) []byte {
+	c, ok := testPushCopy[locale]
+	if !ok {
+		c = testPushCopy["nb"]
+	}
+	if strings.TrimSpace(clubName) == "" {
+		clubName = "Brygge"
+	}
+	b, _ := json.Marshal(map[string]string{
+		"title":    fmt.Sprintf(c.Title, clubName),
+		"body":     c.Body,
+		"category": "test",
+		"url":      "/portal/notifications",
+	})
+	return b
+}
+
+// testPushResult counts what happened to each of the caller's subscriptions.
+type testPushResult struct {
+	Sent    int `json:"sent"`
+	Removed int `json:"removed"`
+	Failed  int `json:"failed"`
+	Total   int `json:"total"`
+}
+
+// HandleTestPush sends a test notification to the caller's own push
+// subscriptions only (BRY-682), so a member can check that a device, such
+// as an iPhone with Brygge on the Home Screen, actually receives pushes.
+// A subscription the push service reports gone (404/410) is deleted.
 func (h *NotificationsHandler) HandleTestPush(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	claims := middleware.GetClaims(ctx)
@@ -412,74 +490,171 @@ func (h *NotificationsHandler) HandleTestPush(w http.ResponseWriter, r *http.Req
 	}
 
 	if h.config.VAPIDPublicKey == "" || h.config.VAPIDPrivateKey == "" {
-		Error(w, http.StatusServiceUnavailable, "VAPID keys not configured")
+		JSON(w, http.StatusServiceUnavailable, map[string]string{
+			"error": "push notifications are not configured on this server",
+			"code":  codePushNotConfigured,
+		})
 		return
 	}
 
 	rows, err := h.db.Query(ctx,
-		`SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = $1`,
-		claims.UserID,
+		`SELECT endpoint, p256dh, auth FROM push_subscriptions
+		 WHERE user_id = $1 AND club_id = $2`,
+		claims.UserID, claims.ClubID,
 	)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to query push subscriptions")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	defer rows.Close()
-
-	var subs []pushSubscriptionRow
-	for rows.Next() {
+	subs, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (pushSubscriptionRow, error) {
 		var s pushSubscriptionRow
-		if err := rows.Scan(&s.Endpoint, &s.P256dh, &s.Auth); err != nil {
-			h.log.Error().Err(err).Msg("failed to scan subscription")
-			Error(w, http.StatusInternalServerError, "internal error")
-			return
-		}
-		subs = append(subs, s)
-	}
-	if err := rows.Err(); err != nil {
-		h.log.Error().Err(err).Msg("error iterating subscriptions")
+		err := row.Scan(&s.Endpoint, &s.P256dh, &s.Auth)
+		return s, err
+	})
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to read push subscriptions")
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	payload := `{"title":"Test Notification","body":"Push notifications are working!","category":"test"}`
-	sent := 0
-
-	for _, s := range subs {
-		sub := &webpush.Subscription{
-			Endpoint: s.Endpoint,
-			Keys: webpush.Keys{
-				P256dh: s.P256dh,
-				Auth:   s.Auth,
-			},
-		}
-		resp, err := webpush.SendNotification([]byte(payload), sub, &webpush.Options{
-			VAPIDPublicKey:  h.config.VAPIDPublicKey,
-			VAPIDPrivateKey: h.config.VAPIDPrivateKey,
-			Subscriber:      "mailto:admin@brygge.no",
-			TTL:             30,
+	if len(subs) == 0 {
+		JSON(w, http.StatusConflict, map[string]string{
+			"error": "no device is subscribed to push notifications for this user",
+			"code":  codeNoPushSubscription,
 		})
-		if err != nil {
-			h.log.Warn().Err(err).Str("endpoint", s.Endpoint).Msg("failed to send test push")
-			continue
-		}
-		resp.Body.Close()
-
-		if resp.StatusCode == http.StatusGone {
-			_, _ = h.db.Exec(ctx,
-				`DELETE FROM push_subscriptions WHERE endpoint = $1`,
-				s.Endpoint,
-			)
-			h.log.Info().Str("endpoint", s.Endpoint).Msg("removed expired push subscription")
-			continue
-		}
-
-		sent++
+		return
 	}
 
-	JSON(w, http.StatusOK, map[string]any{
-		"sent":  sent,
-		"total": len(subs),
+	locale, clubName := h.testPushLocale(ctx, claims.UserID, claims.ClubID)
+	payload := testPushPayload(locale, clubName)
+
+	res := testPushResult{Total: len(subs)}
+	for _, s := range subs {
+		out, err := h.push.Send(ctx, s, payload)
+		host := pushServiceHost(s.Endpoint)
+		switch {
+		case err != nil:
+			h.log.Warn().Err(err).Str("push_host", host).Msg("failed to send test push")
+			res.Failed++
+		case out.Status == http.StatusNotFound || out.Status == http.StatusGone:
+			if _, err := h.db.Exec(ctx,
+				`DELETE FROM push_subscriptions WHERE endpoint = $1 AND user_id = $2`,
+				s.Endpoint, claims.UserID,
+			); err != nil {
+				h.log.Error().Err(err).Msg("failed to delete expired push subscription")
+				res.Failed++
+				continue
+			}
+			h.log.Info().Int("status", out.Status).Str("push_host", host).Msg("removed expired push subscription")
+			res.Removed++
+		case out.Status >= 200 && out.Status < 300:
+			res.Sent++
+		default:
+			// The host and the service's reason (Apple: {"reason":"BadJwtToken"})
+			// are what an operator needs; the endpoint path is a bearer
+			// capability for the device and is never logged.
+			h.log.Warn().Int("status", out.Status).Str("push_host", host).
+				Str("push_response", out.Body).Msg("push service refused test push")
+			res.Failed++
+		}
+	}
+
+	JSON(w, http.StatusOK, res)
+}
+
+// testPushLocale is the member's UI language (their preference, else the
+// club default) and the club's display name, as the join mail resolves it.
+func (h *NotificationsHandler) testPushLocale(ctx context.Context, userID, clubID string) (locale, clubName string) {
+	if err := h.db.QueryRow(ctx,
+		`SELECT COALESCE(u.preferred_language, c.default_language, ''), c.name
+		   FROM users u JOIN clubs c ON c.id = u.club_id
+		  WHERE u.id = $1 AND c.id = $2`, userID, clubID,
+	).Scan(&locale, &clubName); err != nil {
+		h.log.Warn().Err(err).Msg("test push: language unreadable, using the default")
+	}
+	if h.config.ClubName != "" {
+		clubName = h.config.ClubName
+	}
+	return locale, clubName
+}
+
+// pushServiceHost is the push service's host from a subscription endpoint
+// (web.push.apple.com, fcm.googleapis.com, …), safe to log.
+func pushServiceHost(endpoint string) string {
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return ""
+	}
+	return u.Host
+}
+
+// pushOutcome is the push service's answer to one send.
+type pushOutcome struct {
+	Status int
+	// Body is the start of a non-2xx response body (the service's reason),
+	// empty on success.
+	Body string
+}
+
+// pushSender delivers one encrypted push message. The handler holds it as a
+// dependency so tests can stand in for the push service.
+type pushSender interface {
+	// Send returns the push service's answer, or an error when the request
+	// could not be made (including the per-send timeout).
+	Send(ctx context.Context, sub pushSubscriptionRow, payload []byte) (pushOutcome, error)
+}
+
+// webpushSender sends through webpush-go with the server's VAPID keys.
+type webpushSender struct {
+	config *config.Config
+	// client is the HTTP client to the push service; nil means one with
+	// pushSendTimeout. Tests set a fake.
+	client webpush.HTTPClient
+}
+
+// pushResponseLogLimit caps how much of a refusal body is kept for the log.
+const pushResponseLogLimit = 200
+
+func (s webpushSender) Send(ctx context.Context, sub pushSubscriptionRow, payload []byte) (pushOutcome, error) {
+	ctx, cancel := context.WithTimeout(ctx, pushSendTimeout)
+	defer cancel()
+
+	client := s.client
+	if client == nil {
+		client = &http.Client{Timeout: pushSendTimeout}
+	}
+	resp, err := webpush.SendNotificationWithContext(ctx, payload, &webpush.Subscription{
+		Endpoint: sub.Endpoint,
+		Keys:     webpush.Keys{P256dh: sub.P256dh, Auth: sub.Auth},
+	}, &webpush.Options{
+		HTTPClient:      client,
+		VAPIDPublicKey:  s.config.VAPIDPublicKey,
+		VAPIDPrivateKey: s.config.VAPIDPrivateKey,
+		Subscriber:      vapidSubscriber(s.config),
+		TTL:             60,
+		Urgency:         webpush.UrgencyHigh,
 	})
+	if err != nil {
+		return pushOutcome{}, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	out := pushOutcome{Status: resp.StatusCode}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, pushResponseLogLimit))
+		out.Body = strings.ToValidUTF8(string(b), "")
+	}
+	return out, nil
+}
+
+// vapidSubscriber is the contact in the VAPID JWT "sub" claim. webpush-go
+// prefixes "mailto:" to anything that is not an https URL, so a value that
+// already starts with "mailto:" becomes "mailto:mailto:…", which Apple's push
+// service refuses (403 BadJwtToken). The club's own site is the contact.
+func vapidSubscriber(cfg *config.Config) string {
+	if strings.HasPrefix(cfg.FrontendURL, "https:") {
+		return cfg.FrontendURL
+	}
+	return "admin@" + cfg.Domain
 }

@@ -3,13 +3,16 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useNotificationConfig, useUpdateNotificationConfig, useTestPush } from '@/composables/useNotifications'
 import NumberInput from '@/components/ui/form/NumberInput.vue'
+import TestPushNotice from '@/components/notifications/TestPushNotice.vue'
+import { testPushFailure, testPushOutcome, type TestPushMessage } from '@/lib/testPushResult'
 
 const { t } = useI18n()
 const { categories, isLoading } = useNotificationConfig()
 const { mutate: updateConfig } = useUpdateNotificationConfig()
 const { mutate: sendTest, isPending: testSending } = useTestPush()
 
-const toast = ref<{ type: 'success' | 'error'; message: string } | null>(null)
+// Same outcome text as the member's page: 0 sent, 409 and 503 explained.
+const testResult = ref<TestPushMessage | null>(null)
 
 function toggleRequired(category: string, currentRequired: boolean) {
   updateConfig({ category, required: !currentRequired })
@@ -20,14 +23,13 @@ function updateLeadDays(category: string, value: number | null) {
 }
 
 function handleTestPush() {
+  testResult.value = null
   sendTest(undefined, {
-    onSuccess: () => {
-      toast.value = { type: 'success', message: t('notifications.admin.testSent') }
-      setTimeout(() => (toast.value = null), 3000)
+    onSuccess: (res) => {
+      testResult.value = testPushOutcome(t, res)
     },
-    onError: () => {
-      toast.value = { type: 'error', message: t('notifications.admin.testFailed') }
-      setTimeout(() => (toast.value = null), 3000)
+    onError: (err) => {
+      testResult.value = testPushFailure(t, err)
     },
   })
 }
@@ -41,23 +43,17 @@ function handleTestPush() {
         <p class="mt-1 text-sm text-gray-600">{{ t('notifications.admin.subtitle') }}</p>
       </div>
       <button
+        type="button"
         :disabled="testSending"
-        class="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+        data-testid="admin-send-test-push"
+        class="min-h-11 rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
         @click="handleTestPush"
       >
         {{ testSending ? t('common.loading') : t('notifications.admin.testPush') }}
       </button>
     </div>
 
-    <div
-      v-if="toast"
-      :class="[
-        'rounded-md p-3 text-sm',
-        toast.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800',
-      ]"
-    >
-      {{ toast.message }}
-    </div>
+    <TestPushNotice v-if="testResult" :message="testResult" />
 
     <div v-if="isLoading" class="animate-pulse space-y-4">
       <div v-for="i in 6" :key="i" class="h-12 rounded bg-gray-100" />

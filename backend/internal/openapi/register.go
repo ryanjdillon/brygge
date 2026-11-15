@@ -901,6 +901,19 @@ func registerNotificationOps(api huma.API) {
 	}, stub[struct{}, struct{ Body StatusResponse }]())
 
 	huma.Register(api, huma.Operation{
+		OperationID: "send-test-push",
+		Method:      http.MethodPost,
+		Path:        "/api/v1/notifications/test",
+		Tags:        []string{"Notifications"},
+		Summary:     "Send a test push notification to my own devices",
+		Description: "Pushes a test notification to the caller's own subscriptions only and counts the outcome per subscription. " +
+			"Subscriptions the push service reports gone (404/410) are deleted. " +
+			"409 with code no_push_subscription when the caller has no subscribed device; " +
+			"503 with code push_not_configured when the server has no VAPID keys. Limited to 5 per minute per user.",
+		Security: BearerSecurity,
+	}, stub[struct{}, struct{ Body TestPushResult }]())
+
+	huma.Register(api, huma.Operation{
 		OperationID: "get-notification-preferences",
 		Method:      http.MethodGet,
 		Path:        "/api/v1/members/me/notifications",
@@ -2081,15 +2094,6 @@ func registerAdminOps(api huma.API) {
 		Summary:     "Update notification config",
 		Security:    BearerSecurity,
 	}, stub[struct{ Body []NotificationConfig }, struct{ Body []NotificationConfig }]())
-
-	huma.Register(api, huma.Operation{
-		OperationID: "admin-test-push",
-		Method:      http.MethodPost,
-		Path:        "/api/v1/admin/notifications/test",
-		Tags:        []string{"Admin", "Notifications"},
-		Summary:     "Send test push notification",
-		Security:    BearerSecurity,
-	}, stub[struct{}, struct{ Body StatusResponse }]())
 
 	// Admin GDPR
 	huma.Register(api, huma.Operation{

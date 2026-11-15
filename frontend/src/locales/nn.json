@@ -3049,8 +3049,29 @@
     "disable": "Deaktiver",
     "notSupported": "Ikkje støtta i denne nettlesaren",
     "required": "obligatorisk",
-    "iosTitle": "Aktiver varsel på iOS",
-    "iosInstructions": "For å få push-varsel på iOS, legg appen til på heimskjermen: trykk Del-knappen, deretter 'Legg til på Heim-skjerm'.",
+    "iosTitle": "Varsel på iPhone og iPad",
+    "iosIntro": "På iPhone og iPad kjem varsel berre fram når Brygge er lagt til på heimeskjermen og opna derifrå.",
+    "iosStep1": "Opne denne sida i Safari og trykk på Del-knappen (firkanten med pil opp).",
+    "iosStep2": "Vel «Legg til på Hjem-skjerm» og trykk Legg til.",
+    "iosStep3": "Opne Brygge frå det nye ikonet på heimeskjermen og logg inn med passnøkkel (lag ein i Safari under Tryggleik først om du ikkje har).",
+    "iosStep4": "Slå på push-varsel på Varsel-sida og tillat varsel når telefonen spør.",
+    "iosLoginNote": "Innloggingslenka på e-post opnar Safari, ikkje appen på heimeskjermen.",
+    "iosVersion": "Krev iOS 16.4 eller nyare.",
+    "iosNeedsHomeScreen": "Legg Brygge til på heimeskjermen først",
+    "pushDenied": "Varsel er blokkerte for Brygge. Tillat varsel i innstillingane på eininga (på iPhone: Innstillinger → Varslinger → Brygge) og prøv igjen.",
+    "pushSubscribeFailed": "Kunne ikkje slå på varsel på denne eininga. Prøv igjen.",
+    "pushUnsubscribeFailed": "Kunne ikkje slå av varsel. Prøv igjen.",
+    "test": {
+      "button": "Send testvarsel",
+      "sent": "Testvarsel sendt til {sent} av {total} eining. | Testvarsel sendt til {sent} av {total} einingar.",
+      "removed": "Utgåtte einingar fjerna: {count}. Slå varsel av og på att på eininga som manglar.",
+      "failed": "Einingar som ikkje kunne nåast: {count}.",
+      "hint": "Kjem det ikkje noko varsel innan eitt minutt, sjå etter at varsel er tillatne for Brygge i innstillingane på eininga.",
+      "noSubscription": "Ingen einingar er registrerte for varsel. Slå varsel av og på att.",
+      "notConfigured": "Push-varsel er ikkje sette opp på denne serveren. Kontakt styret.",
+      "rateLimited": "For mange testvarsel. Vent eitt minutt og prøv igjen.",
+      "error": "Kunne ikkje sende testvarsel. Prøv igjen seinare."
+    },
     "cat": {
       "payment_reminder": "Betalingspåminningar",
       "slip_offer": "Plasstilbod",
@@ -3066,9 +3087,7 @@
       "subtitle": "Konfigurer varslingskrav for alle medlemmer",
       "requiredToggle": "Obligatorisk",
       "leadDays": "Påminning dagar før",
-      "testPush": "Send testvarsling",
-      "testSent": "Testvarsling sendt",
-      "testFailed": "Kunne ikkje sende testvarsling"
+      "testPush": "Send testvarsling"
     }
   },
   "gdpr": {

@@ -38,6 +38,7 @@ Audience: site admins (in-app club setup, config, data correction), board member
 | [user/payments-overview.md](user/payments-overview.md) | The Payments page: reading it, and setting up its filter groups (names, icons, order, prices) |
 | [user/harbor-share-import.md](user/harbor-share-import.md) | Site admin's guide to importing harbor share (moloandel) owners from the member sheet: the CSV UTF-8 file format and the preview |
 | [user/harbor-qr.md](user/harbor-qr.md) | Harbor master's guide to QR payment targets: full-page posters and 2/4/6-up card sheets |
+| [user/iphone-notifications.md](user/iphone-notifications.md) | **Brygge på iPhone**: Home Screen install so push notifications work on iPhone and iPad, and **Send testvarsel** |
 | [user/setting-up-email.md](user/setting-up-email.md) | Member + board guide to reading and sending club mail in Apple Mail, Outlook, Gmail, Thunderbird, etc. |
 
 ## Developer docs ([developer/](developer/))

@@ -2564,5 +2564,30 @@
     "complete": {
       "navLabel": "Completa l'iscrizione"
     }
+  },
+  "notifications": {
+    "iosTitle": "Notifiche su iPhone e iPad",
+    "iosIntro": "Su iPhone e iPad le notifiche arrivano solo se Brygge è aggiunto alla schermata Home e aperto da lì.",
+    "iosStep1": "Apri questa pagina in Safari e tocca il pulsante Condividi (il quadrato con la freccia verso l'alto).",
+    "iosStep2": "Scegli «Aggiungi alla schermata Home» e tocca Aggiungi.",
+    "iosStep3": "Apri Brygge dalla nuova icona nella schermata Home e accedi con una passkey (creane prima una in Safari sotto Security se non ce l'hai).",
+    "iosStep4": "Attiva le notifiche push nella pagina Notifiche e consentile quando il telefono lo chiede.",
+    "iosLoginNote": "Il link di accesso nell'e-mail apre Safari, non l'app nella schermata Home.",
+    "iosVersion": "Richiede iOS 16.4 o successivo.",
+    "iosNeedsHomeScreen": "Aggiungi prima Brygge alla schermata Home",
+    "pushDenied": "Le notifiche per Brygge sono bloccate. Consentile nelle impostazioni del dispositivo (iPhone: Impostazioni → Notifiche → Brygge) e riprova.",
+    "pushSubscribeFailed": "Impossibile attivare le notifiche su questo dispositivo. Riprova.",
+    "pushUnsubscribeFailed": "Impossibile disattivare le notifiche. Riprova.",
+    "test": {
+      "button": "Invia notifica di prova",
+      "sent": "Notifica di prova inviata: {sent} su {total} dispositivo. | Notifica di prova inviata: {sent} su {total} dispositivi.",
+      "removed": "Dispositivi scaduti rimossi: {count}. Disattiva e riattiva le notifiche sul dispositivo mancante.",
+      "failed": "Dispositivi non raggiungibili: {count}.",
+      "hint": "Se entro un minuto non arriva nulla, controlla che le notifiche per Brygge siano consentite nelle impostazioni del dispositivo.",
+      "noSubscription": "Nessun dispositivo è registrato per le notifiche. Disattiva e riattiva le notifiche.",
+      "notConfigured": "Le notifiche push non sono configurate su questo server. Contatta il consiglio direttivo.",
+      "rateLimited": "Troppe notifiche di prova. Attendi un minuto e riprova.",
+      "error": "Impossibile inviare la notifica di prova. Riprova più tardi."
+    }
   }
 }

@@ -471,23 +471,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/notifications/test": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Send test push notification */
-        post: operations["admin-test-push"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/admin/orders/{orderID}/refund": {
         parameters: {
             query?: never;
@@ -2429,6 +2412,26 @@ export interface paths {
         get: operations["get-my-volunteer-hours"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a test push notification to my own devices
+         * @description Pushes a test notification to the caller's own subscriptions only and counts the outcome per subscription. Subscriptions the push service reports gone (404/410) are deleted. 409 with code no_push_subscription when the caller has no subscribed device; 503 with code push_not_configured when the server has no VAPID keys. Limited to 5 per minute per user.
+         */
+        post: operations["send-test-push"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6229,6 +6232,34 @@ export interface components {
             /** @description User UUID */
             user_id: string;
         };
+        TestPushResult: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/schemas/TestPushResult.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description Subscriptions the push could not be delivered to
+             */
+            failed: number;
+            /**
+             * Format: int64
+             * @description Expired subscriptions (404/410) that were deleted
+             */
+            removed: number;
+            /**
+             * Format: int64
+             * @description Subscriptions the push service accepted the test for
+             */
+            sent: number;
+            /**
+             * Format: int64
+             * @description The caller's subscriptions tried
+             */
+            total: number;
+        };
         TodayAvailability: {
             /**
              * Format: uri
@@ -7537,35 +7568,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NotificationConfig"][] | null;
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "admin-test-push": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StatusResponse"];
                 };
             };
             /** @description Error */
@@ -11928,6 +11930,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VolunteerHoursSummary"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "send-test-push": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestPushResult"];
                 };
             };
             /** @description Error */

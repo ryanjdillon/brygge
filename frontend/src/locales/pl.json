@@ -2535,5 +2535,30 @@
     "complete": {
       "navLabel": "Dokończ członkostwo"
     }
+  },
+  "notifications": {
+    "iosTitle": "Powiadomienia na iPhonie i iPadzie",
+    "iosIntro": "Na iPhonie i iPadzie powiadomienia docierają tylko wtedy, gdy Brygge jest dodane do ekranu początkowego i otwierane z niego.",
+    "iosStep1": "Otwórz tę stronę w Safari i stuknij przycisk Udostępnij (kwadrat ze strzałką w górę).",
+    "iosStep2": "Wybierz „Do ekranu początkowego” i stuknij Dodaj.",
+    "iosStep3": "Otwórz Brygge z nowej ikony na ekranie początkowym i zaloguj się kluczem dostępu (jeśli go nie masz, najpierw utwórz go w Safari w sekcji Security).",
+    "iosStep4": "Włącz powiadomienia push na stronie Powiadomienia i zezwól na nie, gdy telefon zapyta.",
+    "iosLoginNote": "Link logowania z e-maila otwiera Safari, a nie aplikację z ekranu początkowego.",
+    "iosVersion": "Wymaga iOS 16.4 lub nowszego.",
+    "iosNeedsHomeScreen": "Najpierw dodaj Brygge do ekranu początkowego",
+    "pushDenied": "Powiadomienia dla Brygge są zablokowane. Zezwól na nie w ustawieniach urządzenia (iPhone: Ustawienia → Powiadomienia → Brygge) i spróbuj ponownie.",
+    "pushSubscribeFailed": "Nie udało się włączyć powiadomień na tym urządzeniu. Spróbuj ponownie.",
+    "pushUnsubscribeFailed": "Nie udało się wyłączyć powiadomień. Spróbuj ponownie.",
+    "test": {
+      "button": "Wyślij powiadomienie testowe",
+      "sent": "Powiadomienie testowe wysłane: {sent} z {total} urządzenia. | Powiadomienie testowe wysłane: {sent} z {total} urządzeń.",
+      "removed": "Usunięte wygasłe urządzenia: {count}. Wyłącz i włącz ponownie powiadomienia na brakującym urządzeniu.",
+      "failed": "Nieosiągalne urządzenia: {count}.",
+      "hint": "Jeśli w ciągu minuty nic nie dotrze, sprawdź, czy powiadomienia dla Brygge są dozwolone w ustawieniach urządzenia.",
+      "noSubscription": "Żadne urządzenie nie jest zarejestrowane do powiadomień. Wyłącz i włącz ponownie powiadomienia.",
+      "notConfigured": "Powiadomienia push nie są skonfigurowane na tym serwerze. Skontaktuj się z zarządem.",
+      "rateLimited": "Zbyt wiele powiadomień testowych. Odczekaj minutę i spróbuj ponownie.",
+      "error": "Nie udało się wysłać powiadomienia testowego. Spróbuj ponownie później."
+    }
   }
 }

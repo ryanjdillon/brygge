@@ -2563,5 +2563,30 @@
     "complete": {
       "navLabel": "Finaliser l'adhésion"
     }
+  },
+  "notifications": {
+    "iosTitle": "Notifications sur iPhone et iPad",
+    "iosIntro": "Sur iPhone et iPad, les notifications n'arrivent que si Brygge est ajouté à l'écran d'accueil et ouvert depuis celui-ci.",
+    "iosStep1": "Ouvrez cette page dans Safari et touchez le bouton Partager (le carré avec une flèche vers le haut).",
+    "iosStep2": "Choisissez « Sur l'écran d'accueil » puis touchez Ajouter.",
+    "iosStep3": "Ouvrez Brygge depuis la nouvelle icône sur l'écran d'accueil et connectez-vous avec une clé d'accès (créez-en une d'abord dans Safari sous Security si vous n'en avez pas).",
+    "iosStep4": "Activez les notifications push sur la page Notifications et autorisez-les quand le téléphone le demande.",
+    "iosLoginNote": "Le lien de connexion reçu par e-mail ouvre Safari, pas l'app de l'écran d'accueil.",
+    "iosVersion": "Nécessite iOS 16.4 ou version ultérieure.",
+    "iosNeedsHomeScreen": "Ajoutez d'abord Brygge à l'écran d'accueil",
+    "pushDenied": "Les notifications sont bloquées pour Brygge. Autorisez-les dans les réglages de l'appareil (iPhone : Réglages → Notifications → Brygge) et réessayez.",
+    "pushSubscribeFailed": "Impossible d'activer les notifications sur cet appareil. Réessayez.",
+    "pushUnsubscribeFailed": "Impossible de désactiver les notifications. Réessayez.",
+    "test": {
+      "button": "Envoyer une notification de test",
+      "sent": "Notification de test envoyée : {sent} sur {total} appareil. | Notification de test envoyée : {sent} sur {total} appareils.",
+      "removed": "Appareils expirés supprimés : {count}. Désactivez puis réactivez les notifications sur l'appareil manquant.",
+      "failed": "Appareils injoignables : {count}.",
+      "hint": "Si rien n'arrive dans la minute, vérifiez que les notifications sont autorisées pour Brygge dans les réglages de l'appareil.",
+      "noSubscription": "Aucun appareil n'est enregistré pour les notifications. Désactivez puis réactivez les notifications.",
+      "notConfigured": "Les notifications push ne sont pas configurées sur ce serveur. Contactez le bureau.",
+      "rateLimited": "Trop de notifications de test. Attendez une minute et réessayez.",
+      "error": "Impossible d'envoyer la notification de test. Réessayez plus tard."
+    }
   }
 }
