@@ -1540,35 +1540,218 @@ SQL
       # propagate on redeploy.
       POSTMASTER_ADDR="postmaster@${clubConfig.domain}"
       ADMIN_EMAIL="${clubConfig.adminEmail}"
-      EXISTS=$(curl -fsS -u "admin:$ADMIN" "$API/postmaster" \
-                 | jq -r 'if (.data.id // null) != null then "yes" else "no" end')
+      # No -f and `|| true`: a missing principal answers 404 (or nothing
+      # usable), which must read as "does not exist", not abort the unit.
+      PM_JSON=$(curl -sS --max-time 30 -u "admin:$ADMIN" "$API/postmaster" || true)
+      EXISTS=$(printf '%s' "$PM_JSON" \
+                 | jq -r 'if (.data.id? // null) != null then "yes" else "no" end' 2>/dev/null || echo no)
+      PM_TYPE=$(printf '%s' "$PM_JSON" | jq -r '.data.type? // ""' 2>/dev/null || true)
+      PM_SKIP=no
+      CONVERTED=no
+      # Dry run: `touch /etc/brygge/postmaster-export-dryrun` and restart this
+      # unit to export and verify without deleting anything (BRY-409).
+      DRY=no
+      if [ -e /etc/brygge/postmaster-export-dryrun ]; then DRY=yes; fi
+
+      # BRY-409: Stalwart expands `externalMembers` only for type "list".
+      # A postmaster that already exists as an individual mailbox (made by
+      # hand or by an older deploy) is PATCHed without error but never
+      # forwards, so reports and bounces pile up unread. A principal's type
+      # cannot be changed, so it is deleted and recreated, but only after
+      # its messages are exported to /var/lib/stalwart-exports (root-only,
+      # outside /nix/store, not part of the pg_dump backup) and the export
+      # is verified. Any failure leaves postmaster untouched.
+      #
+      # Export via JMAP as the account itself (the way the board reconciler
+      # authenticates): ADD a throwaway secret (existing secrets are never
+      # replaced) and remove it again on exit, list every Email id in one
+      # sorted query, fetch the blobIds, download each message as a raw
+      # .eml, compare the count with the server total, then re-check the
+      # total immediately before the DELETE so a message that arrived during
+      # the export aborts the conversion. Mail accepted in the few
+      # milliseconds between that re-check and the DELETE is still lost.
+      #
+      # Exit status: 0 exported and deleted, 10 dry run done, anything else
+      # failed (principal untouched).
+      export_postmaster() (
+        umask 077
+        JM="http://127.0.0.1:8088"
+        DEST="/var/lib/stalwart-exports/postmaster-$(date +%Y%m%d-%H%M%S)" || exit 1
+        TMPPW=""
+        ADDED=no
+        KEEP=no
+        ORIG=$(printf '%s' "$PM_JSON" | jq -c '.data.secrets // [] | sort' 2>/dev/null || echo '[]')
+        cleanup() {
+          RC=$?
+          trap - EXIT
+          if [ "$ADDED" = yes ]; then
+            NOWJ=$(curl -sS --max-time 30 -u "admin:$ADMIN" "$API/postmaster" || true)
+            if printf '%s' "$NOWJ" | jq -e '(.data.id? // null) != null' >/dev/null 2>&1; then
+              BODY=$(jq -nc --arg pw "$TMPPW" '[{action:"removeItem",field:"secrets",value:$pw}]') || BODY=""
+              if [ -z "$BODY" ] || ! curl -fsS --max-time 30 -u "admin:$ADMIN" -X PATCH "$API/postmaster" \
+                   -H 'Content-Type: application/json' -d "$BODY" >/dev/null; then
+                echo "WARN: could not remove the temporary postmaster secret" >&2
+              fi
+              # The server may store the secret hashed, so removing it by
+              # value might not match; compare with the original list and
+              # put that back if they differ.
+              NOW=$(curl -sS --max-time 30 -u "admin:$ADMIN" "$API/postmaster" \
+                      | jq -c '.data.secrets // [] | sort' 2>/dev/null || echo '[]')
+              if [ "$NOW" != "$ORIG" ] && [ "$ORIG" != "[]" ]; then
+                BODY=$(jq -nc --argjson s "$ORIG" '[{action:"set",field:"secrets",value:$s}]') || BODY=""
+                [ -z "$BODY" ] || curl -fsS --max-time 30 -u "admin:$ADMIN" -X PATCH "$API/postmaster" \
+                  -H 'Content-Type: application/json' -d "$BODY" >/dev/null \
+                  || echo "WARN: could not restore the original postmaster secrets" >&2
+              fi
+            fi
+          fi
+          if [ "$RC" -ne 0 ] && [ "$KEEP" != yes ]; then rm -rf "$DEST"; fi
+          exit "$RC"
+        }
+        trap cleanup EXIT
+
+        install -d -m 0700 /var/lib/stalwart-exports "$DEST" || exit 1
+        TMPPW=$(openssl rand -base64 24 | tr -d '=+/' | head -c 32) || exit 1
+        [ "''${#TMPPW}" -ge 24 ] || exit 1
+        BODY=$(jq -nc --arg pw "$TMPPW" '[{action:"addItem",field:"secrets",value:$pw}]') || exit 1
+        ADDED=yes
+        curl -fsS --max-time 30 -u "admin:$ADMIN" -X PATCH "$API/postmaster" \
+             -H 'Content-Type: application/json' -d "$BODY" >/dev/null || exit 1
+
+        # /.well-known/jmap only redirects (307) to /jmap/session. The session
+        # URLs name http://mail.<domain>:8088, so the origin is swapped for
+        # the loopback address below instead of resolving that host.
+        SESS=$(curl -fsS --max-time 30 -u "postmaster:$TMPPW" "$JM/jmap/session") || exit 1
+        ACCT=$(printf '%s' "$SESS" | jq -er '.primaryAccounts["urn:ietf:params:jmap:mail"]') || exit 1
+        APIURL=$(printf '%s' "$SESS" | jq -er --arg o "$JM" '.apiUrl | sub("^https?://[^/]+"; $o)') || exit 1
+        DLTPL=$(printf '%s' "$SESS" | jq -er --arg o "$JM" '.downloadUrl | sub("^https?://[^/]+"; $o)') || exit 1
+        PAGESZ=$(printf '%s' "$SESS" | jq -er \
+          '(.capabilities["urn:ietf:params:jmap:core"].maxObjectsInGet // 500) | if . > 500 then 500 else . end') || exit 1
+
+        jmap() {
+          curl -fsS --max-time 30 -u "postmaster:$TMPPW" -X POST \
+               -H 'Content-Type: application/json' -d "$1" "$APIURL"
+        }
+        query_page() {
+          jmap "$(jq -nc --arg a "$ACCT" --argjson p "$1" --argjson l "$2" \
+            '{using:["urn:ietf:params:jmap:core","urn:ietf:params:jmap:mail"],
+              methodCalls:[["Email/query",{accountId:$a,sort:[{property:"receivedAt",isAscending:true}],position:$p,limit:$l,calculateTotal:true},"q"]]}')"
+        }
+
+        : > "$DEST/.ids"
+        POS=0
+        GOT=0
+        TOTAL=0
+        while :; do
+          R=$(query_page "$POS" "$PAGESZ") || exit 1
+          printf '%s' "$R" | jq -e '.methodResponses[0][0] == "Email/query"' >/dev/null || exit 1
+          TOTAL=$(printf '%s' "$R" | jq -er '.methodResponses[0][1].total') || exit 1
+          printf '%s' "$R" | jq -r '.methodResponses[0][1].ids[]' >> "$DEST/.ids" || exit 1
+          GOT=$(wc -l < "$DEST/.ids")
+          [ "$GOT" -lt "$TOTAL" ] || break
+          [ "$GOT" -gt "$POS" ] || exit 1
+          POS=$GOT
+        done
+        [ "$GOT" -eq "$TOTAL" ] || exit 1
+        echo "postmaster has $TOTAL message(s) to export" >&2
+
+        split -l "$PAGESZ" "$DEST/.ids" "$DEST/.chunk." || exit 1
+        N=0
+        for CHUNK in "$DEST"/.chunk.*; do
+          [ -e "$CHUNK" ] || continue
+          IDS=$(jq -R . < "$CHUNK" | jq -sc .) || exit 1
+          R=$(jmap "$(jq -nc --arg a "$ACCT" --argjson ids "$IDS" \
+            '{using:["urn:ietf:params:jmap:core","urn:ietf:params:jmap:mail"],
+              methodCalls:[["Email/get",{accountId:$a,ids:$ids,properties:["blobId"]},"g"]]}')") || exit 1
+          printf '%s' "$R" | jq -e --argjson ids "$IDS" \
+            '.methodResponses[0][0] == "Email/get"
+             and ((.methodResponses[0][1].notFound // []) | length) == 0
+             and (.methodResponses[0][1].list | length) == ($ids | length)' >/dev/null || exit 1
+          printf '%s' "$R" | jq -r '.methodResponses[0][1].list[].blobId' > "$DEST/.blobs" || exit 1
+          while read -r BLOB; do
+            N=$((N + 1))
+            URL=$(printf '%s' "$DLTPL" | sed -e "s|{accountId}|$ACCT|" -e "s|{blobId}|$BLOB|" \
+                    -e 's|{name}|message.eml|' -e 's|{type}|message%2Frfc822|')
+            curl -fsS --max-time 30 --retry 2 -u "postmaster:$TMPPW" -o "$DEST/$N.eml" "$URL" || exit 1
+            [ -s "$DEST/$N.eml" ] || exit 1
+          done < "$DEST/.blobs"
+          echo "exported $N/$TOTAL postmaster message(s)" >&2
+        done
+        rm -f "$DEST/.ids" "$DEST/.blobs" "$DEST"/.chunk.*
+        COUNT=$(find "$DEST" -name '*.eml' | wc -l)
+        [ "$COUNT" -eq "$TOTAL" ] || exit 1
+
+        # Re-check right before the DELETE: mail that arrived during the
+        # export is not in the archive, so do not delete.
+        R=$(query_page 0 1) || exit 1
+        T2=$(printf '%s' "$R" | jq -er '.methodResponses[0][1].total') || exit 1
+        if [ "$T2" -ne "$TOTAL" ]; then
+          echo "WARN: postmaster changed during export ($TOTAL -> $T2 messages); not converting, will retry" >&2
+          exit 1
+        fi
+        KEEP=yes
+        echo "exported $COUNT postmaster message(s), $(du -sk "$DEST" | cut -f1) KiB, to $DEST" >&2
+        if [ "$DRY" = yes ]; then
+          echo "dry run: would convert ($COUNT messages exported to $DEST)" >&2
+          exit 10
+        fi
+        curl -fsS --max-time 30 -u "admin:$ADMIN" -X DELETE "$API/postmaster" >/dev/null || exit 1
+        exit 0
+      )
+
+      if [ "$EXISTS" = "yes" ] && [ "$PM_TYPE" != "list" ]; then
+        echo "converting postmaster from $PM_TYPE to list" >&2
+        RC=0
+        export_postmaster || RC=$?
+        case "$RC" in
+          0)  EXISTS=no; CONVERTED=yes ;;
+          10) PM_SKIP=yes ;;
+          *)  echo "WARN: postmaster not converted (export, re-check or delete failed); it stays a $PM_TYPE" >&2 ;;
+        esac
+      fi
       if [ "$EXISTS" = "no" ]; then
         BODY=$(jq -nc \
           --arg email "$POSTMASTER_ADDR" \
           --arg m "$ADMIN_EMAIL" \
           --arg urn "$MANAGED_URN" \
           '{type:"list", name:"postmaster", emails:[$email], externalMembers:[$m], description:"System postmaster", urls:[$urn], quota:0}')
-        curl -fsS -u "admin:$ADMIN" -X POST "$API" \
-             -H 'Content-Type: application/json' -d "$BODY" >/dev/null \
-          && echo "created postmaster list" \
-          || echo "WARN: failed to create postmaster" >&2
+        if curl -fsS --max-time 30 -u "admin:$ADMIN" -X POST "$API" \
+                -H 'Content-Type: application/json' -d "$BODY" >/dev/null; then
+          echo "created postmaster list"
+        elif [ "$CONVERTED" = yes ]; then
+          echo "ERROR: postmaster was deleted but the list could not be created; the old mail is in /var/lib/stalwart-exports" >&2
+          exit 1
+        else
+          echo "WARN: failed to create postmaster" >&2
+        fi
       fi
-      # Separate PATCHes: Stalwart rejects a PATCH as a whole, so a bad
-      # member must not also block the label/marker refresh.
-      BODY=$(jq -nc --arg urn "$MANAGED_URN" \
-        '[{action:"set",field:"description",value:"System postmaster"},
-          {action:"set",field:"urls",value:[$urn]}]')
-      curl -fsS -u "admin:$ADMIN" -X PATCH "$API/postmaster" \
-           -H 'Content-Type: application/json' -d "$BODY" >/dev/null \
-        || echo "WARN: failed to refresh postmaster description/urls" >&2
-      # `externalMembers`, not `members`: Stalwart resolves `members` by
-      # principal name, so an outside address there is not found and a
-      # list with no members accepts and discards every message.
-      BODY=$(jq -nc --arg m "$ADMIN_EMAIL" '[{action:"set",field:"externalMembers",value:[$m]}]')
-      curl -fsS -u "admin:$ADMIN" -X PATCH "$API/postmaster" \
-           -H 'Content-Type: application/json' -d "$BODY" >/dev/null \
-        && echo "synced postmaster → $ADMIN_EMAIL" \
-        || echo "WARN: failed to sync postmaster members" >&2
+      if [ "$PM_SKIP" != yes ]; then
+        # Separate PATCHes: Stalwart rejects a PATCH as a whole, so a bad
+        # member must not also block the label/marker refresh.
+        BODY=$(jq -nc --arg urn "$MANAGED_URN" \
+          '[{action:"set",field:"description",value:"System postmaster"},
+            {action:"set",field:"urls",value:[$urn]}]')
+        curl -fsS --max-time 30 -u "admin:$ADMIN" -X PATCH "$API/postmaster" \
+             -H 'Content-Type: application/json' -d "$BODY" >/dev/null \
+          || echo "WARN: failed to refresh postmaster description/urls" >&2
+        # `externalMembers`, not `members`: Stalwart resolves `members` by
+        # principal name, so an outside address there is not found and a
+        # list with no members accepts and discards every message.
+        BODY=$(jq -nc --arg m "$ADMIN_EMAIL" '[{action:"set",field:"externalMembers",value:[$m]}]')
+        curl -fsS --max-time 30 -u "admin:$ADMIN" -X PATCH "$API/postmaster" \
+             -H 'Content-Type: application/json' -d "$BODY" >/dev/null \
+          && echo "synced postmaster → $ADMIN_EMAIL" \
+          || echo "WARN: failed to sync postmaster members" >&2
+        # Verify the end state so one journal line answers "does it forward".
+        if curl -fsS --max-time 30 -u "admin:$ADMIN" "$API/postmaster" \
+             | jq -e --arg m "$ADMIN_EMAIL" \
+                 '.data.type == "list" and ((.data.externalMembers // []) | index($m) != null)' \
+             >/dev/null; then
+          echo "postmaster ok: list → $ADMIN_EMAIL"
+        else
+          echo "WARN: postmaster not a list after sync" >&2
+        fi
+      fi
 
       if [ ! -s "$SPEC" ]; then
         echo "No board mailboxes declared in $SPEC — done."
@@ -1615,6 +1798,12 @@ SQL
             echo "WARN: failed to create $ADDR" >&2
           fi
         else
+          # A principal of another type is never converted here (it may
+          # hold mail; only postmaster is, with an export first). Say so.
+          CUR_TYPE=$(curl -fsS -u "admin:$ADMIN" "$API/$NAME" | jq -r '.data.type // ""')
+          if [ -n "$CUR_TYPE" ] && [ "$CUR_TYPE" != "$STYPE" ]; then
+            echo "WARN: $ADDR exists as '$CUR_TYPE' but is declared '$STYPE'; not converting" >&2
+          fi
           # Idempotent: refresh the label and the ownership marker so
           # both survive manual edits. Member ACLs and the JMAP Identity
           # name are NOT touched here — the backend reconciler owns both.

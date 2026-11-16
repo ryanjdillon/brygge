@@ -267,7 +267,24 @@ curl -fsS -u "admin:$PW" "$U/api/settings/keys?prefixes=session.mail.rewrite&pre
 journalctl -u stalwart --since -10min | grep -iE 'dsn|over quota|double bounce'
 # postmaster@ forwards to admin_email; this must print nothing
 journalctl -u stalwart-mailbox-config -b | grep 'failed to sync postmaster members'
+# postmaster must be a list ("list" below) and the unit must say so
+journalctl -u stalwart-mailbox-config --since -10min | grep -i postmaster   # "postmaster ok: list → <admin_email>"
+curl -fsS -u "admin:$PW" "$U/api/principal/postmaster" | jq '.data.type, .data.externalMembers'
 ```
+
+#### postmaster@ must be a list (BRY-409)
+
+Stalwart expands `externalMembers` only for `type: "list"`. If `postmaster` ever existed as an individual mailbox, PATCHing `externalMembers` is accepted and ignored: DMARC aggregate reports and app bounces land in an unread mailbox and nothing is delivered to `admin_email`. `stalwart-mailbox-config` therefore converts it: a principal's type cannot change, so it exports the mailbox, deletes the principal and recreates it as a list. The journal shows `converting postmaster from individual to list`, then `postmaster ok: list → <admin_email>`. A `WARN: postmaster not a list after sync` means it is still not forwarding.
+
+The old messages are archived before the principal is deleted. The unit adds a throwaway secret to the principal (existing secrets are kept; a production individual `postmaster` has none) and removes it again when the export ends, success or failure. It logs in over JMAP as `postmaster` (`/jmap/session`; the session's `apiUrl` and `downloadUrl` name `http://mail.<domain>:8088`, so the unit swaps that origin for `http://127.0.0.1:8088`), lists every message in one query sorted by `receivedAt`, and downloads each as a raw `.eml` into `/var/lib/stalwart-exports/postmaster-<YYYYmmdd-HHMMSS>/` (`0700` directory, `0600` files, root only, outside `/nix/store`). It then checks that every file is non-empty, that the file count equals the server's `total`, and, immediately before the DELETE, that the total has not changed. Mail accepted in the milliseconds between that last check and the DELETE would still be lost; the window is tiny but not zero.
+
+If anything fails the principal is left untouched, the partial export directory is removed, and the journal says `WARN: postmaster not converted (export, re-check or delete failed)`. The unit runs on every boot and deploy, so the conversion is retried each time until it succeeds. If the delete works but creating the list does not, the unit logs `ERROR: postmaster was deleted but the list could not be created` and fails, so the deploy surfaces it; the archive is kept. The export directory is not part of the nightly pg_dump backup; copy it off the host if you want it kept.
+
+Read the archive with `scp -r` to your machine and open the `.eml` files in any mail client. Re-importing them into a mailbox is not automated. The attachments of aggregate reports are the compressed DMARC XML.
+
+Dry run before the real conversion: on the host run `touch /etc/brygge/postmaster-export-dryrun && systemctl restart stalwart-mailbox-config`. The unit exports and verifies, removes the temporary secret, deletes nothing, and logs `dry run: would convert (N messages exported to <dir>)`. Read `journalctl -u stalwart-mailbox-config --since -5min | grep -i postmaster`, inspect the `.eml` files, then `rm /etc/brygge/postmaster-export-dryrun` and redeploy (or restart the unit) for the real conversion. The dry-run export directory is kept; the real run writes a new one. Only an existing non-list `postmaster` triggers any of this.
+
+Verify the forwarding after the deploy: `ls -l /var/lib/stalwart-exports/` (only present if a conversion happened), then send a mail from a personal address to `postmaster@<domain>` and check `journalctl -u stalwart --since -5min` for a delivery attempt to the `admin_email` domain, and that it arrives.
 
 Then check that the DSN appears in the bounce mailbox, and that a normal magic link still passes DKIM/SPF/DMARC with `Return-Path: <bounce mailbox>`.
 
