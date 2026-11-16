@@ -1480,13 +1480,32 @@ SQL
     after = [ "stalwart.service" "stalwart-relay-account.service" ];
     wants = [ "stalwart.service" ];
     wantedBy = [ "multi-user.target" ];
-    path = with pkgs; [ curl jq coreutils openssl ];
+    # systemd provides systemctl for the postmaster cache-clearing restart.
+    path = with pkgs; [ curl jq coreutils openssl systemd ];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
     };
     script = ''
       set -eu
+
+      # Stalwart caches recipient lookups (directory cache, 24h positive
+      # TTL). After postmaster changes type (individual -> list) the cached
+      # "mailbox" answer makes SMTP skip list expansion and local delivery
+      # 550s "This account is not authorized to receive email". Only a
+      # restart clears the cache. --no-block: this unit is After= and
+      # Wants= stalwart (no PartOf/BindsTo/Requires), so the restart cannot
+      # stop this unit, but a blocking call would wait on stalwart's start
+      # while we hold the deploy. It runs at the very end so the board
+      # mailbox calls below never hit a restarting API.
+      RESTART_STALWART=no
+      restart_stalwart_if_needed() {
+        if [ "$RESTART_STALWART" = yes ]; then
+          systemctl try-restart --no-block stalwart.service \
+            && echo "restarted stalwart to clear its 24h recipient cache (postmaster was cached as a mailbox)" \
+            || echo "WARN: could not restart stalwart; restart it by hand to clear the recipient cache" >&2
+        fi
+      }
 
       SPEC=/etc/brygge/board-mailboxes.json
       ADMIN_FILE=/etc/stalwart/admin-password
@@ -1718,6 +1737,9 @@ SQL
         if curl -fsS --max-time 30 -u "admin:$ADMIN" -X POST "$API" \
                 -H 'Content-Type: application/json' -d "$BODY" >/dev/null; then
           echo "created postmaster list"
+          # Created only when absent: right after a conversion (or a retry of
+          # one whose create failed). Steady state never reaches here.
+          RESTART_STALWART=yes
         elif [ "$CONVERTED" = yes ]; then
           echo "ERROR: postmaster was deleted but the list could not be created; the old mail is in /var/lib/stalwart-exports" >&2
           exit 1
@@ -1755,6 +1777,7 @@ SQL
 
       if [ ! -s "$SPEC" ]; then
         echo "No board mailboxes declared in $SPEC — done."
+        restart_stalwart_if_needed
         exit 0
       fi
 
@@ -1845,6 +1868,8 @@ SQL
           fi
         fi
       done
+
+      restart_stalwart_if_needed
     '';
   };
 }
