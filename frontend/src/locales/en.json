@@ -2229,7 +2229,7 @@
         "keyActive": "Active"
       },
       "boardNotificationEmail": "Membership notices to",
-      "boardNotificationEmailHint": "Where the board is told of new members, refunded join payments, joins that need checking, cancellations and undone cancellations, and cancellations that could not be completed. Leave empty to use the club's shared mailbox (post@), else the secretary or chair."
+      "boardNotificationEmailHint": "Where the board is told of new members, refunded join payments, joins that need checking, cancellations and undone cancellations, and cancellations that could not be completed. Leave empty to use the club's shared mailbox (post{'@'}), else the secretary or chair."
     },
     "harborSettings": {
       "pageTitle": "Harbor & motorhome",

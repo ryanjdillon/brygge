@@ -2109,7 +2109,7 @@
         "accounting": "Rekneskap og faktura"
       },
       "boardNotificationEmail": "Varsel om medlemskap til",
-      "boardNotificationEmailHint": "Hit får styret melding om nye medlemmer, refunderte innmeldingsbetalingar, innmeldingar som må kontrollerast, utmeldingar og angra utmeldingar, og utmeldingar som ikkje kunne gjennomførast. La feltet stå tomt for å bruke den felles postkassa til klubben (post@), elles sekretær eller leiar."
+      "boardNotificationEmailHint": "Hit får styret melding om nye medlemmer, refunderte innmeldingsbetalingar, innmeldingar som må kontrollerast, utmeldingar og angra utmeldingar, og utmeldingar som ikkje kunne gjennomførast. La feltet stå tomt for å bruke den felles postkassa til klubben (post{'@'}), elles sekretær eller leiar."
     },
     "harborSettings": {
       "pageTitle": "Hamn og bubil",

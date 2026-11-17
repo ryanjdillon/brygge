@@ -2057,7 +2057,7 @@
     },
     "siteSettings": {
       "boardNotificationEmail": "Avvisi di adesione a",
-      "boardNotificationEmailHint": "Dove il consiglio riceve gli avvisi di nuovi soci, quote di adesione rimborsate, adesioni da controllare, recessi e recessi annullati, e recessi che non è stato possibile completare. Lascia vuoto per usare la casella condivisa del club (post@), altrimenti il segretario o il presidente.",
+      "boardNotificationEmailHint": "Dove il consiglio riceve gli avvisi di nuovi soci, quote di adesione rimborsate, adesioni da controllare, recessi e recessi annullati, e recessi che non è stato possibile completare. Lascia vuoto per usare la casella condivisa del club (post{'@'}), altrimenti il segretario o il presidente.",
       "publicDescription": "Descrizione breve",
       "publicDescriptionHint": "Mostrata sotto il titolo di benvenuto nella pagina iniziale. Se il campo è vuoto, viene usato lo slogan predefinito. Massimo 200 caratteri.",
       "publicDescriptionInvalid": "La descrizione può avere al massimo 200 caratteri, su una sola riga."

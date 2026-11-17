@@ -2057,7 +2057,7 @@
     },
     "siteSettings": {
       "boardNotificationEmail": "Lidmaatschapsmeldingen naar",
-      "boardNotificationEmailHint": "Hier krijgt het bestuur bericht over nieuwe leden, terugbetaalde inschrijvingsbetalingen, inschrijvingen die gecontroleerd moeten worden, opzeggingen en ingetrokken opzeggingen, en opzeggingen die niet konden worden afgerond. Laat leeg voor de gedeelde mailbox van de club (post@), anders de secretaris of voorzitter.",
+      "boardNotificationEmailHint": "Hier krijgt het bestuur bericht over nieuwe leden, terugbetaalde inschrijvingsbetalingen, inschrijvingen die gecontroleerd moeten worden, opzeggingen en ingetrokken opzeggingen, en opzeggingen die niet konden worden afgerond. Laat leeg voor de gedeelde mailbox van de club (post{'@'}), anders de secretaris of voorzitter.",
       "publicDescription": "Korte beschrijving",
       "publicDescriptionHint": "Wordt op de voorpagina onder de welkomstkop getoond. Is het veld leeg, dan wordt de standaardslogan gebruikt. Maximaal 200 tekens.",
       "publicDescriptionInvalid": "De beschrijving mag maximaal 200 tekens op één regel zijn."
